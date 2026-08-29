@@ -1,0 +1,1 @@
+"""SupplyMate application package."""

@@ -1,0 +1,10 @@
+change: mvp-core
+status: verified
+strict_tdd: true
+phases:
+  proposal: done
+  specs: done
+  design: done
+  tasks: done
+  apply: done
+  verify: done

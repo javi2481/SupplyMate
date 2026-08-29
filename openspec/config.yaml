@@ -1,0 +1,34 @@
+schema: spec-driven
+
+context: |
+  Project: SupplyMate — AI replenishment advisor for SME distributors.
+  Stack: Python 3.12, FastAPI, Pydantic, openai-agents, CSV, pytest, Docker.
+  Architecture: LLM orchestrates tools; deterministic Python calculates order qty.
+  Out of scope: RAG, embeddings, LangChain, multi-agent, frontend, DB, K8s.
+
+strict_tdd: true
+
+testing:
+  runner: pytest
+  command: pytest
+  layers:
+    unit: true
+    integration: true
+    e2e: false
+  coverage: false
+
+rules:
+  proposal:
+    - Keep MVP scope minimal; no RAG or multi-agent
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - LLM must not invent critical numbers; quantity from Python only
+  tasks:
+    - Order tasks for Strict TDD: replenishment, tools, agent, api
+    - Group by phase, hierarchical numbering
+  apply:
+    - Follow Strict TDD RED-GREEN-TRIANGULATE-REFACTOR per task
+  verify:
+    - Require TDD evidence table and green pytest without live LLM
