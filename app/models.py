@@ -137,8 +137,48 @@ class ProductContext(BaseModel):
 
 
 class PurchaseListItem(BaseModel):
+    product_id: str = ""
+    barcode: str = ""
     product_name: str
+    supplier: str = ""
+    category: str = ""
+    subcategory: str = ""
+    current_stock: int = 0
+    reorder_point: int | None = None
+    below_reorder_point: bool = False
+    average_daily_demand: float = 0.0
+    days_of_supply: float | None = None
+    health_bucket: str = ""
     recommended_quantity: int
+
+
+class CategoryBar(BaseModel):
+    category: str
+    recommended_quantity: int
+    sku_count: int = 0
+
+
+class CategorySalesBar(BaseModel):
+    category: str
+    units_sold: int
+    sku_count: int = 0
+
+
+class CoverageBar(BaseModel):
+    bucket: str
+    sku_count: int
+
+
+class InventoryDashboard(BaseModel):
+    skus: int = 0
+    stockout_risk: int = 0
+    understock: int = 0
+    overstock: int = 0
+    healthy: int = 0
+    avg_coverage: float | None = None
+    by_category: list[CategoryBar] = Field(default_factory=list)
+    by_sales: list[CategorySalesBar] = Field(default_factory=list)
+    coverage: list[CoverageBar] = Field(default_factory=list)
 
 
 class ChatResponse(BaseModel):
@@ -150,6 +190,7 @@ class ChatResponse(BaseModel):
     calculation: ReplenishmentResult | None = None
     context: ProductContext | None = None
     purchase_list: list[PurchaseListItem] = Field(default_factory=list)
+    dashboard: InventoryDashboard | None = None
 
 
 class ProductNotFoundError(Exception):

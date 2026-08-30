@@ -92,6 +92,40 @@ def test_purchase_list_endpoint():
     assert len(body) == 5
     assert all(item["recommended_quantity"] > 0 for item in body)
     assert all("product_name" in item for item in body)
+    assert all("product_id" in item and item["product_id"] for item in body)
+    assert all("health_bucket" in item for item in body)
+
+
+def test_dashboard_endpoint():
+    response = client.get("/replenishment/dashboard")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["skus"] > 0
+    assert "stockout_risk" in body
+    assert body["coverage"]
+    assert body["by_category"]
+
+
+def test_purchase_list_csv():
+    import csv
+    import io
+
+    response = client.get("/replenishment/purchase-list.csv", params={"limit": 3})
+    assert response.status_code == 200
+    assert "text/csv" in response.headers["content-type"]
+    rows = list(csv.reader(io.StringIO(response.text)))
+    assert rows[0] == [
+        "barcode",
+        "product_id",
+        "product_name",
+        "supplier",
+        "recommended_quantity",
+    ]
+    assert len(rows) == 4  # header + 3 rows
+    json_items = client.get("/replenishment/purchase-list", params={"limit": 3}).json()
+    for i, item in enumerate(json_items):
+        assert rows[i + 1][1] == item["product_id"]
+        assert int(rows[i + 1][4]) == item["recommended_quantity"]
 
 
 def test_chat_purchase_list():
@@ -104,3 +138,22 @@ def test_chat_purchase_list():
     assert body["mode"] == "list"
     assert body["purchase_list"]
     assert len(body["purchase_list"]) <= 25
+    assert body["purchase_list"][0]["product_id"]
+    dash = body["dashboard"]
+    assert dash["skus"] > 0
+    assert "stockout_risk" in dash
+    assert "understock" in dash
+    assert dash["coverage"]
+    assert dash["by_category"]
+
+
+def test_chat_top_categories():
+    response = client.post(
+        "/chat",
+        json={"message": "cuales son las categorias mas vendidas"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["mode"] == "sales"
+    assert body["dashboard"]["by_sales"]
+    assert body["dashboard"]["by_sales"][0]["units_sold"] > 0

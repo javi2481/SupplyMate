@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Response
 
 from app.agent import run_supplymate
 from app.models import (
     ChatRequest,
     ChatResponse,
+    InventoryDashboard,
     ProductMaster,
     ProductNotFoundError,
     ProductSearchHit,
@@ -14,7 +15,7 @@ from app.models import (
 )
 from app.services import catalog_service
 
-app = FastAPI(title="SupplyMate", version="0.2.0")
+app = FastAPI(title="SupplyMate", version="0.4.0")
 
 
 @app.get("/health")
@@ -43,10 +44,26 @@ async def get_replenishment(product_id: str) -> ReplenishmentRecommendation:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@app.get("/replenishment/dashboard", response_model=InventoryDashboard)
+async def inventory_dashboard() -> InventoryDashboard:
+    snap, _items = catalog_service.chat_dashboard(limit=1)
+    return snap
+
+
 @app.get("/replenishment/purchase-list", response_model=list[PurchaseListItem])
 async def purchase_list(limit: int = Query(default=25, ge=1, le=100)) -> list[PurchaseListItem]:
     recs = catalog_service.list_purchase_recommendations(limit=limit)
     return catalog_service.purchase_list_items(recs)
+
+
+@app.get("/replenishment/purchase-list.csv")
+async def purchase_list_csv(limit: int = Query(default=25, ge=1, le=100)) -> Response:
+    body = catalog_service.purchase_list_csv(limit=limit)
+    return Response(
+        content=body,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=purchase_order.csv"},
+    )
 
 
 @app.post("/chat", response_model=ChatResponse)

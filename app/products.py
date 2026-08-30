@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from app import config
-from app.intents import is_purchase_list_query
+from app.intents import is_purchase_list_query, is_top_categories_query
 from app.models import ProductNotFoundError
 from app.store import get_store, reset_store_cache
 
@@ -186,10 +186,15 @@ def resolve_product_id(
     raise ProductNotFoundError(query)
 
 
+def message_looks_like_sku(message: str) -> bool:
+    """True when the text contains a catalog-style numeric code (5+ digits)."""
+    return bool(NUMERIC_CODE_RE.search(message or ""))
+
+
 def resolve_from_message(message: str, products_csv: Path | None = None) -> str | None:
     """Extract a product reference from a natural-language message."""
     _ = products_csv
-    if is_purchase_list_query(message):
+    if is_purchase_list_query(message) or is_top_categories_query(message):
         return None
 
     store = get_store()

@@ -124,7 +124,19 @@ async def test_run_supplymate_purchase_list():
     assert response.purchase_list
     assert len(response.purchase_list) <= 25
     assert all(item.recommended_quantity > 0 for item in response.purchase_list)
+    assert response.dashboard is not None
+    assert response.dashboard.skus > 0
     assert "productos" in response.answer.lower()
+
+
+@pytest.mark.asyncio
+async def test_run_supplymate_top_categories():
+    response = await run_supplymate("cuales son las categorias mas vendidas")
+    assert response.mode == "sales"
+    assert response.dashboard is not None
+    assert response.dashboard.by_sales
+    assert response.dashboard.by_sales[0].units_sold >= response.dashboard.by_sales[-1].units_sold
+    assert "categor" in response.answer.lower()
 
 
 @pytest.mark.asyncio
@@ -142,3 +154,38 @@ async def test_fallback_hydrates_when_agent_skips_tools():
 
     assert response.product_id == SKU_HIGH_QTY
     assert response.recommended_quantity == expected.recommended_quantity
+
+
+@pytest.mark.asyncio
+async def test_regex_purchase_does_not_call_classifier():
+    with patch(
+        "app.agent.classify_intent",
+        new=AsyncMock(side_effect=AssertionError("classifier should not run")),
+    ):
+        response = await run_supplymate("¿Qué productos tengo que comprar?")
+    assert response.mode == "list"
+
+
+@pytest.mark.asyncio
+async def test_llm_classifies_stockout_paraphrase_as_purchase_list():
+    with patch("app.agent.classify_intent", new=AsyncMock(return_value="purchase_list")):
+        response = await run_supplymate("qué me está faltando del depósito")
+    assert response.mode == "list"
+    assert response.dashboard is not None
+    assert response.purchase_list
+
+
+@pytest.mark.asyncio
+async def test_llm_classifies_sales_paraphrase():
+    with patch("app.agent.classify_intent", new=AsyncMock(return_value="sales_categories")):
+        response = await run_supplymate("qué rubros mueven más unidades")
+    assert response.mode == "sales"
+    assert response.dashboard is not None
+    assert response.dashboard.by_sales
+
+
+@pytest.mark.asyncio
+async def test_llm_unknown_does_not_force_a_random_sku():
+    with patch("app.agent.classify_intent", new=AsyncMock(return_value="unknown")):
+        with pytest.raises(ProductNotFoundError):
+            await run_supplymate("hola cómo va el día")

@@ -7,9 +7,10 @@ from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 from openai import AsyncOpenAI
 
 from app import config
-from app.intents import is_purchase_list_query
+from app.intent_classifier import classify_intent
+from app.intents import is_purchase_list_query, is_top_categories_query, match_rule_intent
 from app.models import ChatResponse, ProductNotFoundError, SupplyContext
-from app.products import resolve_from_message, resolve_product_id
+from app.products import message_looks_like_sku, resolve_from_message, resolve_product_id
 from app.services import catalog_service
 from app.tools import (
     get_inventory,
@@ -36,6 +37,7 @@ You are SupplyMate. Explain the replenishment recommendation in Spanish.
 Use ONLY the numbers provided in the JSON payload.
 Do not invent or change recommended_quantity.
 Keep 3-5 short sentences for a warehouse manager.
+Never use English metric names; say cantidad recomendada, demanda diaria, punto de reorden, stock de seguridad.
 """.strip()
 
 PURCHASE_LIST_LIMIT = 25
@@ -44,7 +46,7 @@ _model_cache: OpenAIChatCompletionsModel | str | None = None
 
 
 def _extract_product_id(message: str) -> str | None:
-    if is_purchase_list_query(message):
+    if is_purchase_list_query(message) or is_top_categories_query(message):
         return None
     return resolve_from_message(message)
 
@@ -101,20 +103,26 @@ def build_explain_agent() -> Agent:
     )
 
 
-async def _run_purchase_list(message: str) -> ChatResponse:
-    recommendations = catalog_service.list_purchase_recommendations(limit=PURCHASE_LIST_LIMIT)
-    items = catalog_service.purchase_list_items(recommendations)
+async def _run_top_categories() -> ChatResponse:
+    snap, _items = catalog_service.chat_dashboard(limit=1)
     return ChatResponse(
-        answer=catalog_service.format_purchase_list_answer(recommendations),
-        mode="list",
-        purchase_list=items,
+        answer=catalog_service.format_sales_answer(snap),
+        mode="sales",
+        dashboard=snap,
     )
 
 
-async def run_supplymate(message: str) -> ChatResponse:
-    if is_purchase_list_query(message):
-        return await _run_purchase_list(message)
+async def _run_purchase_list(message: str) -> ChatResponse:
+    snap, items = catalog_service.chat_dashboard(limit=PURCHASE_LIST_LIMIT)
+    return ChatResponse(
+        answer=catalog_service.format_dashboard_answer(snap, items),
+        mode="list",
+        purchase_list=items,
+        dashboard=snap,
+    )
 
+
+async def _run_single_product(message: str) -> ChatResponse:
     product_id = _extract_product_id(message)
     context = SupplyContext(product_id=product_id)
     supply_agent = build_supply_agent()
@@ -159,4 +167,37 @@ async def run_supplymate(message: str) -> ChatResponse:
         recommended_quantity=recommendation.recommended_quantity,
         calculation=recommendation.calculation,
         context=recommendation.context,
+    )
+
+
+async def run_supplymate(message: str) -> ChatResponse:
+    """Route by concept, then let deterministic Python compute numbers.
+
+    1. Regex fast-path (no LLM).
+    2. Numeric SKU in the message → single product.
+    3. LLM classifies the concept (falta de stock vs un SKU vs ranking).
+    4. If the classifier is down, fall back to product resolution.
+    """
+    rule = match_rule_intent(message)
+    if rule == "sales_categories":
+        return await _run_top_categories()
+    if rule == "purchase_list":
+        return await _run_purchase_list(message)
+
+    if message_looks_like_sku(message):
+        return await _run_single_product(message)
+
+    intent = await classify_intent(message)
+    if intent == "sales_categories":
+        return await _run_top_categories()
+    if intent == "purchase_list":
+        return await _run_purchase_list(message)
+    if intent == "single_product":
+        return await _run_single_product(message)
+    if intent is None:
+        return await _run_single_product(message)
+
+    raise ProductNotFoundError(
+        "No entendí si preguntás por un producto o por la lista de reposición. "
+        "Probá: «qué productos están en falta» o el nombre / código del producto."
     )

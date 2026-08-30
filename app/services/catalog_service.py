@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 from app.models import (
+    InventoryDashboard,
     ProductMaster,
     ProductNotFoundError,
     ProductSearchHit,
@@ -12,7 +13,17 @@ from app.models import (
 )
 from app.products import resolve_product_id
 from app.replenishment import calculate_replenishment
+from app.services import dashboard, metrics
 from app.store import SALES_AS_OF, get_store
+
+_sku_rows_cache: list[dict] | None = None
+
+
+def _sku_analytics_rows() -> list[dict]:
+    global _sku_rows_cache
+    if _sku_rows_cache is None:
+        _sku_rows_cache = dashboard.analytics_rows(tuple(get_store().products.values()))
+    return _sku_rows_cache
 
 
 def resolve_product(query: str) -> str:
@@ -67,9 +78,18 @@ def list_purchase_recommendations(
     min_quantity: int = 1,
 ) -> list[ReplenishmentRecommendation]:
     """All SKUs with recommended_quantity >= min_quantity, sorted desc."""
+    ranked = [
+        row
+        for row in _sku_analytics_rows()
+        if int(row.get("recommended_quantity") or 0) >= min_quantity
+    ]
+    ranked.sort(
+        key=lambda row: (-int(row["recommended_quantity"]), str(row.get("product_name") or ""))
+    )
+    items: list[ReplenishmentRecommendation] = []
     store = get_store()
-    results: list[ReplenishmentRecommendation] = []
-    for master in store.products.values():
+    for row in ranked[:limit]:
+        master = store.get_master(row["product_id"])
         calculation = calculate_replenishment(
             product_id=master.product_id,
             current_stock=master.current_stock,
@@ -77,10 +97,43 @@ def list_purchase_recommendations(
             lead_time_days=master.lead_time_days,
             safety_stock=master.safety_stock,
         )
-        if calculation.recommended_quantity >= min_quantity:
-            results.append(ReplenishmentRecommendation.from_master(master, calculation))
-    results.sort(key=lambda r: (-r.recommended_quantity, r.product_name))
-    return results[:limit]
+        items.append(ReplenishmentRecommendation.from_master(master, calculation))
+    return items
+
+
+def chat_dashboard(limit: int = 25) -> tuple[InventoryDashboard, list[PurchaseListItem]]:
+    rows = _sku_analytics_rows()
+    return dashboard.from_rows(rows), dashboard.purchase_items(rows, limit=limit)
+
+
+def format_dashboard_answer(
+    snap: InventoryDashboard,
+    items: list[PurchaseListItem],
+) -> str:
+    if not items:
+        return (
+            "Con el stock y las ventas de los últimos 30 días, "
+            "no hay productos que requieran reposición para cubrir los próximos 7 días."
+        )
+    coverage = (
+        f"{snap.avg_coverage:.1f} días" if snap.avg_coverage is not None else "—"
+    )
+    return (
+        f"**{snap.stockout_risk}** productos en riesgo de quiebre · "
+        f"**{len(items)} productos** para reponer. "
+        f"Cobertura promedio: {coverage}."
+    )
+
+
+def format_sales_answer(snap: InventoryDashboard) -> str:
+    if not snap.by_sales:
+        return "No hay ventas registradas en los últimos 30 días para armar un ranking de categorías."
+    lines = ["Estas son las **categorías más vendidas** (unidades, últimos 30 días):\n"]
+    for i, row in enumerate(snap.by_sales[:8], 1):
+        lines.append(
+            f"{i}. **{row.category}** — **{row.units_sold}** unidades ({row.sku_count} productos)"
+        )
+    return "\n".join(lines)
 
 
 def format_purchase_list_answer(items: list[ReplenishmentRecommendation]) -> str:
@@ -105,10 +158,56 @@ def format_purchase_list_answer(items: list[ReplenishmentRecommendation]) -> str
 def purchase_list_items(
     recommendations: list[ReplenishmentRecommendation],
 ) -> list[PurchaseListItem]:
-    return [
-        PurchaseListItem(
-            product_name=r.product_name,
-            recommended_quantity=r.recommended_quantity,
+    store = get_store()
+    items: list[PurchaseListItem] = []
+    for r in recommendations:
+        master = store.get_master(r.product_id)
+        row = metrics.sku_analytics_row(master, r.calculation)
+        items.append(
+            PurchaseListItem(
+                product_id=row["product_id"],
+                barcode=row["barcode"] or "",
+                product_name=row["product_name"],
+                supplier=row["supplier"] or "",
+                category=row["category"] or "",
+                subcategory=row["subcategory"] or "",
+                current_stock=row["current_stock"],
+                reorder_point=row["reorder_point"],
+                below_reorder_point=master.below_reorder_point,
+                average_daily_demand=row["average_daily_demand"],
+                days_of_supply=row["days_of_supply"],
+                health_bucket=row["health_bucket"],
+                recommended_quantity=row["recommended_quantity"],
+            )
         )
-        for r in recommendations
-    ]
+    return items
+
+
+PURCHASE_CSV_HEADERS = (
+    "barcode",
+    "product_id",
+    "product_name",
+    "supplier",
+    "recommended_quantity",
+)
+
+
+def purchase_list_csv(limit: int = 25) -> str:
+    import csv
+    import io
+
+    items = purchase_list_items(list_purchase_recommendations(limit=limit))
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(PURCHASE_CSV_HEADERS)
+    for item in items:
+        writer.writerow(
+            [
+                item.barcode,
+                item.product_id,
+                item.product_name,
+                item.supplier,
+                item.recommended_quantity,
+            ]
+        )
+    return buf.getvalue()
