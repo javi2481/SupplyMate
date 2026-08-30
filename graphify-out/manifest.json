@@ -190,5 +190,149 @@
     "seen": 1788127584.3935106,
     "ast_hash": "ce43d2a219cdc6aa7e81ddf08b693462",
     "semantic_hash": "ce43d2a219cdc6aa7e81ddf08b693462"
+  },
+  ".cursor/mcp.json": {
+    "mtime": 1788128718.176938,
+    "seen": 1788128731.143414,
+    "ast_hash": "46c2cf23d08421abc9a1e5e6bf330f7c",
+    "semantic_hash": ""
+  },
+  ".atl/skill-registry.md": {
+    "mtime": 1787679696.7527452,
+    "seen": 1788128731.143414,
+    "ast_hash": "000354a3302c341bfdbbb80b922a01a1",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1788119945.2527835,
+    "seen": 1788128731.143414,
+    "ast_hash": "0d9e74332e55f758f32f8b017cd462eb",
+    "semantic_hash": ""
+  },
+  "docs/api-simulada.md": {
+    "mtime": 1788041078.78519,
+    "seen": 1788128731.143414,
+    "ast_hash": "08d4a445eaeba86aff2b927214c7256d",
+    "semantic_hash": ""
+  },
+  "openspec/changes/catalog-integration/tasks.md": {
+    "mtime": 1788041126.022509,
+    "seen": 1788128731.143414,
+    "ast_hash": "f3211038b0ef793b786d0c8b27343f9d",
+    "semantic_hash": ""
+  },
+  "openspec/changes/catalog-integration/verify-report.md": {
+    "mtime": 1788041132.097965,
+    "seen": 1788128731.143414,
+    "ast_hash": "cef3ccf911f1e9cb3b3b807dfbd33573",
+    "semantic_hash": ""
+  },
+  "openspec/changes/dual-surface-analytics/design.md": {
+    "mtime": 1788118968.8908048,
+    "seen": 1788128731.143414,
+    "ast_hash": "11f0d0a9679764cc72325348d3f7c722",
+    "semantic_hash": ""
+  },
+  "openspec/changes/dual-surface-analytics/proposal.md": {
+    "mtime": 1788118970.4119406,
+    "seen": 1788128731.143414,
+    "ast_hash": "1a9be94679a059d8d65733c8b1c0f359",
+    "semantic_hash": ""
+  },
+  "openspec/changes/dual-surface-analytics/specs/analytics-db/spec.md": {
+    "mtime": 1788118970.0722022,
+    "seen": 1788128731.143414,
+    "ast_hash": "ee3e218becd3606ac0678fcbd1c7d667",
+    "semantic_hash": ""
+  },
+  "openspec/changes/dual-surface-analytics/specs/metrics/spec.md": {
+    "mtime": 1788111632.7032301,
+    "seen": 1788128731.143414,
+    "ast_hash": "8954711f519cca42ac78e04345bf0bcc",
+    "semantic_hash": ""
+  },
+  "openspec/changes/dual-surface-analytics/specs/purchase-export/spec.md": {
+    "mtime": 1788111640.2403793,
+    "seen": 1788128731.143414,
+    "ast_hash": "4e1b622c9253884325cc61b1e7ae894d",
+    "semantic_hash": ""
+  },
+  "openspec/changes/dual-surface-analytics/specs/surfaces/spec.md": {
+    "mtime": 1788118948.9471061,
+    "seen": 1788128731.143414,
+    "ast_hash": "d32932b623e000908cbee2f37de273d9",
+    "semantic_hash": ""
+  },
+  "openspec/changes/dual-surface-analytics/tasks.md": {
+    "mtime": 1788118045.7970264,
+    "seen": 1788128731.143414,
+    "ast_hash": "bc7a1cac77cb7b6abbc1d89645970030",
+    "semantic_hash": ""
+  },
+  "openspec/changes/dual-surface-analytics/verify-report.md": {
+    "mtime": 1788112069.0942385,
+    "seen": 1788128731.143414,
+    "ast_hash": "7fac5c1ddd4b906b83789a6f5a551111",
+    "semantic_hash": ""
+  },
+  "openspec/changes/mvp-core/design.md": {
+    "mtime": 1787679732.9303253,
+    "seen": 1788128731.143414,
+    "ast_hash": "5a82c451ac9886243995f6ea3c43037f",
+    "semantic_hash": ""
+  },
+  "openspec/changes/mvp-core/proposal.md": {
+    "mtime": 1787679709.3018367,
+    "seen": 1788128731.143414,
+    "ast_hash": "ad5fb0c331ab2e506c7d92306faa7b48",
+    "semantic_hash": ""
+  },
+  "openspec/changes/mvp-core/specs/agent/spec.md": {
+    "mtime": 1787679720.8201041,
+    "seen": 1788128731.143414,
+    "ast_hash": "23c9b872503cfce4ea3361ac4ae8721c",
+    "semantic_hash": ""
+  },
+  "openspec/changes/mvp-core/specs/api/spec.md": {
+    "mtime": 1787679727.4314551,
+    "seen": 1788128731.143414,
+    "ast_hash": "8442d3f51547385b3eae336426ad5140",
+    "semantic_hash": ""
+  },
+  "openspec/changes/mvp-core/specs/replenishment/spec.md": {
+    "mtime": 1787679714.205621,
+    "seen": 1788128731.143414,
+    "ast_hash": "87d01e1a97b6a778348bb4a727739740",
+    "semantic_hash": ""
+  },
+  "openspec/changes/mvp-core/specs/tools/spec.md": {
+    "mtime": 1787679717.3415155,
+    "seen": 1788128731.143414,
+    "ast_hash": "6ecfb22434bca3b6cd63b81bc825a750",
+    "semantic_hash": ""
+  },
+  "openspec/changes/mvp-core/state.yaml": {
+    "mtime": 1787680052.0004134,
+    "seen": 1788128731.143414,
+    "ast_hash": "2b7dc595a7d5c95f4cb3875e9a0592e1",
+    "semantic_hash": ""
+  },
+  "openspec/changes/mvp-core/tasks.md": {
+    "mtime": 1787680051.0586586,
+    "seen": 1788128731.143414,
+    "ast_hash": "166f55ca9eaebc9369d1478db7abc21a",
+    "semantic_hash": ""
+  },
+  "openspec/changes/mvp-core/verify-report.md": {
+    "mtime": 1787680050.363212,
+    "seen": 1788128731.143414,
+    "ast_hash": "0f4375b0403767b8216f8395272adf24",
+    "semantic_hash": ""
+  },
+  "openspec/config.yaml": {
+    "mtime": 1788118948.9461045,
+    "seen": 1788128731.143414,
+    "ast_hash": "321b6942dce52004eb29b6ca54b961b4",
+    "semantic_hash": ""
   }
 }
