@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "graphify": {
+      "command": "C:\\Users\\Equipo\\.local\\bin\\graphify.exe",
+      "args": [
+        "serve",
+        "graphify-out/graph.json"
+      ]
+    }
+  }
+}

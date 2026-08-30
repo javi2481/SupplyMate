@@ -14,3 +14,4 @@ build/
 .engram/
 *.duckdb
 *.duckdb.wal
+graphify-out/cost.json
