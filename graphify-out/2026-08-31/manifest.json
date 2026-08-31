@@ -748,29 +748,5 @@
     "seen": 1788142216.5004873,
     "ast_hash": "32503c18367ce3f71b7920e1300be312",
     "semantic_hash": ""
-  },
-  "openspec/changes/natural-query-interpretation/design.md": {
-    "mtime": 1788144589.5647736,
-    "seen": 1788145503.819818,
-    "ast_hash": "c573acf5df48d3a20281f3ca58123a71",
-    "semantic_hash": ""
-  },
-  "openspec/changes/natural-query-interpretation/proposal.md": {
-    "mtime": 1788144525.1347063,
-    "seen": 1788145503.819818,
-    "ast_hash": "3c0cddd4ecab58c8e6326ba2d697981e",
-    "semantic_hash": ""
-  },
-  "openspec/changes/natural-query-interpretation/tasks.md": {
-    "mtime": 1788145496.4202416,
-    "seen": 1788145503.819818,
-    "ast_hash": "325e08c5a2e205d1fb81f34f7e9da059",
-    "semantic_hash": ""
-  },
-  "docs/03 PLN - Conceptos y t\u00e9cnicas de procesamiento.pdf": {
-    "mtime": 1788144290.5643692,
-    "seen": 1788145503.819818,
-    "ast_hash": "c5bc4446927916444a7654c36b0c85df",
-    "semantic_hash": ""
   }
 }
