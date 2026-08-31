@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 
 from agents import Agent, Runner, set_tracing_disabled
 from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
@@ -9,6 +10,7 @@ from openai import AsyncOpenAI
 from app import config
 from app.intent_classifier import classify_intent
 from app.intents import is_purchase_list_query, is_top_categories_query, match_rule_intent
+from app.llm_log import emit
 from app.models import (
     AnalyticalScope,
     AnalyzeRequest,
@@ -70,6 +72,18 @@ oc_summary must mention SKU count and total recommended units from the payload.
 PURCHASE_LIST_LIMIT = 25
 
 _model_cache: OpenAIChatCompletionsModel | str | None = None
+
+
+async def _run_logged(agent, prompt, context=None, **kwargs):
+    started = time.perf_counter()
+    if context is not None:
+        result = await Runner.run(agent, prompt, context=context, **kwargs)
+    else:
+        result = await Runner.run(agent, prompt, **kwargs)
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    name = getattr(agent, "name", "unknown")
+    emit(event="runner.run", agent=name, latency_ms=latency_ms)
+    return result, latency_ms
 
 
 def _extract_product_id(message: str) -> str | None:
@@ -208,7 +222,7 @@ async def run_analyze(request: AnalyzeRequest) -> AnalyzeResponse:
             if request.mode == "commit"
             else build_insight_agent()
         )
-        run = await Runner.run(agent, prompt)
+        run, _latency = await _run_logged(agent, prompt)
         raw = _parse_json_output(str(run.final_output))
         if request.mode == "commit":
             summary = CommitSummary.model_validate(raw)
@@ -252,6 +266,13 @@ async def run_analyze(request: AnalyzeRequest) -> AnalyzeResponse:
         response = _fallback_analyze_response(request, slice_data, prompt_hash=phash)
 
     insight_cache.set(cache_key, response)
+    emit(
+        event="analyze.complete",
+        agent="SupplyMateCommit" if request.mode == "commit" else "SupplyMateInsight",
+        latency_ms=0,
+        fallback_used=response.insight_source == "fallback",
+        insight_source=response.insight_source,
+    )
     return response
 
 
@@ -279,7 +300,7 @@ async def _run_single_product(message: str) -> ChatResponse:
     context = SupplyContext(product_id=product_id)
     supply_agent = build_supply_agent()
 
-    await Runner.run(supply_agent, message, context=context)
+    await _run_logged(supply_agent, message, context=context)
 
     if not context.ready():
         product_id = context.product_id or _extract_product_id(message)
@@ -308,8 +329,19 @@ async def _run_single_product(message: str) -> ChatResponse:
         "Explica esta recomendación de reabastecimiento al usuario:\n"
         f"{json.dumps(explain_payload, ensure_ascii=False)}"
     )
-    explain_run = await Runner.run(explain_agent, explain_prompt)
+    explain_run, _latency = await _run_logged(explain_agent, explain_prompt)
     answer = str(explain_run.final_output)
+    orphan_errors = insight_validator.validate_explanation_text(answer, explain_payload)
+    fallback_used = bool(orphan_errors)
+    if fallback_used:
+        answer = catalog_service.format_single_product_answer(recommendation)
+    emit(
+        event="explain.complete",
+        agent="SupplyMateExplainer",
+        latency_ms=_latency,
+        fallback_used=fallback_used,
+        insight_source="fallback" if fallback_used else "llm",
+    )
 
     return ChatResponse(
         answer=answer,

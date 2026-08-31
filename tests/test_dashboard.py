@@ -110,6 +110,39 @@ def test_purchase_items_top_limit():
     assert items[0].recommended_quantity == 40
 
 
+def test_purchase_items_critical_before_higher_qty():
+    rows = [
+        _row(
+            product_id="cheap",
+            product_name="Cheap",
+            recommended_quantity=99,
+            operational_priority="normal",
+            days_of_supply=20.0,
+        ),
+        _row(
+            product_id="urgent",
+            product_name="Urgent",
+            recommended_quantity=3,
+            operational_priority="critical",
+            health_bucket="stockout_risk",
+            days_of_supply=0.5,
+        ),
+    ]
+    items = dashboard.purchase_items(rows, limit=2)
+    assert items[0].product_id == "urgent"
+
+
+def test_from_rows_sums_purchase_value():
+    rows = [
+        _row(recommended_quantity=10, estimated_purchase_value=100.0),
+        _row(recommended_quantity=2, estimated_purchase_value=20.0),
+        _row(recommended_quantity=5, estimated_purchase_value=None),
+    ]
+    snap = dashboard.from_rows(rows)
+    assert snap.estimated_purchase_value == 120.0
+
+
+
 def test_from_rows_empty():
     snap = dashboard.from_rows([])
     assert snap.skus == 0

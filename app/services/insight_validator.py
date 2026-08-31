@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import re
+from typing import Any
 
 from app.models import CommitSummary, DashboardInsight, PurchaseListItem, ReplenishmentSlice
 
@@ -31,6 +33,35 @@ def _validate_priorities(
     return errors
 
 
+def _add_number(nums: set[str], value: Any) -> None:
+    if value is None:
+        return
+    if isinstance(value, bool):
+        return
+    if isinstance(value, int):
+        nums.add(str(value))
+        return
+    if isinstance(value, float):
+        nums.add(str(int(value)))
+        rounded = int(round(value))
+        nums.add(str(rounded))
+        nums.add(f"{value:.1f}")
+        nums.add(f"{value:.2f}")
+        return
+    text = str(value).strip()
+    if re.fullmatch(r"\d+", text):
+        nums.add(text)
+
+
+def allowed_numbers_from_mapping(data: Any) -> set[str]:
+    """Harvest integer tokens from a JSON-serializable payload."""
+    nums: set[str] = set()
+    blob = json.dumps(data, default=str, ensure_ascii=False)
+    for match in re.finditer(r"\b(\d+)\b", blob):
+        nums.add(match.group(1))
+    return nums
+
+
 def _allowed_numbers(slice_data: ReplenishmentSlice) -> set[str]:
     nums: set[str] = set()
     dash = slice_data.dashboard
@@ -41,27 +72,32 @@ def _allowed_numbers(slice_data: ReplenishmentSlice) -> set[str]:
         dash.overstock,
         dash.healthy,
     ):
-        nums.add(str(val))
-    if dash.avg_coverage is not None:
-        nums.add(f"{dash.avg_coverage:.1f}")
-        nums.add(str(int(dash.avg_coverage)))
+        _add_number(nums, val)
+    _add_number(nums, dash.avg_coverage)
+    _add_number(nums, dash.estimated_purchase_value)
     total_qty = sum(i.recommended_quantity for i in slice_data.purchase_list)
-    nums.add(str(len(slice_data.purchase_list)))
-    nums.add(str(total_qty))
+    _add_number(nums, len(slice_data.purchase_list))
+    _add_number(nums, total_qty)
     for item in slice_data.purchase_list:
-        nums.add(str(item.recommended_quantity))
-        if item.days_of_supply is not None:
-            nums.add(f"{item.days_of_supply:.1f}")
+        _add_number(nums, item.recommended_quantity)
+        _add_number(nums, item.days_of_supply)
+        _add_number(nums, item.estimated_purchase_value)
+        _add_number(nums, item.purchase_cost)
+        _add_number(nums, item.current_stock)
     return nums
 
 
-def _orphan_integers(text: str, allowed: set[str]) -> list[str]:
+def orphan_integers(text: str, allowed: set[str]) -> list[str]:
     errors: list[str] = []
     for match in re.finditer(r"\b(\d+)\b", text):
         token = match.group(1)
         if token not in allowed and int(token) > 2:
             errors.append(f"orphan integer {token} in text")
     return errors
+
+
+def _orphan_integers(text: str, allowed: set[str]) -> list[str]:
+    return orphan_integers(text, allowed)
 
 
 def validate_insight(
@@ -74,7 +110,7 @@ def validate_insight(
     )
     allowed = _allowed_numbers(slice_data)
     blob = " ".join(insight.bullets + [insight.summary])
-    errors.extend(_orphan_integers(blob, allowed))
+    errors.extend(orphan_integers(blob, allowed))
     return errors
 
 
@@ -93,5 +129,10 @@ def validate_commit_summary(
         if n > 0:
             errors.append("oc_summary must cite sku count or total units from payload")
     blob = " ".join([summary.headline, summary.oc_summary] + summary.checklist)
-    errors.extend(_orphan_integers(blob, allowed))
+    errors.extend(orphan_integers(blob, allowed))
     return errors
+
+
+def validate_explanation_text(text: str, payload: dict) -> list[str]:
+    allowed = allowed_numbers_from_mapping(payload)
+    return orphan_integers(text, allowed)

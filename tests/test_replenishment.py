@@ -38,6 +38,26 @@ def test_recommended_quantity_zero_when_stock_exceeds_target():
     assert result.recommended_quantity == 0
 
 
+def test_ceil_rounds_fractional_gap_up():
+    result = calculate_replenishment(
+        product_id="PROD-FRAC",
+        current_stock=10,
+        total_units_sold_last_30=125,
+        lead_time_days=3,
+        safety_stock=10,
+    )
+    # D=4.166...; horizon=29.166...; lead=12.5; target=51.666...; gap=41.666... → 42
+    assert result.recommended_quantity == 42
+
+
+def test_policy_does_not_use_reorder_point():
+    import inspect
+
+    source = inspect.getsource(calculate_replenishment)
+    assert "reorder_point" not in source
+
+
+
 def test_different_lead_time_triangulation():
     result = calculate_replenishment(
         product_id="PROD-003",

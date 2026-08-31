@@ -152,6 +152,9 @@ class PurchaseListItem(BaseModel):
     days_of_supply: float | None = None
     health_bucket: str = ""
     recommended_quantity: int
+    operational_priority: str = "normal"
+    purchase_cost: float | None = None
+    estimated_purchase_value: float | None = None
 
 
 class CategoryBar(BaseModel):
@@ -178,6 +181,7 @@ class InventoryDashboard(BaseModel):
     overstock: int = 0
     healthy: int = 0
     avg_coverage: float | None = None
+    estimated_purchase_value: float | None = None
     by_category: list[CategoryBar] = Field(default_factory=list)
     by_sales: list[CategorySalesBar] = Field(default_factory=list)
     coverage: list[CoverageBar] = Field(default_factory=list)

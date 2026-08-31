@@ -126,6 +126,12 @@ def from_rows(rows: list[dict], *, category_limit: int = 8) -> InventoryDashboar
         key=lambda pair: (-pair[1][0], pair[0]),
     )
     avg = (sum(coverage_days) / len(coverage_days)) if coverage_days else None
+    value_parts = [
+        float(row["estimated_purchase_value"])
+        for row in rows
+        if int(row.get("recommended_quantity") or 0) > 0
+        and row.get("estimated_purchase_value") is not None
+    ]
     return InventoryDashboard(
         skus=skus,
         stockout_risk=counts[metrics.BUCKET_STOCKOUT_RISK],
@@ -133,6 +139,7 @@ def from_rows(rows: list[dict], *, category_limit: int = 8) -> InventoryDashboar
         overstock=counts[metrics.BUCKET_OVERSTOCK],
         healthy=counts[metrics.BUCKET_HEALTHY],
         avg_coverage=avg,
+        estimated_purchase_value=sum(value_parts) if value_parts else None,
         by_category=[
             CategoryBar(category=name, recommended_quantity=qty, sku_count=n)
             for name, (qty, n) in ranked[:category_limit]
@@ -150,10 +157,16 @@ def from_rows(rows: list[dict], *, category_limit: int = 8) -> InventoryDashboar
 def purchase_items(rows: list[dict], limit: int = 25) -> list[PurchaseListItem]:
     needed = [row for row in rows if int(row.get("recommended_quantity") or 0) > 0]
     needed.sort(
-        key=lambda row: (-int(row.get("recommended_quantity") or 0), str(row.get("product_name") or ""))
+        key=lambda row: (
+            metrics.PRIORITY_RANK.get(str(row.get("operational_priority") or ""), 9),
+            -int(row.get("recommended_quantity") or 0),
+            str(row.get("product_name") or ""),
+        )
     )
     items: list[PurchaseListItem] = []
     for row in needed[:limit]:
+        cost = row.get("purchase_cost")
+        value = row.get("estimated_purchase_value")
         items.append(
             PurchaseListItem(
                 product_id=str(row.get("product_id") or ""),
@@ -169,6 +182,9 @@ def purchase_items(rows: list[dict], limit: int = 25) -> list[PurchaseListItem]:
                 days_of_supply=row.get("days_of_supply"),
                 health_bucket=str(row.get("health_bucket") or ""),
                 recommended_quantity=int(row.get("recommended_quantity") or 0),
+                operational_priority=str(row.get("operational_priority") or metrics.PRIORITY_NORMAL),
+                purchase_cost=float(cost) if cost is not None else None,
+                estimated_purchase_value=float(value) if value is not None else None,
             )
         )
     return items

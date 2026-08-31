@@ -212,6 +212,20 @@ def format_purchase_list_answer(items: list[ReplenishmentRecommendation]) -> str
     return "\n".join(lines)
 
 
+def format_single_product_answer(rec: ReplenishmentRecommendation) -> str:
+    """Deterministic SKU explanation when the LLM narration fails validation."""
+    calc = rec.calculation
+    return (
+        f"Para **{rec.product_name}** (`{rec.product_id}`) la cantidad recomendada es "
+        f"**{rec.recommended_quantity}** unidades.\n\n"
+        f"Política order-up-to: demanda 7 días ({calc.demand_horizon:.1f}) + "
+        f"demanda en lead time ({calc.demand_lead_time:.1f}) + stock de seguridad "
+        f"({calc.safety_stock}) − stock actual ({calc.current_stock}), "
+        f"redondeado hacia arriba.\n"
+        f"El punto de reorden no entra en esta cuenta."
+    )
+
+
 def purchase_list_items(
     recommendations: list[ReplenishmentRecommendation],
 ) -> list[PurchaseListItem]:
@@ -235,6 +249,9 @@ def purchase_list_items(
                 days_of_supply=row["days_of_supply"],
                 health_bucket=row["health_bucket"],
                 recommended_quantity=row["recommended_quantity"],
+                operational_priority=str(row.get("operational_priority") or metrics.PRIORITY_NORMAL),
+                purchase_cost=row.get("purchase_cost"),
+                estimated_purchase_value=row.get("estimated_purchase_value"),
             )
         )
     return items
@@ -246,6 +263,8 @@ PURCHASE_CSV_HEADERS = (
     "product_name",
     "supplier",
     "recommended_quantity",
+    "operational_priority",
+    "estimated_purchase_value",
 )
 
 
@@ -264,6 +283,10 @@ def purchase_list_csv_from_items(items: list[PurchaseListItem]) -> str:
                 item.product_name,
                 item.supplier,
                 item.recommended_quantity,
+                item.operational_priority,
+                ""
+                if item.estimated_purchase_value is None
+                else f"{item.estimated_purchase_value:.2f}",
             ]
         )
     return buf.getvalue()

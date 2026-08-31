@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import time
+
 from agents import Agent, Runner
 
 from app.intents import Intent, parse_intent_label
+from app.llm_log import emit
 
 CLASSIFY_INSTRUCTIONS = """
 Sos un clasificador de intenciones para SupplyMate, un sistema de reposición de inventario.
@@ -52,7 +55,22 @@ async def classify_intent(message: str) -> Intent | None:
         from app.agent import get_model
 
         agent = build_classifier_agent(get_model())
+        started = time.perf_counter()
         result = await Runner.run(agent, f"Pregunta del usuario:\n{text}")
-        return parse_intent_label(str(result.final_output))
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        intent = parse_intent_label(str(result.final_output))
+        emit(
+            event="runner.run",
+            agent="SupplyMateIntent",
+            latency_ms=latency_ms,
+            intent=intent,
+        )
+        return intent
     except Exception:
+        emit(
+            event="runner.run",
+            agent="SupplyMateIntent",
+            latency_ms=0,
+            fallback_used=True,
+        )
         return None

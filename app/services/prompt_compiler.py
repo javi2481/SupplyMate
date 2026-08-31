@@ -13,6 +13,7 @@ from app.models import (
     PurchaseListItem,
     ReplenishmentSlice,
 )
+from app.services import metrics
 
 
 def _event_line(index: int, event: InteractionEvent) -> str:
@@ -28,6 +29,7 @@ def _dashboard_summary(dash: InventoryDashboard) -> dict:
         "overstock": dash.overstock,
         "healthy": dash.healthy,
         "avg_coverage": dash.avg_coverage,
+        "estimated_purchase_value": dash.estimated_purchase_value,
     }
 
 
@@ -39,6 +41,8 @@ def _purchase_top(items: list[PurchaseListItem], limit: int = 10) -> list[dict]:
             "recommended_quantity": item.recommended_quantity,
             "days_of_supply": item.days_of_supply,
             "health_bucket": item.health_bucket,
+            "operational_priority": item.operational_priority,
+            "estimated_purchase_value": item.estimated_purchase_value,
             "category": item.category,
         }
         for item in items[:limit]
@@ -93,6 +97,8 @@ def compile_analyze_prompt(
 
     parts = [
         "Sos SupplyMate Analista. Español. Usá SOLO números del JSON payload.",
+        metrics.metric_prompt_block(),
+        "No uses porcentajes ni variaciones salvo que aparezcan en el JSON.",
         f"Pregunta inicial: {root_question or '(no indicada)'}",
         f"Historial de exploración:\n{history or '(ninguno)'}",
         f"Payload verificado:\n{payload_json}",

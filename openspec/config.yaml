@@ -6,7 +6,7 @@ context: |
   Architecture: LLM orchestrates tools; deterministic Python calculates order qty.
   Product: one Streamlit chat — “¿Cuánto pedir?” and “¿Qué está pasando?” in the same reply
   (KPIs + lollipop/histogram + purchase table). Shared metrics vocabulary. No Superset/DuckDB.
-  Out of scope: RAG, embeddings, LangChain, multi-agent, React frontend, Postgres/dbt/Airflow, K8s, Apache Superset.
+  Out of scope: RAG, embeddings, LangChain, multi-agent swarm, React frontend, Postgres/dbt/Airflow, K8s, Apache Superset.
 
 strict_tdd: true
 

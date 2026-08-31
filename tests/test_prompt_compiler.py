@@ -26,6 +26,8 @@ def test_compile_explore_prompt_includes_history_and_delta():
     assert "Perfumería" in prompt
     assert "delta_vs_root" in prompt
     assert "DashboardInsight" in prompt
+    assert "Caveat:" in prompt
+    assert "Riesgo de quiebre" in prompt
 
 
 def test_compile_commit_prompt_mentions_commit_summary():

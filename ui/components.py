@@ -40,7 +40,7 @@ def render_kpi_strip(dash: dict | None) -> None:
             metrics.LABEL_STOCKOUT_RISK,
             str(dash.get("stockout_risk", "—")),
             theme.HEALTH_COLORS[metrics.BUCKET_STOCKOUT_RISK],
-            "Bajo punto de reorden — acción urgente",
+            metrics.METRIC_CONTRACTS["stockout_risk"].caveat,
         ),
         _kpi_card(
             metrics.LABEL_UNDERSTOCK,
@@ -52,15 +52,25 @@ def render_kpi_strip(dash: dict | None) -> None:
             metrics.LABEL_OVERSTOCK,
             str(dash.get("overstock", "—")),
             theme.HEALTH_COLORS[metrics.BUCKET_OVERSTOCK],
-            "Stock por encima del máximo",
+            metrics.METRIC_CONTRACTS["overstock"].caveat,
         ),
         _kpi_card(
             f"{metrics.LABEL_COVERAGE} prom.",
             avg_txt,
             "#AED581",
-            "Días que alcanza el stock al ritmo de venta",
+            metrics.METRIC_CONTRACTS["coverage"].caveat,
         ),
     ]
+    value = dash.get("estimated_purchase_value")
+    if isinstance(value, (int, float)):
+        cards.append(
+            _kpi_card(
+                metrics.LABEL_PURCHASE_VALUE,
+                f"{value:,.0f}",
+                "#FFCC80",
+                metrics.METRIC_CONTRACTS["purchase_value"].caveat,
+            )
+        )
     st.markdown(
         f'<div class="sm-kpi-row">{"".join(cards)}</div>',
         unsafe_allow_html=True,
@@ -82,14 +92,11 @@ def render_health_legend() -> None:
         unsafe_allow_html=True,
     )
     with st.expander("¿Qué significan estos indicadores?", expanded=False):
-        st.markdown(
-            """
-- **Cobertura** = stock ÷ venta diaria → cuántos días te alcanza lo que tenés.
-- **Cantidad recomendada** = Python calcula cuánto pedir para **7 días + lead time + stock de seguridad** (el LLM no inventa el número).
-- **Riesgo de quiebre** = stock en o bajo el punto de reorden y hay que comprar.
-- Los gráficos son clickeables: cada click **recorta** el panel sin volver a preguntar.
-"""
-        )
+        lines = [
+            f"- **{c.label}** — {c.rule}. _{c.caveat}_"
+            for c in metrics.METRIC_CONTRACTS.values()
+        ]
+        st.markdown("\n".join(lines))
 
 
 def render_coverage_strip(coverage_rows: list[dict]) -> None:
@@ -135,6 +142,11 @@ def build_purchase_dataframe(purchase_list: list[dict]) -> pd.DataFrame:
                 "Ritmo/día": round(float(item.get("average_daily_demand") or 0), 1),
                 "Tendencia": theme.TREND_LABELS.get(bucket, "—"),
                 "Pedir": int(item.get("recommended_quantity") or 0),
+                "Prioridad": metrics.PRIORITY_LABELS.get(
+                    str(item.get("operational_priority") or ""),
+                    item.get("operational_priority") or "—",
+                ),
+                "Valor est.": item.get("estimated_purchase_value"),
                 "Estado": metrics.BUCKET_LABELS.get(bucket, bucket),
             }
         )
@@ -170,6 +182,15 @@ def render_purchase_table(
             "Pedir",
             help=metrics.LABEL_RECOMMENDED_QTY,
             format="%d u",
+        ),
+        "Prioridad": st.column_config.TextColumn(
+            "Prioridad",
+            help="Crítica = riesgo de quiebre; Alta = reponer con cobertura < 7 días",
+        ),
+        "Valor est.": st.column_config.NumberColumn(
+            "Valor est.",
+            help=metrics.METRIC_CONTRACTS["purchase_value"].caveat,
+            format="%.0f",
         ),
         "Estado": st.column_config.TextColumn("Estado"),
     }

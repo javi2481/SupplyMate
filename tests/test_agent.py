@@ -61,7 +61,31 @@ async def test_run_supplymate_quantity_matches_python_calc():
     assert isinstance(response, ChatResponse)
     assert response.product_id == SKU_HIGH_QTY
     assert response.recommended_quantity == expected.recommended_quantity
-    assert response.recommended_quantity == 172
+    assert response.recommended_quantity == 173
+
+
+@pytest.mark.asyncio
+async def test_explain_orphan_falls_back_to_deterministic_text():
+    ctx = _seed_context_for_high_qty()
+    expected = catalog_service.get_replenishment_recommendation(SKU_HIGH_QTY)
+
+    async def fake_runner(agent, message, context=None, **kwargs):
+        class Result:
+            final_output = "Recomiendo pedir 999 unidades inventadas."
+
+        if context is not None and hasattr(agent, "tools") and agent.tools:
+            context.product_id = ctx.product_id
+            context.inventory = ctx.inventory
+            context.sales = ctx.sales
+            context.params = ctx.params
+        return Result()
+
+    with patch("app.agent.Runner.run", new=AsyncMock(side_effect=fake_runner)):
+        response = await run_supplymate(f"¿Cuánto debería pedir de {SKU_HIGH_QTY}?")
+
+    assert "999" not in response.answer
+    assert str(expected.recommended_quantity) in response.answer
+    assert "order-up-to" in response.answer.lower()
 
 
 @pytest.mark.asyncio

@@ -28,9 +28,9 @@ HEALTH_ICONS: dict[str, str] = {
 }
 
 HEALTH_HINTS: dict[str, str] = {
-    metrics.BUCKET_STOCKOUT_RISK: "Stock bajo el punto de reorden — prioridad alta",
-    metrics.BUCKET_UNDERSTOCK: "Hay que reponer para cubrir 7 días + lead time",
-    metrics.BUCKET_OVERSTOCK: "Stock por encima del máximo — no pedir",
+    metrics.BUCKET_STOCKOUT_RISK: metrics.METRIC_CONTRACTS["stockout_risk"].caveat,
+    metrics.BUCKET_UNDERSTOCK: metrics.METRIC_CONTRACTS["understock"].caveat,
+    metrics.BUCKET_OVERSTOCK: metrics.METRIC_CONTRACTS["overstock"].caveat,
     metrics.BUCKET_HEALTHY: "Stock alineado con la demanda",
 }
 

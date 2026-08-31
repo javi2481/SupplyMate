@@ -15,6 +15,6 @@ echo "$csv" | grep -q "barcode"
 test "$(echo "$csv" | wc -l)" -ge 2
 
 echo "Smoke: GET /products/6033436/replenishment"
-curl -sf "${BASE_URL}/products/6033436/replenishment" | grep -q '"recommended_quantity":172'
+curl -sf "${BASE_URL}/products/6033436/replenishment" | grep -q '"recommended_quantity":173'
 
 echo "All smoke checks passed."

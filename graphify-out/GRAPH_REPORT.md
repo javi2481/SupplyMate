@@ -1,29 +1,29 @@
 # Graph Report - SupplyMate  (2026-08-30)
 
 ## Corpus Check
-- 110 files · ~26,515 words
+- 122 files · ~29,136 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 717 nodes · 1568 edges · 55 communities (36 shown, 15 thin omitted)
-- Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 118 edges (avg confidence: 0.95)
+- 947 nodes · 1848 edges · 85 communities (71 shown, 9 thin omitted)
+- Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 120 edges (avg confidence: 0.95)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `42697b72`
+- Built from commit: `e939a143`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- test_tools.py
+- ProductNotFoundError
 - AnalyticalScope
-- get_replenishment_recommendation
+- test_agent.py
 - store.py
-- models.py
+- insight_validator.py
 - api.py
 - bug_report.md
 - test_api.py
-- products.py
+- test_purchase_list.py
 - streamlit_app.py
 - export_catalog_csvs.py
 - app/__init__.py
@@ -31,9 +31,8 @@
 - graphify
 - Traceability matrix — active changes
 - SupplyMate
-- panel_modes.py
+- run_analyze
 - components.py
-- README.md
 - charts.py
 - Requirements
 - Tasks: engineering-quality
@@ -61,25 +60,57 @@
 - llm-drilldown-insights/tasks.md
 - llm-drilldown-insights/verify-report.md
 - smoke_api.sh script
-- Agent
-- date
-- get
-- Response
-- asyncio
+- agent.py
+- ProductMaster
+- classify_intent
+- products.py
+- ADDED Requirements
+- ADDED Requirements
+- get_inventory
+- Requirements
+- ADDED Requirements
+- Proposal: dual-surface-analytics
+- Requirements
+- Design: mvp-core
+- Proposal: mvp-core
+- Tasks: mvp-core
+- API simulada — contrato de datos SupplyMate
+- Design: dual-surface-analytics
+- Requirements
+- Tasks: dual-surface-analytics
+- Verify report — dual-surface-analytics
+- Tasks: semantic-correctness
+- Requirements
+- ADDED Requirements
+- Verify Report: mvp-core
+- Requirements
+- Requirements
+- Matriz de compatibilidad
+- Verify report — catalog-integration
+- Design: semantic-correctness
+- Proposal: semantic-correctness
+- Requirements
+- Requirements
+- Requirements
+- Verify report — semantic-correctness
+- Skill Registry
+- Catalog integration — extends mvp-core with unified master + REST
 
 ## God Nodes (most connected - your core abstractions)
 1. `AnalyticalScope` - 82 edges
 2. `ProductNotFoundError` - 29 edges
-3. `run_analyze()` - 26 edges
-4. `ProductMaster` - 25 edges
-5. `run_supplymate()` - 23 edges
+3. `run_analyze()` - 28 edges
+4. `ProductMaster` - 28 edges
+5. `run_supplymate()` - 24 edges
 6. `PurchaseListItem` - 22 edges
-7. `chat_dashboard()` - 22 edges
-8. `CatalogStore` - 22 edges
-9. `get_replenishment_recommendation()` - 21 edges
+7. `get_replenishment_recommendation()` - 22 edges
+8. `chat_dashboard()` - 22 edges
+9. `CatalogStore` - 22 edges
 10. `InventoryDashboard` - 20 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `test_run_supplymate_zero_quantity_triangulation()` --uses--> `SalesHistory`  [INFERRED]
+  tests/test_agent.py → app/models.py
 - `test_run_analyze_priorities_subset_of_purchase_list()` --uses--> `AnalyticalScope`  [INFERRED]
   tests/test_agent.py → app/models.py
 - `_analyze_cache_key()` --uses--> `AnalyticalScope`  [INFERRED]
@@ -88,45 +119,47 @@
   ui/streamlit_app.py → app/models.py
 - `_effective_panel_scope()` --uses--> `AnalyticalScope`  [INFERRED]
   ui/streamlit_app.py → app/models.py
-- `fetch_analyze()` --uses--> `AnalyticalScope`  [INFERRED]
-  ui/streamlit_app.py → app/models.py
 
 ## Import Cycles
 - None detected.
 
-## Communities (55 total, 15 thin omitted)
+## Communities (85 total, 9 thin omitted)
 
-### Community 0 - "test_tools.py"
+### Community 0 - "ProductNotFoundError"
 Cohesion: 0.14
-Nodes (25): Any, _hydrate_context(), resolve_product(), get_inventory(), get_replenishment_params(), get_sales_history(), load_inventory(), load_replenishment_params() (+17 more)
+Nodes (22): ProductNotFoundError, Resolve free-text to product_id: catalog code, barcode, or name., resolve_product_id(), get_sales_history(), date, resolve_product(), safe_resolve(), load_inventory() (+14 more)
 
 ### Community 1 - "AnalyticalScope"
-Cohesion: 0.07
-Nodes (70): AnalyticalScope, CategoryBar, CoverageBar, InteractionEvent, InventoryDashboard, PurchaseListItem, SuggestedFilter, chat_dashboard() (+62 more)
+Cohesion: 0.06
+Nodes (84): inventory_dashboard(), purchase_list(), purchase_list_csv(), Response, replenishment_slice(), AnalyticalScope, CategoryBar, CategorySalesBar (+76 more)
 
-### Community 2 - "get_replenishment_recommendation"
-Cohesion: 0.09
-Nodes (34): ReplenishmentRecommendation, ReplenishmentResult, calculate_replenishment(), format_purchase_list_answer(), get_master(), get_replenishment_by_query(), get_replenishment_recommendation(), list_purchase_recommendations() (+26 more)
+### Community 2 - "test_agent.py"
+Cohesion: 0.08
+Nodes (49): Route by concept, then let deterministic Python compute numbers. 1. Regex fast-…, _run_purchase_list(), run_supplymate(), _run_top_categories(), chat(), get_product(), get_replenishment(), ChatResponse (+41 more)
 
 ### Community 3 - "store.py"
-Cohesion: 0.10
-Nodes (32): ProductMaster, days_of_supply(), health_bucket(), _as_float(), _as_int(), _as_str(), _build_master(), CatalogStore (+24 more)
+Cohesion: 0.11
+Nodes (28): search_products(), ProductSearchHit, SalesHistory, search_products(), _as_float(), _as_int(), _as_str(), _build_master() (+20 more)
 
-### Community 4 - "models.py"
-Cohesion: 0.07
-Nodes (72): Agent, build_commit_agent(), build_explain_agent(), build_insight_agent(), build_supply_agent(), _fallback_analyze_response(), get_model(), _parse_json_output() (+64 more)
+### Community 4 - "insight_validator.py"
+Cohesion: 0.20
+Nodes (24): CommitSummary, DashboardInsight, PurchasePriority, ReplenishmentSlice, _add_number(), _allowed_numbers(), allowed_numbers_from_mapping(), _items_by_id() (+16 more)
 
 ### Community 5 - "api.py"
-Cohesion: 0.05
-Nodes (44): get_product(), get_replenishment(), health(), inventory_dashboard(), purchase_list(), purchase_list_csv(), Response, replenishment_slice() (+36 more)
+Cohesion: 0.06
+Nodes (36): health(), _scope_dependency(), _validate_scope_values(), effective_analyze_rate_limit(), effective_chat_rate_limit(), is_production(), is_test_env(), ChatRateLimitMiddleware (+28 more)
 
 ### Community 6 - "bug_report.md"
 Cohesion: 0.11
 Nodes (16): Auditoría OSSTMM lite — Sección C (Internet), C — Seguridad en tecnologías de Internet, Fuera de alcance (OSSTMM D–F), Próximos pasos (producción), Actualización, Auditoría local, Dependencias y auditoría (OWASP A06), Pinning (+8 more)
 
-### Community 8 - "products.py"
-Cohesion: 0.08
-Nodes (42): _extract_product_id(), build_classifier_agent(), classify_intent(), Agent, Intent, LLM concept router. None = classifier unavailable; caller should fall back., is_purchase_list_query(), is_top_categories_query() (+34 more)
+### Community 7 - "test_api.py"
+Cohesion: 0.12
+Nodes (3): _sample_chat_response(), test_chat_not_found(), test_chat_success()
+
+### Community 8 - "test_purchase_list.py"
+Cohesion: 0.24
+Nodes (16): _extract_product_id(), is_purchase_list_query(), is_top_categories_query(), match_rule_intent(), _normalize(), parse_intent_label(), Intent, True when the user asks for a replenishment list or inventory dashboard. (+8 more)
 
 ### Community 9 - "streamlit_app.py"
 Cohesion: 0.10
@@ -141,20 +174,16 @@ Cohesion: 0.13
 Nodes (15): dual-surface / metrics, dual-surface / purchase-export, dual-surface / surfaces (API-backed), engineering-quality / deployment, engineering-quality / security, interactive-drilldown / filter_rows, interactive-drilldown / scope, interactive-drilldown / slice-api (+7 more)
 
 ### Community 17 - "SupplyMate"
-Cohesion: 0.13
-Nodes (15): Alcance, Calidad y mantenimiento, Cómo funciona SupplyMate, Docker (API), Documentación / SDD, Flujo en terminal, Inicio rápido, Licencia (+7 more)
+Cohesion: 0.12
+Nodes (17): Alcance, Calidad y mantenimiento, Cómo funciona, Docker (API), Documentación / SDD, El flujo (menos de 2 minutos), Flujo en terminal, Inicio rápido (+9 more)
 
-### Community 18 - "panel_modes.py"
-Cohesion: 0.23
-Nodes (11): can_export(), effective_scope(), PanelMode, Ask/Agent panel modes — pure helpers for explore vs commit., Filter dimensions (excluding highlight) must match when entering commit., scopes_match_filters(), validate_commit_request(), test_can_export_only_in_commit() (+3 more)
+### Community 18 - "run_analyze"
+Cohesion: 0.12
+Nodes (26): _fallback_analyze_response(), _parse_json_output(), run_analyze(), replenishment_analyze(), AnalyzeRequest, AnalyzeResponse, cache_key(), events_hash() (+18 more)
 
 ### Community 19 - "components.py"
 Cohesion: 0.20
 Nodes (7): DataFrame, build_purchase_dataframe(), _kpi_card(), Any, Componentes visuales didácticos para Streamlit., render_kpi_strip(), render_purchase_table()
-
-### Community 20 - "README.md"
-Cohesion: 0.21
-Nodes (5): API (:8000), Matriz de compatibilidad, Navegador × SO (Streamlit :8501), No probado formalmente, Regresión manual sugerida
 
 ### Community 21 - "charts.py"
 Cohesion: 0.22
@@ -240,25 +269,165 @@ Nodes (3): Deployment spec, Docker, Smoke script
 Cohesion: 0.50
 Nodes (3): Ask / Agent, Design: llm-drilldown-insights, Flow
 
+### Community 48 - "agent.py"
+Cohesion: 0.21
+Nodes (15): build_commit_agent(), build_explain_agent(), build_insight_agent(), build_supply_agent(), get_model(), _hydrate_context(), Agent, _run_logged() (+7 more)
+
+### Community 50 - "ProductMaster"
+Cohesion: 0.13
+Nodes (28): ProductMaster, ReplenishmentResult, analytics_rows(), days_of_supply(), estimated_purchase_value(), health_bucket(), MetricContract, operational_priority() (+20 more)
+
+### Community 51 - "classify_intent"
+Cohesion: 0.18
+Nodes (15): build_classifier_agent(), classify_intent(), Agent, Intent, LLM concept router. None = classifier unavailable; caller should fall back., llm, asyncio, _rows() (+7 more)
+
+### Community 52 - "products.py"
+Cohesion: 0.23
+Nodes (11): clear_product_caches(), _lexical_resolve(), load_products(), message_looks_like_sku(), _normalize(), Path, True when the text contains a catalog-style numeric code (5+ digits)., Extract a product reference from a natural-language message. (+3 more)
+
+### Community 54 - "ADDED Requirements"
+Cohesion: 0.18
+Nodes (10): ADDED Requirements, Requirement: Get inventory by product, Requirement: Get replenishment params by product, Requirement: Get sales history by product, Requirement: Unknown product handling, Scenario: Unknown product id, Scenario: Valid product inventory, Scenario: Valid replenishment params (+2 more)
+
+### Community 55 - "ADDED Requirements"
+Cohesion: 0.20
+Nodes (9): ADDED Requirements, Replenishment Spec, Requirement: Average daily demand, Requirement: Demand components and stock target, Requirement: Recommended order quantity, Scenario: Happy path average, Scenario: Positive order quantity, Scenario: Stock exceeds target (+1 more)
+
+### Community 56 - "get_inventory"
+Cohesion: 0.33
+Nodes (9): get_inventory(), get_replenishment_params(), get_sales_history(), Any, Return current stock. product_id may be a code, barcode, or name fragment., Return recent sales. product_id may be a code, barcode, or product name., Return lead_time_days and safety_stock. Accepts code, barcode, or name., function_tool (+1 more)
+
+### Community 57 - "Requirements"
+Cohesion: 0.22
+Nodes (8): Build, Health view, Materialization, Purpose, Purpose, Regeneration, Requirements, Spec: analytics-db
+
+### Community 58 - "ADDED Requirements"
+Cohesion: 0.22
+Nodes (8): ADDED Requirements, API Spec, Requirement: Chat endpoint, Requirement: Health endpoint, Requirement: Unknown product error, Scenario: Health check, Scenario: Missing product, Scenario: Successful recommendation
+
+### Community 59 - "Proposal: dual-surface-analytics"
+Cohesion: 0.25
+Nodes (7): Capabilities, Non-Goals, Proposal: dual-surface-analytics, Risks, Rollback, What Changes, Why
+
+### Community 60 - "Requirements"
+Cohesion: 0.25
+Nodes (7): Canonical labels, Days of supply, Health bucket, Parity with replenishment, Purpose, Requirements, Spec: metrics
+
+### Community 61 - "Design: mvp-core"
+Cohesion: 0.25
+Nodes (7): Architecture, Components, Design: mvp-core, Formula, Stack decisions, Testing strategy, Threats (MVP)
+
+### Community 62 - "Proposal: mvp-core"
+Cohesion: 0.25
+Nodes (7): Capabilities, Non-Goals, Proposal: mvp-core, Risks, Rollback, What Changes, Why
+
+### Community 63 - "Tasks: mvp-core"
+Cohesion: 0.25
+Nodes (7): Phase 0 — Scaffold, Phase 1 — Replenishment (Strict TDD), Phase 2 — Tools (Strict TDD), Phase 3 — Agent (Strict TDD), Phase 4 — API (Strict TDD), Phase 5 — Ship, Tasks: mvp-core
+
+### Community 64 - "API simulada — contrato de datos SupplyMate"
+Cohesion: 0.29
+Nodes (6): API simulada — contrato de datos SupplyMate, Diagrama de relación, Recursos, Regenerar desde el dump Excel, Runtime, Variables de entorno
+
+### Community 65 - "Design: dual-surface-analytics"
+Cohesion: 0.29
+Nodes (6): Anti-patterns avoided, Architecture, Dashboard wire (single), Deep-link, Design: dual-surface-analytics, Product model
+
+### Community 66 - "Requirements"
+Cohesion: 0.29
+Nodes (6): CSV export, Enriched list item, No product analytics health API, Purpose, Requirements, Spec: purchase-export
+
+### Community 67 - "Tasks: dual-surface-analytics"
+Cohesion: 0.29
+Nodes (6): Phase 1 — Metrics (Strict TDD), Phase 2 — Analytics DB (Strict TDD), Phase 3 — Purchase export (Strict TDD), Phase 4 — Surfaces, Phase 5 — Verify, Tasks: dual-surface-analytics
+
+### Community 68 - "Verify report — dual-surface-analytics"
+Cohesion: 0.29
+Nodes (6): pytest, Spec coverage, TDD cycle evidence, UX coherence checklist, Verdict, Verify report — dual-surface-analytics
+
+### Community 69 - "Tasks: semantic-correctness"
+Cohesion: 0.29
+Nodes (6): Phase 0 — SDD, Phase 1 — Embeddings perimeter, Phase 2 — Policy + metrics, Phase 3 — Evals + logs, Phase 4 — Value + demo, Tasks: semantic-correctness
+
+### Community 70 - "Requirements"
+Cohesion: 0.33
+Nodes (5): Operation (Streamlit chat), Purpose, Requirements, Shared product identity, Spec: surfaces
+
+### Community 71 - "ADDED Requirements"
+Cohesion: 0.33
+Nodes (5): ADDED Requirements, Agent Spec, Requirement: Explanation uses calculation, Requirement: Two-phase recommendation flow, Scenario: Quantity comes from Python
+
+### Community 72 - "Verify Report: mvp-core"
+Cohesion: 0.33
+Nodes (5): Notes, Spec coverage, TDD Cycle Evidence, Verdict, Verify Report: mvp-core
+
+### Community 73 - "Requirements"
+Cohesion: 0.33
+Nodes (5): Explain fallback, Golden intents, Insight fixtures, Requirements, Spec: llm-evals
+
+### Community 74 - "Requirements"
+Cohesion: 0.33
+Nodes (5): Cost basis, CSV, Operational priority, Requirements, Spec: purchase-value
+
+### Community 75 - "Matriz de compatibilidad"
+Cohesion: 0.40
+Nodes (5): API (:8000), Matriz de compatibilidad, Navegador × SO (Streamlit :8501), No probado formalmente, Regresión manual sugerida
+
+### Community 76 - "Verify report — catalog-integration"
+Cohesion: 0.40
+Nodes (4): Checks, Demo SKUs, Scope, Verify report — catalog-integration
+
+### Community 77 - "Design: semantic-correctness"
+Cohesion: 0.40
+Nodes (4): Design: semantic-correctness, LLM vs Python, Logs, Policy
+
+### Community 78 - "Proposal: semantic-correctness"
+Cohesion: 0.40
+Nodes (4): Non-Goals, Proposal: semantic-correctness, What Changes, Why
+
+### Community 79 - "Requirements"
+Cohesion: 0.40
+Nodes (4): Declared UI chart dep, No semantic resolve, Requirements, Spec: embeddings-perimeter
+
+### Community 80 - "Requirements"
+Cohesion: 0.40
+Nodes (4): Canonical caveats, Reorder point display, Requirements, Spec: metric-contracts
+
+### Community 81 - "Requirements"
+Cohesion: 0.40
+Nodes (4): Fractional remainder, Order-up-to quantity, Requirements, Spec: replenishment-policy
+
+### Community 82 - "Verify report — semantic-correctness"
+Cohesion: 0.40
+Nodes (4): Spec coverage, TDD / CI, Verdict, Verify report — semantic-correctness
+
+### Community 83 - "Skill Registry"
+Cohesion: 0.50
+Nodes (3): Indexed skills (paths only), Project conventions, Skill Registry
+
+### Community 84 - "Catalog integration — extends mvp-core with unified master + REST"
+Cohesion: 0.50
+Nodes (3): Catalog integration — extends mvp-core with unified master + REST, Goal, Tasks
+
 ## Knowledge Gaps
-- **148 isolated node(s):** `Descripción`, `Pasos para reproducir`, `Comportamiento esperado`, `Comportamiento actual`, `Entorno` (+143 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 281 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **15 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **263 isolated node(s):** `C:\Users\Equipo\.local\bin\graphify.exe`, `MetricContract`, `supplymate`, `smoke_api.sh script`, `Project conventions` (+258 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 428 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **9 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `AnalyticalScope` connect `AnalyticalScope` to `get_replenishment_recommendation`, `models.py`, `api.py`, `streamlit_app.py`, `panel_modes.py`?**
-  _High betweenness centrality (0.085) - this node is a cross-community bridge._
-- **Why does `ProductNotFoundError` connect `models.py` to `test_tools.py`, `AnalyticalScope`, `get_replenishment_recommendation`, `store.py`, `api.py`, `test_api.py`, `products.py`?**
-  _High betweenness centrality (0.027) - this node is a cross-community bridge._
-- **Why does `ProductMaster` connect `store.py` to `AnalyticalScope`, `get_replenishment_recommendation`, `models.py`, `api.py`?**
-  _High betweenness centrality (0.025) - this node is a cross-community bridge._
+- **Why does `AnalyticalScope` connect `AnalyticalScope` to `test_agent.py`, `api.py`, `streamlit_app.py`, `agent.py`, `run_analyze`?**
+  _High betweenness centrality (0.055) - this node is a cross-community bridge._
+- **Why does `ProductMaster` connect `ProductMaster` to `AnalyticalScope`, `test_agent.py`, `store.py`, `api.py`?**
+  _High betweenness centrality (0.018) - this node is a cross-community bridge._
+- **Why does `ProductNotFoundError` connect `ProductNotFoundError` to `AnalyticalScope`, `test_agent.py`, `store.py`, `api.py`, `test_api.py`, `agent.py`, `products.py`?**
+  _High betweenness centrality (0.015) - this node is a cross-community bridge._
 - **Are the 30 inferred relationships involving `AnalyticalScope` (e.g. with `inventory_dashboard()` and `purchase_list()`) actually correct?**
   _`AnalyticalScope` has 30 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 12 inferred relationships involving `ProductNotFoundError` (e.g. with `chat()` and `get_product()`) actually correct?**
   _`ProductNotFoundError` has 12 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 3 inferred relationships involving `run_analyze()` (e.g. with `AnalyzeRequest` and `CommitSummary`) actually correct?**
   _`run_analyze()` has 3 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 6 inferred relationships involving `ProductMaster` (e.g. with `get_product()` and `get_master()`) actually correct?**
-  _`ProductMaster` has 6 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 7 inferred relationships involving `ProductMaster` (e.g. with `get_product()` and `get_master()`) actually correct?**
+  _`ProductMaster` has 7 INFERRED edges - model-reasoned connections that need verification._

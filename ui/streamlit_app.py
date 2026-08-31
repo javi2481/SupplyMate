@@ -561,7 +561,11 @@ def render_live_panel() -> None:
         )
         ctx = calc_payload.get("context") or {}
         cols[1].metric("Stock actual", ctx.get("current_stock", "—"))
-        cols[2].metric("Punto de reorden", ctx.get("reorder_point", "—"))
+        cols[2].metric(
+            metrics.LABEL_REORDER_POINT,
+            ctx.get("reorder_point", "—"),
+            help=metrics.ROP_CAPTION,
+        )
         render_calculation(calc_payload.get("calculation") or {})
 
     mode_cols = st.columns([2, 2, 2])
@@ -641,13 +645,16 @@ def render_calculation(calc: dict) -> None:
     with st.expander("Cómo se calculó", expanded=True):
         st.markdown(
             f"""
+Política **order-up-to** (horizonte 7 días + lead time + stock de seguridad).
+El punto de reorden es una alarma de salud; no entra en esta cuenta.
+
 - Demanda diaria promedio: **{calc.get("average_daily_demand", 0):.2f}**
 - Demanda horizonte (7 días): **{calc.get("demand_horizon", 0):.2f}**
 - Demanda en lead time: **{calc.get("demand_lead_time", 0):.2f}**
 - Stock de seguridad: **{calc.get("safety_stock", 0)}**
 - Objetivo de stock: **{calc.get("stock_target", 0):.2f}**
 - Stock actual: **{calc.get("current_stock", 0)}**
-- **Cantidad recomendada: {calc.get("recommended_quantity", 0)}** (la calcula Python, no el LLM)
+- **Cantidad recomendada: {calc.get("recommended_quantity", 0)}** (Python, redondeo hacia arriba)
 """
         )
 
@@ -683,7 +690,11 @@ def render_history() -> None:
                     m = msg["metrics"]
                     cols[0].metric("Stock", m.get("stock", "—"))
                     cols[1].metric("Demanda diaria", m.get("avg_daily", "—"))
-                    cols[2].metric("Punto de reorden", m.get("rop", "—"))
+                    cols[2].metric(
+                        metrics.LABEL_REORDER_POINT,
+                        m.get("rop", "—"),
+                        help=metrics.ROP_CAPTION,
+                    )
                 if msg.get("calculation"):
                     render_calculation(msg["calculation"])
             if msg.get("content"):
@@ -729,9 +740,10 @@ if st.session_state.live_list_active:
 with st.sidebar:
     st.markdown("### 📦 SupplyMate")
     st.markdown(
-        "1. **Explorar (Ask)** — preguntá y recortá con clicks  \n"
-        "2. **Armar OC (Agent)** — congelá el recorte y exportá  \n"
-        "3. Python calcula qty · LLM interpreta"
+        "1. Preguntá *¿Qué productos tengo que comprar?*  \n"
+        "2. Click **Riesgo de quiebre** → categoría → SKU  \n"
+        "3. **Armar OC** → exportar CSV  \n"
+        "Python calcula qty · LLM interpreta · clicks = 0 LLM"
     )
     st.session_state.analyst_enabled = st.toggle(
         "Analista IA",
@@ -740,7 +752,7 @@ with st.sidebar:
     st.divider()
     components.render_health_legend()
     st.divider()
-    st.markdown("**SKU demo:** `6033436` → qty **172**")
+    st.markdown("**SKU demo:** `6033436` → qty **173**")
     if st.button("Limpiar chat", width="stretch"):
         st.session_state.messages = []
         st.session_state.pending_prompt = None
@@ -802,7 +814,11 @@ if prompt:
                 "Demanda diaria",
                 round(calc.get("average_daily_demand", 0), 1),
             )
-            cols[2].metric("Punto de reorden", ctx.get("reorder_point", "—"))
+            cols[2].metric(
+                metrics.LABEL_REORDER_POINT,
+                ctx.get("reorder_point", "—"),
+                help=metrics.ROP_CAPTION,
+            )
             if calc:
                 render_calculation(calc)
 

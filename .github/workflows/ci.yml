@@ -29,7 +29,7 @@ jobs:
             --cov=app.services.dashboard \
             --cov-report=term-missing \
             --cov-fail-under=85 \
-            -m "not performance"
+            -m "not performance and not llm"
       - name: pip-audit (advisory)
         continue-on-error: true
         run: pip install pip-audit && pip-audit

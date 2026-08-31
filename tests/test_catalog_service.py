@@ -21,7 +21,7 @@ def test_search_products():
 
 def test_replenishment_recommendation_high_qty():
     rec = catalog_service.get_replenishment_recommendation(SKU_HIGH_QTY)
-    assert rec.recommended_quantity == 172
+    assert rec.recommended_quantity == 173
 
 
 def test_replenishment_recommendation_zero_qty():
@@ -79,7 +79,12 @@ def test_replenishment_slice_empty_evidence():
     assert catalog_service.EMPTY_SLICE_EVIDENCE.split()[0] in slice_.evidence
 
 
-def test_purchase_list_csv_respects_scope():
+def test_purchase_list_csv_headers_include_value_and_priority():
+    csv_text = catalog_service.purchase_list_csv(limit=2)
+    header = csv_text.splitlines()[0]
+    assert "operational_priority" in header
+    assert "estimated_purchase_value" in header
+
     from app.models import AnalyticalScope
 
     root_snap, root_items = catalog_service.chat_dashboard(limit=5)
@@ -135,3 +140,4 @@ def test_purchase_list_items_shape():
     items = catalog_service.purchase_list_items(recs)
     assert len(items) == len(recs)
     assert items[0].product_id
+    assert items[0].operational_priority in {"critical", "high", "normal"}

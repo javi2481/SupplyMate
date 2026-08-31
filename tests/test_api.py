@@ -55,7 +55,7 @@ def test_get_replenishment():
     response = client.get(f"/products/{SKU_HIGH_QTY}/replenishment")
     assert response.status_code == 200
     body = response.json()
-    assert body["recommended_quantity"] == 172
+    assert body["recommended_quantity"] == 173
     assert body["product_id"] == SKU_HIGH_QTY
 
 
@@ -69,7 +69,7 @@ def test_chat_success():
     assert response.status_code == 200
     body = response.json()
     assert body["product_id"] == SKU_HIGH_QTY
-    assert body["recommended_quantity"] == 172
+    assert body["recommended_quantity"] == 173
     assert "answer" in body
 
 
@@ -173,6 +173,8 @@ def test_purchase_list_csv():
         "product_name",
         "supplier",
         "recommended_quantity",
+        "operational_priority",
+        "estimated_purchase_value",
     ]
     assert len(rows) == 4  # header + 3 rows
     json_items = client.get("/replenishment/purchase-list", params={"limit": 3}).json()

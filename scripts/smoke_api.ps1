@@ -18,6 +18,6 @@ if ($csv.Content -notmatch "barcode") { throw "csv missing header" }
 
 Write-Host "Smoke: GET /products/6033436/replenishment"
 $rec = Invoke-RestMethod -Uri "$BaseUrl/products/6033436/replenishment" -Method Get
-if ($rec.recommended_quantity -ne 172) { throw "expected qty 172" }
+if ($rec.recommended_quantity -ne 173) { throw "expected qty 173" }
 
 Write-Host "All smoke checks passed."

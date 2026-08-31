@@ -1,0 +1,35 @@
+message,intent,needs_llm
+qué productos tengo que comprar,purchase_list,0
+¿Qué productos tengo que comprar?,purchase_list,0
+qué productos están en falta,purchase_list,0
+productos sin stock,purchase_list,0
+dashboard,purchase_list,0
+qué está pasando,purchase_list,0
+salud de inventario,purchase_list,0
+lista de compra,purchase_list,0
+mostrame el pedido,purchase_list,0
+riesgo de quiebre,purchase_list,0
+que debo pedir,purchase_list,0
+cuales son las categorias mas vendidas,sales_categories,0
+¿Cuáles son las categorías más vendidas?,sales_categories,0
+que categoria vende mas,sales_categories,0
+top categorias,sales_categories,0
+qué me está faltando,purchase_list,1
+los que se van a acabar,purchase_list,1
+cuales estan por reventar,purchase_list,1
+qué me está faltando del depósito,purchase_list,1
+los que van a faltar esta semana,purchase_list,1
+qué conviene comprar ya,purchase_list,1
+qué se está agotando,purchase_list,1
+qué rubros mueven más unidades,sales_categories,1
+ranking de rubros por venta,sales_categories,1
+qué líneas pegan más,sales_categories,1
+cuánto pedir de 47 street aura,single_product,1
+cuanto pedir de 6033436,single_product,0
+¿Cuánto debería pedir de 6033436?,single_product,0
+necesito el stock de issue flowpack,single_product,1
+hola,unknown,1
+cómo va el día,unknown,1
+gracias,unknown,1
+qué hora es,unknown,1
+contame un chiste,unknown,1

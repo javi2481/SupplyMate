@@ -4,9 +4,6 @@ import re
 import unicodedata
 from pathlib import Path
 
-import numpy as np
-
-from app import config
 from app.intents import is_purchase_list_query, is_top_categories_query
 from app.models import ProductNotFoundError
 from app.store import get_store, reset_store_cache
@@ -44,16 +41,6 @@ STOPWORDS = {
     "quiero",
 }
 
-SEMANTIC_MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-SEMANTIC_MIN_SCORE = 0.38
-SEMANTIC_MARGIN = 0.04
-SEMANTIC_MAX_PRODUCTS = int(
-    __import__("os").getenv("SUPPLYMATE_SEMANTIC_MAX", "500")
-)
-
-_model = None
-_matrix_cache: dict[str, tuple[list[dict[str, str]], np.ndarray]] = {}
-
 
 def _normalize(text: str) -> str:
     text = text.lower().strip()
@@ -66,52 +53,6 @@ def _normalize(text: str) -> str:
 def load_products(products_csv: Path | None = None) -> list[dict[str, str]]:
     _ = products_csv
     return get_store().list_products()
-
-
-def _get_model():
-    global _model
-    if _model is None:
-        from sentence_transformers import SentenceTransformer
-
-        _model = SentenceTransformer(SEMANTIC_MODEL_NAME)
-    return _model
-
-
-def _product_document(row: dict[str, str]) -> str:
-    return f"{row['product_id']} {row['product_name']}"
-
-
-def _embed_products(products: list[dict[str, str]], cache_key: str) -> np.ndarray:
-    if cache_key in _matrix_cache:
-        cached_products, matrix = _matrix_cache[cache_key]
-        if cached_products == products:
-            return matrix
-    model = _get_model()
-    docs = [_product_document(row) for row in products]
-    matrix = model.encode(docs, normalize_embeddings=True, batch_size=64, show_progress_bar=False)
-    matrix = np.asarray(matrix, dtype=np.float32)
-    _matrix_cache[cache_key] = (list(products), matrix)
-    return matrix
-
-
-def _semantic_resolve(query: str, products: list[dict[str, str]], cache_key: str) -> str | None:
-    if not query.strip() or not products:
-        return None
-    if len(products) > SEMANTIC_MAX_PRODUCTS:
-        return None
-    model = _get_model()
-    matrix = _embed_products(products, cache_key=cache_key)
-    q_vec = model.encode([query], normalize_embeddings=True)[0]
-    scores = matrix @ np.asarray(q_vec, dtype=np.float32)
-    order = np.argsort(scores)[::-1]
-    best_i = int(order[0])
-    best = float(scores[best_i])
-    second = float(scores[order[1]]) if len(order) > 1 else 0.0
-    if best < SEMANTIC_MIN_SCORE:
-        return None
-    if second > 0 and (best - second) < SEMANTIC_MARGIN and best < 0.55:
-        return None
-    return products[best_i]["product_id"]
 
 
 def _lexical_resolve(query: str, products: list[dict[str, str]]) -> str | None:
@@ -158,7 +99,6 @@ def resolve_product_id(
         raise ProductNotFoundError(query)
 
     raw = query.strip()
-    cache_key = store.source or str(config.PRODUCTS_CSV)
 
     exact = store.resolve_exact(raw)
     if exact:
@@ -178,10 +118,6 @@ def resolve_product_id(
     lexical = _lexical_resolve(raw, products)
     if lexical:
         return lexical
-
-    semantic = _semantic_resolve(raw, products, cache_key=cache_key)
-    if semantic:
-        return semantic
 
     raise ProductNotFoundError(query)
 
@@ -227,10 +163,8 @@ def resolve_from_message(message: str, products_csv: Path | None = None) -> str 
         except ProductNotFoundError:
             pass
 
-    cache_key = store.source or str(config.PRODUCTS_CSV)
-    return _semantic_resolve(message, store.list_products(), cache_key=cache_key)
+    return None
 
 
 def clear_product_caches() -> None:
-    _matrix_cache.clear()
     reset_store_cache()

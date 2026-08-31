@@ -37,7 +37,7 @@ def test_catalog_service_recommendation_matches_formula():
         safety_stock=master.safety_stock,
     )
     assert rec.recommended_quantity == expected.recommended_quantity
-    assert rec.recommended_quantity == 172
+    assert rec.recommended_quantity == 173
 
 
 def test_zero_qty_sku():
