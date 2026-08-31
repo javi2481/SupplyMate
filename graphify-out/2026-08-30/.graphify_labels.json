@@ -1,0 +1,18 @@
+{
+  "0": "agent.py",
+  "1": "dashboard.py",
+  "2": "catalog_service.py",
+  "3": "store.py",
+  "4": "models.py",
+  "5": "ProductMaster",
+  "6": "classify_intent",
+  "7": "ProductNotFoundError",
+  "8": "products.py",
+  "9": "streamlit_app.py",
+  "10": "export_catalog_csvs.py",
+  "11": "app/__init__.py",
+  "12": "services/__init__.py",
+  "13": "supplymate",
+  "14": "demo_queries.ps1",
+  "15": "graphify"
+}
