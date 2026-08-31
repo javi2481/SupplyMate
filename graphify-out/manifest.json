@@ -738,15 +738,15 @@
     "semantic_hash": ""
   },
   "openspec/changes/semantic-correctness/tasks.md": {
-    "mtime": 1788141658.8369708,
-    "seen": 1788141713.9127069,
-    "ast_hash": "7bbb7412ea5f43f249cb466e5cd1132f",
+    "mtime": 1788141837.008015,
+    "seen": 1788142216.5004873,
+    "ast_hash": "1fa6636a2101a0664928846000497df0",
     "semantic_hash": ""
   },
   "openspec/changes/semantic-correctness/verify-report.md": {
-    "mtime": 1788141658.412187,
-    "seen": 1788141713.9127069,
-    "ast_hash": "4bea9009f70d65126d137afbc9d46520",
+    "mtime": 1788141837.008015,
+    "seen": 1788142216.5004873,
+    "ast_hash": "32503c18367ce3f71b7920e1300be312",
     "semantic_hash": ""
   }
 }
