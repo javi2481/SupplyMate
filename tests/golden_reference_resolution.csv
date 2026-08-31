@@ -1,0 +1,5 @@
+reference,match_kind,scope_dimension,scope_value_contains
+jabones,group,category,Jabon
+shampoo,group,subcategory,Shampoo
+6033436,exact_sku,,
+cuidado,ambiguous,,

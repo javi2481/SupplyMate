@@ -9,6 +9,7 @@ from app.store import SALES_AS_OF
 
 _LIMITS: dict[str, int] = {
     "categories": 5,
+    "subcategories": 5,
     "coverage_buckets": 5,
     "health_buckets": 4,
     "suppliers": 5,
@@ -16,6 +17,7 @@ _LIMITS: dict[str, int] = {
 
 _FIELD_BY_DIMENSION: dict[str, str] = {
     "category": "categories",
+    "subcategory": "subcategories",
     "coverage_bucket": "coverage_buckets",
     "health_bucket": "health_buckets",
     "supplier": "suppliers",
@@ -76,6 +78,7 @@ def clear_highlight(scope: AnalyticalScope) -> AnalyticalScope:
 def scope_from_query_params(
     *,
     categories: list[str] | None = None,
+    subcategories: list[str] | None = None,
     coverage_buckets: list[str] | None = None,
     health_buckets: list[str] | None = None,
     suppliers: list[str] | None = None,
@@ -83,6 +86,7 @@ def scope_from_query_params(
 ) -> AnalyticalScope:
     return AnalyticalScope(
         categories=list(categories or []),
+        subcategories=list(subcategories or []),
         coverage_buckets=list(coverage_buckets or []),
         health_buckets=list(health_buckets or []),
         suppliers=list(suppliers or []),
@@ -94,6 +98,7 @@ def cache_key(scope: AnalyticalScope) -> str:
     parts = [
         f"as_of={SALES_AS_OF.isoformat()}",
         f"categories={','.join(sorted(scope.categories))}",
+        f"subcategories={','.join(sorted(scope.subcategories))}",
         f"coverage={','.join(sorted(scope.coverage_buckets))}",
         f"health={','.join(sorted(scope.health_buckets))}",
         f"suppliers={','.join(sorted(scope.suppliers))}",

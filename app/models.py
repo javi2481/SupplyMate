@@ -8,6 +8,19 @@ from pydantic import BaseModel, Field, computed_field
 
 PanelMode = Literal["explore", "commit"]
 
+BusinessIntent = Literal[
+    "replenishment",
+    "inventory_risk",
+    "sales_ranking",
+    "single_sku",
+    "unknown",
+]
+
+ReferenceKind = Literal["product_group", "sku_hint", "filter_hint"]
+MatchKind = Literal["exact_sku", "group", "ambiguous", "unresolved"]
+ScopeDimension = Literal["category", "subcategory", "sku_set"]
+ConfidenceLevel = Literal["high", "low"]
+
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
@@ -189,10 +202,58 @@ class InventoryDashboard(BaseModel):
 
 class AnalyticalScope(BaseModel):
     categories: list[str] = Field(default_factory=list)
+    subcategories: list[str] = Field(default_factory=list)
     coverage_buckets: list[str] = Field(default_factory=list)
     health_buckets: list[str] = Field(default_factory=list)
     suppliers: list[str] = Field(default_factory=list)
     highlight_product_id: str = ""
+
+
+class Reference(BaseModel):
+    text: str = Field(max_length=80)
+    kind: ReferenceKind = "product_group"
+
+
+class QueryInterpretation(BaseModel):
+    intent: BusinessIntent = "unknown"
+    references: list[Reference] = Field(default_factory=list, max_length=5)
+    filter_hints: list[str] = Field(default_factory=list, max_length=5)
+    confidence: ConfidenceLevel = "high"
+    source: Literal["rules", "llm", "hybrid"] = "rules"
+
+
+class ResolvedReference(BaseModel):
+    label: str = ""
+    user_text: str = ""
+    match_kind: MatchKind = "unresolved"
+    product_id: str = ""
+    sku_ids: list[str] = Field(default_factory=list)
+    scope_dimension: ScopeDimension = "category"
+    scope_value: str = ""
+    sku_count: int = 0
+    recommended_quantity: int = 0
+    confidence: ConfidenceLevel = "high"
+
+
+class ResolutionResult(BaseModel):
+    interpretation: QueryInterpretation
+    resolved: list[ResolvedReference] = Field(default_factory=list)
+    scope: AnalyticalScope = Field(default_factory=AnalyticalScope)
+    disambiguation_options: list[str] = Field(default_factory=list)
+    blocking: bool = False
+
+
+class GroupSummary(BaseModel):
+    label: str
+    recommended_quantity: int
+    sku_count: int = 0
+
+
+class ChatInterpretation(BaseModel):
+    understood_labels: list[str] = Field(default_factory=list)
+    confidence: ConfidenceLevel = "high"
+    disambiguation_question: str = ""
+    disambiguation_options: list[str] = Field(default_factory=list)
 
 
 class SuggestedFilter(BaseModel):
@@ -289,6 +350,9 @@ class ChatResponse(BaseModel):
     context: ProductContext | None = None
     purchase_list: list[PurchaseListItem] = Field(default_factory=list)
     dashboard: InventoryDashboard | None = None
+    scope: AnalyticalScope | None = None
+    interpretation: ChatInterpretation | None = None
+    group_summaries: list[GroupSummary] = Field(default_factory=list)
 
 
 class ProductNotFoundError(Exception):

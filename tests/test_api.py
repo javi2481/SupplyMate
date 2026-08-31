@@ -212,3 +212,67 @@ def test_chat_top_categories():
     assert body["mode"] == "sales"
     assert body["dashboard"]["by_sales"]
     assert body["dashboard"]["by_sales"][0]["units_sold"] > 0
+
+
+def test_chat_explore_jabones():
+    response = client.post(
+        "/chat",
+        json={"message": "¿Cuántos jabones debo comprar?"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["mode"] == "explore"
+    assert body["scope"] is not None
+    assert "Jabon de Tocador" in body["scope"]["categories"]
+    assert body["purchase_list"]
+    assert body["group_summaries"]
+    assert "Entendí" in body["answer"]
+
+
+def test_chat_explore_jabones_and_shampoo():
+    response = client.post(
+        "/chat",
+        json={"message": "¿Cuántos jabones y shampoo debo comprar?"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["mode"] == "explore"
+    scope = body["scope"]
+    assert "Jabon de Tocador" in scope["categories"]
+    assert "Shampoo" in scope["subcategories"]
+    assert len(body["group_summaries"]) >= 2
+
+
+def test_chat_disambiguation_cuidado():
+    response = client.post(
+        "/chat",
+        json={"message": "¿Cuánto cuidado debo comprar?"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["mode"] == "disambiguation"
+    assert body["interpretation"]["disambiguation_options"]
+
+
+def test_chat_inventory_risk_jabones():
+    response = client.post(
+        "/chat",
+        json={"message": "¿Qué jabones tienen riesgo?"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["mode"] == "explore"
+    assert "stockout_risk" in body["scope"]["health_buckets"]
+    assert "Jabon de Tocador" in body["scope"]["categories"]
+
+
+def test_slice_with_subcategory_filter():
+    response = client.get(
+        "/replenishment/slice",
+        params={"subcategory": "Shampoo", "limit": 5},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["purchase_list"]
+    for item in body["purchase_list"]:
+        assert item["subcategory"] == "Shampoo"

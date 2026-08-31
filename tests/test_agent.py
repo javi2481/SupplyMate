@@ -181,6 +181,42 @@ async def test_fallback_hydrates_when_agent_skips_tools():
 
 
 @pytest.mark.asyncio
+async def test_run_supplymate_explore_jabones():
+    response = await run_supplymate("¿Cuántos jabones debo comprar?")
+    assert response.mode == "explore"
+    assert response.scope is not None
+    assert "Jabon de Tocador" in response.scope.categories
+    assert response.group_summaries
+    assert "Entendí" in response.answer
+
+
+@pytest.mark.asyncio
+async def test_run_supplymate_explore_jabones_and_shampoo():
+    response = await run_supplymate("¿Cuántos jabones y shampoo debo comprar?")
+    assert response.mode == "explore"
+    assert response.scope is not None
+    assert "Jabon de Tocador" in response.scope.categories
+    assert "Shampoo" in response.scope.subcategories
+    assert len(response.group_summaries) >= 2
+
+
+@pytest.mark.asyncio
+async def test_run_supplymate_disambiguation():
+    response = await run_supplymate("¿Cuánto cuidado debo comprar?")
+    assert response.mode == "disambiguation"
+    assert response.interpretation is not None
+    assert response.interpretation.disambiguation_options
+
+
+@pytest.mark.asyncio
+async def test_run_supplymate_inventory_risk():
+    response = await run_supplymate("¿Qué jabones tienen riesgo?")
+    assert response.mode == "explore"
+    assert response.scope is not None
+    assert "stockout_risk" in response.scope.health_buckets
+
+
+@pytest.mark.asyncio
 async def test_regex_purchase_does_not_call_classifier():
     with patch(
         "app.agent.classify_intent",

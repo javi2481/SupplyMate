@@ -43,10 +43,16 @@ def _row_category(row: dict) -> str:
     return name or MISSING_CATEGORY
 
 
+def _row_subcategory(row: dict) -> str:
+    name = str(row.get("subcategory") or "").strip()
+    return name
+
+
 def filter_rows(rows: list[dict], scope: AnalyticalScope | None) -> list[dict]:
     if scope is None or not any(
         (
             scope.categories,
+            scope.subcategories,
             scope.coverage_buckets,
             scope.health_buckets,
             scope.suppliers,
@@ -55,9 +61,22 @@ def filter_rows(rows: list[dict], scope: AnalyticalScope | None) -> list[dict]:
         return list(rows)
 
     filtered = list(rows)
-    if scope.categories:
-        allowed = set(scope.categories)
-        filtered = [row for row in filtered if _row_category(row) in allowed]
+    if scope.categories or scope.subcategories:
+        allowed_cats = set(scope.categories)
+        allowed_subs = set(scope.subcategories)
+        if allowed_cats and allowed_subs:
+            filtered = [
+                row
+                for row in filtered
+                if _row_category(row) in allowed_cats
+                or _row_subcategory(row) in allowed_subs
+            ]
+        elif allowed_cats:
+            filtered = [row for row in filtered if _row_category(row) in allowed_cats]
+        elif allowed_subs:
+            filtered = [
+                row for row in filtered if _row_subcategory(row) in allowed_subs
+            ]
     if scope.coverage_buckets:
         allowed = set(scope.coverage_buckets)
         filtered = [

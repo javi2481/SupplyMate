@@ -129,6 +129,8 @@ def format_slice_evidence(
         f"**{len(items)}** productos en este recorte · **{total_qty}** unidades recomendadas.",
         f"**{snap.skus}** SKUs en el recorte · **{snap.stockout_risk}** en riesgo de quiebre.",
     ]
+    if scope.subcategories:
+        lines.append(f"Subcategorías activas: {', '.join(scope.subcategories)}.")
     if scope.categories:
         lines.append(f"Categorías activas: {', '.join(scope.categories)}.")
     if scope.coverage_buckets:

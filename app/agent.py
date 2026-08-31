@@ -8,6 +8,11 @@ from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 from openai import AsyncOpenAI
 
 from app import config
+from app.explore_answer import (
+    format_disambiguation_answer,
+    format_explore_answer,
+    group_summaries_from_resolved,
+)
 from app.intent_classifier import classify_intent
 from app.intents import is_purchase_list_query, is_top_categories_query, match_rule_intent
 from app.llm_log import emit
@@ -15,13 +20,17 @@ from app.models import (
     AnalyticalScope,
     AnalyzeRequest,
     AnalyzeResponse,
+    ChatInterpretation,
     ChatResponse,
     CommitSummary,
     DashboardInsight,
     ProductNotFoundError,
     SupplyContext,
 )
-from app.products import message_looks_like_sku, resolve_from_message, resolve_product_id
+from app.products import NUMERIC_CODE_RE, message_looks_like_sku, resolve_from_message, resolve_product_id
+from app.query_interpretation import interpret_query
+from app.reference_resolver import resolve_references
+from app.scope_builder import build_resolution_result
 from app.services import catalog_service, insight_cache, prompt_compiler
 from app.services import insight_validator
 from app.services import panel_modes
@@ -285,13 +294,57 @@ async def _run_top_categories() -> ChatResponse:
     )
 
 
-async def _run_purchase_list(message: str) -> ChatResponse:
-    snap, items = catalog_service.chat_dashboard(limit=PURCHASE_LIST_LIMIT)
+async def _run_purchase_list(message: str, scope: AnalyticalScope | None = None) -> ChatResponse:
+    active = scope or AnalyticalScope()
+    slice_data = catalog_service.replenishment_slice(active, limit=PURCHASE_LIST_LIMIT)
     return ChatResponse(
-        answer=catalog_service.format_dashboard_answer(snap, items),
+        answer=catalog_service.format_dashboard_answer(
+            slice_data.dashboard, slice_data.purchase_list
+        ),
         mode="list",
-        purchase_list=items,
-        dashboard=snap,
+        scope=active,
+        purchase_list=slice_data.purchase_list,
+        dashboard=slice_data.dashboard,
+    )
+
+
+async def _run_explore(
+    message: str,
+    scope: AnalyticalScope,
+    *,
+    interpretation: ChatInterpretation | None = None,
+    group_summaries=None,
+) -> ChatResponse:
+    slice_data = catalog_service.replenishment_slice(scope, limit=PURCHASE_LIST_LIMIT)
+    chat_interp = interpretation or ChatInterpretation()
+    summaries = group_summaries or []
+    answer = format_explore_answer(slice_data, chat_interp, summaries)
+    return ChatResponse(
+        answer=answer,
+        mode="explore",
+        scope=scope,
+        interpretation=chat_interp,
+        group_summaries=summaries,
+        purchase_list=slice_data.purchase_list,
+        dashboard=slice_data.dashboard,
+    )
+
+
+async def _run_disambiguation(message: str, resolution) -> ChatResponse:
+    question = (
+        f"No estoy seguro de a qué te referís con "
+        f"**«{resolution.resolved[0].user_text if resolution.resolved else 'eso'}»**."
+    )
+    options = resolution.disambiguation_options
+    answer = format_disambiguation_answer(question, options)
+    return ChatResponse(
+        answer=answer,
+        mode="disambiguation",
+        interpretation=ChatInterpretation(
+            confidence="low",
+            disambiguation_question=question,
+            disambiguation_options=options,
+        ),
     )
 
 
@@ -355,13 +408,56 @@ async def _run_single_product(message: str) -> ChatResponse:
 
 
 async def run_supplymate(message: str) -> ChatResponse:
-    """Route by concept, then let deterministic Python compute numbers.
+    """Route by interpreted intent + catalog resolution, then deterministic Python."""
+    interpretation = await interpret_query(message)
+    resolved = resolve_references(interpretation)
+    resolution = build_resolution_result(interpretation, resolved)
 
-    1. Regex fast-path (no LLM).
-    2. Numeric SKU in the message → single product.
-    3. LLM classifies the concept (falta de stock vs un SKU vs ranking).
-    4. If the classifier is down, fall back to product resolution.
-    """
+    if resolution.blocking:
+        if interpretation.intent == "single_sku" or any(
+            r.match_kind == "unresolved" and NUMERIC_CODE_RE.fullmatch(r.user_text.strip())
+            for r in resolved
+        ):
+            sku = next(
+                (r.user_text for r in resolved if r.user_text),
+                message,
+            )
+            raise ProductNotFoundError(sku)
+        return await _run_disambiguation(message, resolution)
+
+    if interpretation.intent == "sales_ranking":
+        return await _run_top_categories()
+
+    exact = next((r for r in resolved if r.match_kind == "exact_sku"), None)
+    if interpretation.intent == "single_sku" or exact:
+        sku_message = f"cuanto pedir de {exact.product_id}" if exact else message
+        if interpretation.intent == "single_sku" or exact or message_looks_like_sku(message):
+            return await _run_single_product(sku_message)
+
+    if interpretation.intent in ("replenishment", "inventory_risk"):
+        if not interpretation.references:
+            if interpretation.intent == "inventory_risk":
+                return await _run_explore(
+                    message,
+                    resolution.scope,
+                    interpretation=ChatInterpretation(understood_labels=["Riesgo de quiebre"]),
+                )
+            return await _run_purchase_list(message, resolution.scope)
+
+        summaries = group_summaries_from_resolved(resolved)
+        labels = [s.label for s in summaries] or [
+            r.label or r.user_text for r in resolved if r.match_kind == "group"
+        ]
+        return await _run_explore(
+            message,
+            resolution.scope,
+            interpretation=ChatInterpretation(
+                understood_labels=labels,
+                confidence=interpretation.confidence,
+            ),
+            group_summaries=summaries,
+        )
+
     rule = match_rule_intent(message)
     if rule == "sales_categories":
         return await _run_top_categories()

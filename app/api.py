@@ -44,6 +44,7 @@ def _validate_scope_values(raw_values: list[str], param_name: str) -> list[str]:
 
 def _scope_dependency(
     category: list[str] = Query(default=[]),
+    subcategory: list[str] = Query(default=[]),
     coverage_bucket: list[str] = Query(default=[]),
     health_bucket: list[str] = Query(default=[]),
     supplier: list[str] = Query(default=[]),
@@ -57,6 +58,7 @@ def _scope_dependency(
         )
     return scope_svc.scope_from_query_params(
         categories=_validate_scope_values(category, "category"),
+        subcategories=_validate_scope_values(subcategory, "subcategory"),
         coverage_buckets=_validate_scope_values(coverage_bucket, "coverage_bucket"),
         health_buckets=_validate_scope_values(health_bucket, "health_bucket"),
         suppliers=_validate_scope_values(supplier, "supplier"),

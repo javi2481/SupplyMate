@@ -1,0 +1,7 @@
+message,intent,references,confidence,expected_mode
+¿Qué productos tengo que comprar?,replenishment,,high,explore
+¿Cuántos jabones debo comprar?,replenishment,jabones,high,explore
+¿Cuántos jabones y shampoo debo comprar?,replenishment,jabones|shampoo,high,explore
+¿Cuánto pedir de 6033436?,single_sku,6033436,high,single
+¿Qué jabones tienen riesgo?,inventory_risk,jabones,high,explore
+¿Cuánto cuidado debo comprar?,replenishment,cuidado,low,disambiguation

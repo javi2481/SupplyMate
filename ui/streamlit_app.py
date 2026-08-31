@@ -158,6 +158,8 @@ def scope_query_params(scope: AnalyticalScope, *, limit: int = 25) -> list[tuple
     params: list[tuple[str, str]] = [("limit", str(limit))]
     for cat in scope.categories:
         params.append(("category", cat))
+    for sub in scope.subcategories:
+        params.append(("subcategory", sub))
     for bucket in scope.coverage_buckets:
         params.append(("coverage_bucket", bucket))
     for health in scope.health_buckets:
@@ -277,6 +279,8 @@ def _breadcrumb_labels(scope: AnalyticalScope) -> list[tuple[str, str, str]]:
     crumbs: list[tuple[str, str, str]] = [("root", "Inventario", "")]
     for cat in scope.categories:
         crumbs.append(("category", cat, cat))
+    for sub in scope.subcategories:
+        crumbs.append(("subcategory", sub, sub))
     for bucket in scope.coverage_buckets:
         crumbs.append(("coverage_bucket", bucket, bucket))
     for health in scope.health_buckets:
@@ -662,7 +666,10 @@ El punto de reorden es una alarma de salud; no entra en esta cuenta.
 def render_history() -> None:
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
-            if msg.get("mode") == "list":
+            if msg.get("mode") in ("list", "explore"):
+                labels = msg.get("understood_labels") or []
+                if labels:
+                    st.caption("Entendí: " + " · ".join(labels))
                 if msg is st.session_state.messages[-1] and st.session_state.live_list_active:
                     pass
                 else:
@@ -787,7 +794,7 @@ if prompt:
         dash = data.get("dashboard")
         csv_bytes = None
 
-        if mode == "list":
+        if mode in ("list", "explore"):
             st.session_state.live_list_active = True
             st.session_state.root_question = prompt
             st.session_state.panel_mode = "explore"
@@ -796,9 +803,37 @@ if prompt:
             st.session_state.analyze_data = None
             st.session_state.last_analyze_key = ""
             _append_event(source="chat", action="reset", label_human=prompt)
-            _set_scope(scope_svc.reset())
+            if data.get("scope"):
+                _set_scope(AnalyticalScope.model_validate(data["scope"]))
+            else:
+                _set_scope(scope_svc.reset())
             st.session_state.highlight_calc = None
-            render_live_panel()
+            interp = data.get("interpretation") or {}
+            labels = interp.get("understood_labels") or []
+            st.session_state.messages.append(
+                {
+                    "role": "assistant",
+                    "content": data.get("answer", ""),
+                    "mode": mode,
+                    "purchase_list": purchase_list,
+                    "dashboard": dash,
+                    "understood_labels": labels,
+                }
+            )
+            st.rerun()
+        elif mode == "disambiguation":
+            st.session_state.live_list_active = False
+            interp = data.get("interpretation") or {}
+            options = interp.get("disambiguation_options") or []
+            if options:
+                cols = st.columns(min(len(options), 3))
+                for i, opt in enumerate(options[:3]):
+                    with cols[i % len(cols)]:
+                        if st.button(opt, key=f"disambig-{opt}-{id(prompt)}"):
+                            st.session_state.pending_prompt = (
+                                f"¿Cuántos {opt.lower()} debo comprar?"
+                            )
+                            st.rerun()
         elif mode == "sales":
             st.session_state.live_list_active = False
             render_sales_ranking(dash)
