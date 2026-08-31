@@ -21,6 +21,7 @@ dependencies = [
 dev = [
   "pytest>=8.0.0",
   "pytest-asyncio>=0.24.0",
+  "pytest-cov>=5.0.0",
 ]
 
 [build-system]
@@ -34,3 +35,18 @@ include = ["app*"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+  "performance: performance smoke tests (may run on main CI only)",
+]
+
+[tool.coverage.run]
+omit = ["tests/*", "ui/*"]
+
+[tool.coverage.report]
+fail_under = 85
+include = [
+  "app/replenishment.py",
+  "app/services/scope.py",
+  "app/services/catalog_service.py",
+  "app/services/dashboard.py",
+]

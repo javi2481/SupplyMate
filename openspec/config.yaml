@@ -17,7 +17,7 @@ testing:
     unit: true
     integration: true
     e2e: false
-  coverage: false
+  coverage: true
 
 rules:
   proposal:

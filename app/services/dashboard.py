@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from app.models import (
+    AnalyticalScope,
     CategoryBar,
     CategorySalesBar,
     CoverageBar,
@@ -35,6 +36,48 @@ def coverage_bucket(days_of_supply: float | None) -> str | None:
     if days_of_supply < 30:
         return "14–30 días"
     return "30+ días"
+
+
+def _row_category(row: dict) -> str:
+    name = str(row.get("category") or "").strip()
+    return name or MISSING_CATEGORY
+
+
+def filter_rows(rows: list[dict], scope: AnalyticalScope | None) -> list[dict]:
+    if scope is None or not any(
+        (
+            scope.categories,
+            scope.coverage_buckets,
+            scope.health_buckets,
+            scope.suppliers,
+        )
+    ):
+        return list(rows)
+
+    filtered = list(rows)
+    if scope.categories:
+        allowed = set(scope.categories)
+        filtered = [row for row in filtered if _row_category(row) in allowed]
+    if scope.coverage_buckets:
+        allowed = set(scope.coverage_buckets)
+        filtered = [
+            row
+            for row in filtered
+            if coverage_bucket(row.get("days_of_supply")) in allowed
+        ]
+    if scope.health_buckets:
+        allowed = set(scope.health_buckets)
+        filtered = [
+            row for row in filtered if str(row.get("health_bucket") or "") in allowed
+        ]
+    if scope.suppliers:
+        allowed = set(scope.suppliers)
+        filtered = [
+            row
+            for row in filtered
+            if str(row.get("supplier") or "").strip() in allowed
+        ]
+    return filtered
 
 
 def analytics_rows(products: list[ProductMaster] | tuple[ProductMaster, ...]) -> list[dict]:

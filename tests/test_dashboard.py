@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.models import AnalyticalScope
 from app.services import dashboard
 
 
@@ -120,3 +121,53 @@ def test_from_rows_empty():
 def test_total_recommended_qty():
     assert dashboard.total_recommended_qty([{"recommended_quantity": 10}, {"recommended_quantity": 7}]) == 17
     assert dashboard.total_recommended_qty([]) == 0
+
+
+def test_filter_rows_single_category():
+    rows = [
+        _row(product_id="a", category="Cabello"),
+        _row(product_id="b", category="Fragancias"),
+    ]
+    scope = AnalyticalScope(categories=["Cabello"])
+    out = dashboard.filter_rows(rows, scope)
+    assert len(out) == 1
+    assert out[0]["product_id"] == "a"
+
+
+def test_filter_rows_or_two_categories():
+    rows = [
+        _row(product_id="a", category="Cabello"),
+        _row(product_id="b", category="Fragancias"),
+        _row(product_id="c", category="Otros"),
+    ]
+    scope = AnalyticalScope(categories=["Cabello", "Fragancias"])
+    out = dashboard.filter_rows(rows, scope)
+    assert {row["product_id"] for row in out} == {"a", "b"}
+
+
+def test_filter_rows_and_category_plus_coverage():
+    rows = [
+        _row(product_id="a", category="Cabello", days_of_supply=1.0),
+        _row(product_id="b", category="Cabello", days_of_supply=10.0),
+        _row(product_id="c", category="Fragancias", days_of_supply=1.0),
+    ]
+    scope = AnalyticalScope(categories=["Cabello"], coverage_buckets=["0–3 días"])
+    out = dashboard.filter_rows(rows, scope)
+    assert len(out) == 1
+    assert out[0]["product_id"] == "a"
+
+
+def test_filter_rows_highlight_does_not_filter():
+    rows = [
+        _row(product_id="a", category="Cabello"),
+        _row(product_id="b", category="Fragancias"),
+    ]
+    scope = AnalyticalScope(highlight_product_id="b")
+    out = dashboard.filter_rows(rows, scope)
+    assert len(out) == 2
+
+
+def test_filter_rows_empty_scope_returns_all():
+    rows = [_row(product_id="a")]
+    assert len(dashboard.filter_rows(rows, AnalyticalScope())) == 1
+    assert len(dashboard.filter_rows(rows, None)) == 1

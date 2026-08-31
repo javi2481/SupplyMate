@@ -6,6 +6,7 @@ import importlib
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
@@ -15,8 +16,14 @@ import altair as alt
 import httpx
 import streamlit as st
 
+from app.models import AnalyticalScope, InteractionEvent
 from app.services import dashboard as dash_svc
-from app.services import metrics
+from app.services import metrics, suggested_filters
+from app.services import panel_modes
+from app.services import scope as scope_svc
+from ui import analyst
+from ui import charts
+from ui import components
 
 metrics = importlib.reload(metrics)
 dash_svc = importlib.reload(dash_svc)
@@ -24,23 +31,163 @@ dash_svc = importlib.reload(dash_svc)
 API_URL = os.getenv("SUPPLYMATE_API_URL", "http://127.0.0.1:8000").rstrip("/")
 
 st.set_option("client.toolbarMode", "viewer")
-st.set_page_config(page_title="SupplyMate", layout="wide")
-st.title("SupplyMate")
-st.caption("¿Cuánto pedir? · ¿Qué está pasando? · Horizonte 7 días · Python decide la cantidad")
+st.set_page_config(page_title="SupplyMate", layout="wide", page_icon="📦")
+components.inject_theme()
+st.markdown("## 📦 SupplyMate · Operación")
+st.caption(
+    "Explorar (Ask) · Recortá con clicks · Armar OC (Agent) · Exportá · "
+    "**Python calcula, el LLM interpreta**"
+)
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "pending_prompt" not in st.session_state:
     st.session_state.pending_prompt = None
-if "last_purchase_csv" not in st.session_state:
-    st.session_state.last_purchase_csv = None
+if "live_list_active" not in st.session_state:
+    st.session_state.live_list_active = False
+if "analytical_scope" not in st.session_state:
+    st.session_state.analytical_scope = scope_svc.empty_scope().model_dump()
+if "slice_data" not in st.session_state:
+    st.session_state.slice_data = None
+if "highlight_calc" not in st.session_state:
+    st.session_state.highlight_calc = None
+if "panel_mode" not in st.session_state:
+    st.session_state.panel_mode = "explore"
+if "frozen_scope" not in st.session_state:
+    st.session_state.frozen_scope = None
+if "interaction_events" not in st.session_state:
+    st.session_state.interaction_events = []
+if "root_question" not in st.session_state:
+    st.session_state.root_question = ""
+if "analyst_enabled" not in st.session_state:
+    st.session_state.analyst_enabled = True
+if "analyze_data" not in st.session_state:
+    st.session_state.analyze_data = None
+if "last_analyze_key" not in st.session_state:
+    st.session_state.last_analyze_key = ""
 
 
-def fetch_purchase_csv(limit: int = 25) -> bytes | None:
+def _append_event(
+    *,
+    source: str,
+    action: str,
+    dimension: str = "",
+    value: str = "",
+    label_human: str = "",
+) -> None:
+    st.session_state.interaction_events.append(
+        InteractionEvent(
+            source=source,
+            action=action,
+            dimension=dimension,
+            value=value,
+            label_human=label_human,
+        ).model_dump()
+    )
+
+
+def _effective_panel_scope() -> AnalyticalScope:
+    if st.session_state.panel_mode == "commit" and st.session_state.frozen_scope:
+        return AnalyticalScope.model_validate(st.session_state.frozen_scope)
+    return _scope_model()
+
+
+def _enter_commit_mode() -> None:
+    scope = _scope_model()
+    st.session_state.frozen_scope = scope.model_dump()
+    st.session_state.panel_mode = "commit"
+    _append_event(
+        source="mode_transition",
+        action="enter_commit",
+        label_human="Listo — armar OC de este recorte",
+    )
+    st.session_state.last_analyze_key = ""
+
+
+def _exit_commit_mode() -> None:
+    st.session_state.panel_mode = "explore"
+    st.session_state.frozen_scope = None
+    _append_event(
+        source="mode_transition",
+        action="exit_commit",
+        label_human="Volver a explorar",
+    )
+    st.session_state.last_analyze_key = ""
+
+
+def fetch_analyze(scope: AnalyticalScope, *, mode: str) -> dict | None:
+    events = [
+        InteractionEvent.model_validate(e) for e in st.session_state.interaction_events
+    ]
+    body: dict = {
+        "mode": mode,
+        "scope": scope.model_dump(),
+        "events": [e.model_dump() for e in events],
+        "root_question": st.session_state.root_question,
+        "insight_level": "full",
+    }
+    if mode == "commit" and st.session_state.frozen_scope:
+        body["frozen_scope"] = st.session_state.frozen_scope
+    try:
+        response = httpx.post(
+            f"{API_URL}/replenishment/analyze",
+            json=body,
+            timeout=180.0,
+        )
+        if response.status_code == 200:
+            return response.json()
+    except httpx.ConnectError:
+        return None
+    return None
+
+
+def _analyze_cache_key(scope: AnalyticalScope, mode: str) -> str:
+    ev_len = len(st.session_state.interaction_events)
+    return f"{mode}|{scope_svc.cache_key(scope)}|{ev_len}"
+
+
+def _scope_model() -> AnalyticalScope:
+    return AnalyticalScope.model_validate(st.session_state.analytical_scope)
+
+
+def _set_scope(scope: AnalyticalScope) -> None:
+    st.session_state.analytical_scope = scope.model_dump()
+
+
+def scope_query_params(scope: AnalyticalScope, *, limit: int = 25) -> list[tuple[str, str]]:
+    params: list[tuple[str, str]] = [("limit", str(limit))]
+    for cat in scope.categories:
+        params.append(("category", cat))
+    for bucket in scope.coverage_buckets:
+        params.append(("coverage_bucket", bucket))
+    for health in scope.health_buckets:
+        params.append(("health_bucket", health))
+    for supplier in scope.suppliers:
+        params.append(("supplier", supplier))
+    if scope.highlight_product_id:
+        params.append(("highlight_product_id", scope.highlight_product_id))
+    return params
+
+
+def fetch_slice(scope: AnalyticalScope, limit: int = 25) -> dict | None:
+    try:
+        response = httpx.get(
+            f"{API_URL}/replenishment/slice",
+            params=scope_query_params(scope, limit=limit),
+            timeout=120.0,
+        )
+        if response.status_code == 200:
+            return response.json()
+    except httpx.ConnectError:
+        return None
+    return None
+
+
+def fetch_purchase_csv(scope: AnalyticalScope, limit: int = 25) -> bytes | None:
     try:
         response = httpx.get(
             f"{API_URL}/replenishment/purchase-list.csv",
-            params={"limit": limit},
+            params=scope_query_params(scope, limit=limit),
             timeout=120.0,
         )
         if response.status_code == 200:
@@ -50,81 +197,168 @@ def fetch_purchase_csv(limit: int = 25) -> bytes | None:
     return None
 
 
-def _lollipop(
-    rows: list[dict],
-    y_field: str,
-    y_title: str,
-    x_field: str = "recommended_quantity",
-    x_title: str = "Cantidad recomendada",
-    extra_tooltips: list[alt.Tooltip] | None = None,
-) -> alt.Chart:
-    """Ranking: one categoric + one numeric → lollipop (data-to-viz)."""
-    tooltips = [
-        alt.Tooltip(f"{y_field}:N", title=y_title),
-        *(extra_tooltips or []),
-        alt.Tooltip(f"{x_field}:Q", title=x_title),
-    ]
-    base = alt.Chart(alt.Data(values=rows)).encode(
-        x=alt.X(f"{x_field}:Q", title=x_title),
-        y=alt.Y(f"{y_field}:N", sort="-x", title=None),
-        tooltip=tooltips,
-    )
-    return (
-        base.mark_rule(strokeWidth=2)
-        + base.mark_circle(size=90, opacity=1)
-    ).properties(height=max(240, 28 * max(len(rows), 1)))
-
-
-def _histogram(
-    rows: list[dict],
-    x_field: str,
-    x_title: str,
-    y_field: str = "sku_count",
-    y_title: str = "Productos",
-    x_sort: list[str] | None = None,
-) -> alt.Chart:
-    """Numeric distribution → histogram (ordered bins on X, counts on Y)."""
-    return (
-        alt.Chart(alt.Data(values=rows))
-        .mark_bar(cornerRadiusEnd=2)
-        .encode(
-            x=alt.X(
-                f"{x_field}:N",
-                title=x_title,
-                sort=x_sort or [],
-                axis=alt.Axis(labelAngle=0),
-            ),
-            y=alt.Y(f"{y_field}:Q", title=y_title),
-            tooltip=[
-                alt.Tooltip(f"{x_field}:N", title=x_title),
-                alt.Tooltip(f"{y_field}:Q", title=y_title),
-            ],
+def fetch_replenishment(product_id: str) -> dict | None:
+    try:
+        response = httpx.get(
+            f"{API_URL}/products/{product_id}/replenishment",
+            timeout=60.0,
         )
-        .properties(height=260)
-    )
+        if response.status_code == 200:
+            return response.json()
+    except httpx.ConnectError:
+        return None
+    return None
 
 
-def render_inventory_dashboard(dash: dict | None, purchase_list: list[dict]) -> None:
+def apply_filter_action(action: str, args: dict[str, str], *, source: str = "chip") -> None:
+    scope = _scope_model()
+    if action == suggested_filters.ACTION_FILTER_CATEGORY:
+        cat = args["category"]
+        scope = scope_svc.add(scope, "category", cat)
+        _append_event(
+            source=source,
+            action="add_filter",
+            dimension="category",
+            value=cat,
+            label_human=cat,
+        )
+    elif action == suggested_filters.ACTION_FILTER_COVERAGE:
+        bucket = args["coverage_bucket"]
+        scope = scope_svc.add(scope, "coverage_bucket", bucket)
+        _append_event(
+            source=source,
+            action="add_filter",
+            dimension="coverage_bucket",
+            value=bucket,
+            label_human=bucket,
+        )
+    elif action == suggested_filters.ACTION_FILTER_HEALTH:
+        health = args["health_bucket"]
+        scope = scope_svc.add(scope, "health_bucket", health)
+        _append_event(
+            source=source,
+            action="add_filter",
+            dimension="health_bucket",
+            value=health,
+            label_human=health,
+        )
+    elif action == suggested_filters.ACTION_FILTER_SUPPLIER:
+        supplier = args["supplier"]
+        scope = scope_svc.add(scope, "supplier", supplier)
+        _append_event(
+            source=source,
+            action="add_filter",
+            dimension="supplier",
+            value=supplier,
+            label_human=supplier,
+        )
+    elif action == suggested_filters.ACTION_OPEN_SKU:
+        pid = args["product_id"]
+        scope = scope_svc.set_highlight(scope, pid)
+        calc = fetch_replenishment(pid)
+        st.session_state.highlight_calc = calc
+        _append_event(
+            source=source,
+            action="highlight_sku",
+            dimension="product_id",
+            value=pid,
+            label_human=f"SKU {pid}",
+        )
+        _set_scope(scope)
+        st.session_state.last_analyze_key = ""
+        return
+    scope = scope_svc.clear_highlight(scope)
+    st.session_state.highlight_calc = None
+    _set_scope(scope)
+    st.session_state.last_analyze_key = ""
+
+
+def _breadcrumb_labels(scope: AnalyticalScope) -> list[tuple[str, str, str]]:
+    crumbs: list[tuple[str, str, str]] = [("root", "Inventario", "")]
+    for cat in scope.categories:
+        crumbs.append(("category", cat, cat))
+    for bucket in scope.coverage_buckets:
+        crumbs.append(("coverage_bucket", bucket, bucket))
+    for health in scope.health_buckets:
+        label = metrics.BUCKET_LABELS.get(health, health)
+        crumbs.append(("health_bucket", health, label))
+    for supplier in scope.suppliers:
+        crumbs.append(("supplier", supplier, supplier))
+    if scope.highlight_product_id:
+        crumbs.append(("highlight", scope.highlight_product_id, f"SKU {scope.highlight_product_id}"))
+    return crumbs
+
+
+def render_breadcrumb(scope: AnalyticalScope, *, readonly: bool = False) -> None:
+    st.markdown("**Analizando:**")
+    cols = st.columns([6, 1])
+    with cols[0]:
+        parts = []
+        for kind, value, label in _breadcrumb_labels(scope):
+            if kind == "root":
+                parts.append(label)
+            else:
+                parts.append(label)
+        st.caption(" › ".join(parts) if parts else "Inventario")
+    with cols[1]:
+        if not readonly and st.button("Limpiar filtros", key="reset_scope"):
+            _set_scope(scope_svc.reset())
+            st.session_state.highlight_calc = None
+            st.session_state.interaction_events = []
+            _append_event(source="reset", action="reset", label_human="Limpiar filtros")
+            st.session_state.last_analyze_key = ""
+            st.rerun()
+
+    if readonly:
+        return
+
+    remove_cols = st.columns(8)
+    idx = 0
+    for kind, value, label in _breadcrumb_labels(scope):
+        if kind == "root":
+            continue
+        if idx < len(remove_cols) and remove_cols[idx].button(f"{label} ×", key=f"rm-{kind}-{value}"):
+            current = _scope_model()
+            if kind == "highlight":
+                current = scope_svc.clear_highlight(current)
+                st.session_state.highlight_calc = None
+                _append_event(
+                    source="breadcrumb",
+                    action="remove_filter",
+                    dimension="highlight",
+                    value=value,
+                    label_human=label,
+                )
+            else:
+                current = scope_svc.remove(current, kind, value)
+                _append_event(
+                    source="breadcrumb",
+                    action="remove_filter",
+                    dimension=kind,
+                    value=value,
+                    label_human=label,
+                )
+            _set_scope(current)
+            st.session_state.last_analyze_key = ""
+            st.rerun()
+        idx += 1
+
+
+def render_inventory_dashboard_static(dash: dict | None, purchase_list: list[dict]) -> None:
     dash = dash or {}
-    kpis = st.columns(5)
-    kpis[0].metric(metrics.LABEL_SKUS, dash.get("skus", "—"))
-    kpis[1].metric(metrics.LABEL_STOCKOUT_RISK, dash.get("stockout_risk", "—"))
-    kpis[2].metric(metrics.LABEL_UNDERSTOCK, dash.get("understock", "—"))
-    kpis[3].metric(metrics.LABEL_OVERSTOCK, dash.get("overstock", "—"))
-    avg = dash.get("avg_coverage")
-    kpis[4].metric(
-        f"{metrics.LABEL_COVERAGE} promedio",
-        f"{avg:.1f} d" if isinstance(avg, (int, float)) else "—",
-    )
+    components.render_kpi_strip(dash)
+    components.render_health_legend()
+    components.render_coverage_strip(dash.get("coverage") or [])
 
     category_rows = dash.get("by_category") or []
     coverage_rows = dash.get("coverage") or []
     left, right = st.columns(2)
     with left:
-        st.caption(f"{metrics.LABEL_RECOMMENDED_QTY} por categoría")
+        st.markdown(f"**{metrics.LABEL_RECOMMENDED_QTY} por categoría**")
+        st.caption("Click en una barra para filtrar (solo en panel vivo)")
         if category_rows:
             st.altair_chart(
-                _lollipop(
+                charts.lollipop(
                     category_rows,
                     "category",
                     "Categoría",
@@ -133,10 +367,11 @@ def render_inventory_dashboard(dash: dict | None, purchase_list: list[dict]) -> 
                 width="stretch",
             )
     with right:
-        st.caption(f"Distribución de {metrics.LABEL_COVERAGE}")
+        st.markdown(f"**Distribución de {metrics.LABEL_COVERAGE}**")
+        st.caption("Rojo = pocos días de stock · Verde = holgado")
         if coverage_rows:
             st.altair_chart(
-                _histogram(
+                charts.histogram(
                     coverage_rows,
                     "bucket",
                     metrics.LABEL_COVERAGE,
@@ -145,28 +380,243 @@ def render_inventory_dashboard(dash: dict | None, purchase_list: list[dict]) -> 
                 width="stretch",
             )
 
-    total = sum(int(item.get("recommended_quantity") or 0) for item in purchase_list)
-    st.markdown(
-        f"**{len(purchase_list)} productos para reponer** · "
-        f"**{total}** unidades ({metrics.LABEL_RECOMMENDED_QTY})"
+    if purchase_list:
+        components.render_oc_summary(purchase_list)
+        components.render_purchase_table(purchase_list, selectable=False)
+
+
+def render_live_panel() -> None:
+    st.markdown('<div class="sm-panel">', unsafe_allow_html=True)
+    panel_mode = st.session_state.panel_mode
+    explore_mode = panel_mode == "explore"
+    scope = _effective_panel_scope()
+    mutable_scope = _scope_model()
+
+    analyst.render_mode_badge(panel_mode)
+
+    slice_data = fetch_slice(scope, limit=25)
+    if slice_data is None:
+        st.error(f"No pude conectar con la API en `{API_URL}`. Arrancá uvicorn primero.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+    st.session_state.slice_data = slice_data
+
+    render_breadcrumb(scope, readonly=not explore_mode)
+    dash = slice_data.get("dashboard") or {}
+    purchase_list = slice_data.get("purchase_list") or []
+    evidence = slice_data.get("evidence") or ""
+    suggested = slice_data.get("suggested_filters") or []
+
+    analyze_key = _analyze_cache_key(scope, panel_mode)
+    if st.session_state.analyst_enabled and analyze_key != st.session_state.last_analyze_key:
+        analyze_body = fetch_analyze(_scope_model(), mode=panel_mode)
+        if analyze_body:
+            st.session_state.analyze_data = analyze_body
+            st.session_state.last_analyze_key = analyze_key
+
+    analyze_data = st.session_state.analyze_data or {}
+    insight = analyze_data.get("insight")
+    commit_summary = analyze_data.get("commit_summary")
+    insight_source = analyze_data.get("insight_source", "fallback")
+
+    components.render_kpi_strip(dash)
+    components.render_health_legend()
+    components.render_coverage_strip(dash.get("coverage") or [])
+
+    analyst.render_analyst_card(
+        panel_mode=panel_mode,
+        evidence=evidence,
+        insight=insight,
+        commit_summary=commit_summary,
+        insight_source=insight_source,
+        analyst_enabled=st.session_state.analyst_enabled,
     )
-    table = [
-        {
-            "SKU": item.get("product_id", ""),
-            "Código de barras": item.get("barcode", ""),
-            "Producto": item.get("product_name", ""),
-            "Proveedor": item.get("supplier", ""),
-            "Categoría": item.get("category", ""),
-            "Stock": item.get("current_stock"),
-            "Cobertura": item.get("days_of_supply"),
-            "Cantidad recomendada": item.get("recommended_quantity"),
-            "Estado": metrics.BUCKET_LABELS.get(
-                str(item.get("health_bucket") or ""), item.get("health_bucket") or ""
-            ),
-        }
-        for item in purchase_list
-    ]
-    st.dataframe(table, width="stretch", hide_index=True)
+    analyst.render_exploration_timeline(st.session_state.interaction_events)
+
+    if explore_mode and insight and insight.get("suggested_questions"):
+        analyst.render_suggested_questions(
+            insight["suggested_questions"],
+            key_prefix=f"live-{scope_svc.cache_key(scope)}",
+        )
+
+    if explore_mode and suggested:
+        st.markdown("**Refinar recorte** — sugerencias determinísticas:")
+        chip_cols = st.columns(min(len(suggested), 3))
+        for i, chip in enumerate(suggested[:3]):
+            if chip_cols[i].button(
+                f"➕ {chip['label']}",
+                key=f"chip-{scope_svc.cache_key(scope)}-{i}",
+                help="Agrega este filtro al breadcrumb",
+            ):
+                apply_filter_action(chip["action"], chip.get("args") or {}, source="chip")
+                st.rerun()
+
+    category_rows = dash.get("by_category") or []
+    coverage_rows = dash.get("coverage") or []
+    left, right = st.columns(2)
+    with left:
+        st.markdown(f"**{metrics.LABEL_RECOMMENDED_QTY} por categoría**")
+        st.caption("👆 Click en una categoría para recortar" if explore_mode else "Recorte congelado")
+        if category_rows:
+            cat_chart = charts.lollipop(
+                category_rows,
+                "category",
+                "Categoría",
+                extra_tooltips=[alt.Tooltip("sku_count:Q", title="Productos")],
+                selectable_field="category" if explore_mode else None,
+                selection_name="category_select",
+            )
+            if explore_mode:
+                cat_event = st.altair_chart(
+                    cat_chart,
+                    on_select="rerun",
+                    key="live_category_chart",
+                    width="stretch",
+                )
+                cat_value = charts.selection_value(
+                    cat_event, "category", selection_name="category_select"
+                )
+                if cat_value and cat_value not in mutable_scope.categories:
+                    _set_scope(scope_svc.add(mutable_scope, "category", cat_value))
+                    _append_event(
+                        source="chart_category",
+                        action="add_filter",
+                        dimension="category",
+                        value=cat_value,
+                        label_human=cat_value,
+                    )
+                    st.session_state.last_analyze_key = ""
+                    st.rerun()
+            else:
+                st.altair_chart(cat_chart, width="stretch")
+    with right:
+        st.markdown(f"**Distribución de {metrics.LABEL_COVERAGE}**")
+        st.caption("👆 Click en un bucket para filtrar" if explore_mode else "Recorte congelado")
+        if coverage_rows:
+            cov_chart = charts.histogram(
+                coverage_rows,
+                "bucket",
+                metrics.LABEL_COVERAGE,
+                x_sort=list(dash_svc.COVERAGE_ORDER),
+                selectable_field="bucket" if explore_mode else None,
+                selection_name="coverage_select",
+            )
+            if explore_mode:
+                cov_event = st.altair_chart(
+                    cov_chart,
+                    on_select="rerun",
+                    key="live_coverage_chart",
+                    width="stretch",
+                )
+                bucket_value = charts.selection_value(
+                    cov_event, "bucket", selection_name="coverage_select"
+                )
+                if bucket_value and bucket_value not in mutable_scope.coverage_buckets:
+                    _set_scope(scope_svc.add(mutable_scope, "coverage_bucket", bucket_value))
+                    _append_event(
+                        source="chart_coverage",
+                        action="add_filter",
+                        dimension="coverage_bucket",
+                        value=bucket_value,
+                        label_human=bucket_value,
+                    )
+                    st.session_state.last_analyze_key = ""
+                    st.rerun()
+            else:
+                st.altair_chart(cov_chart, width="stretch")
+
+    if not purchase_list:
+        st.warning("Ningún producto en este recorte. Quitá un filtro o usá **Limpiar filtros**.")
+    else:
+        components.render_oc_summary(purchase_list)
+        st.caption(
+            "👆 Click en una fila para ver **Cómo se calculó**"
+            if explore_mode
+            else "OC congelada — volvé a Explorar para cambiar filtros"
+        )
+        table_event = components.render_purchase_table(
+            purchase_list,
+            table_key="live_purchase_table",
+            selectable=explore_mode,
+        )
+        if explore_mode:
+            sku = _table_selection_sku(table_event, purchase_list)
+            if sku and sku != mutable_scope.highlight_product_id:
+                apply_filter_action(
+                    suggested_filters.ACTION_OPEN_SKU,
+                    {"product_id": sku},
+                    source="table_row",
+                )
+                st.rerun()
+
+    calc_payload = st.session_state.highlight_calc
+    if calc_payload and scope.highlight_product_id:
+        st.markdown("---")
+        st.markdown(f"### 🧮 {calc_payload.get('product_name', scope.highlight_product_id)}")
+        cols = st.columns(3)
+        cols[0].metric(
+            metrics.LABEL_RECOMMENDED_QTY,
+            calc_payload.get("recommended_quantity", 0),
+            help="Calculado en Python — no lo inventa el LLM",
+        )
+        ctx = calc_payload.get("context") or {}
+        cols[1].metric("Stock actual", ctx.get("current_stock", "—"))
+        cols[2].metric("Punto de reorden", ctx.get("reorder_point", "—"))
+        render_calculation(calc_payload.get("calculation") or {})
+
+    mode_cols = st.columns([2, 2, 2])
+    if explore_mode:
+        with mode_cols[0]:
+            if st.button(
+                "Listo — armar OC de este recorte",
+                type="primary",
+                key="enter_commit",
+            ):
+                _enter_commit_mode()
+                st.rerun()
+        with mode_cols[1]:
+            st.caption("Export disponible después de congelar el recorte.")
+    else:
+        with mode_cols[0]:
+            csv_bytes = fetch_purchase_csv(scope, limit=max(len(purchase_list), 1))
+            if csv_bytes and panel_modes.can_export(panel_mode):
+                st.download_button(
+                    f"📥 Exportar OC ({len(purchase_list)} SKUs)",
+                    data=csv_bytes,
+                    file_name="purchase_order.csv",
+                    mime="text/csv",
+                    key=f"dl-slice-{scope_svc.cache_key(scope)}",
+                    type="primary",
+                )
+        with mode_cols[1]:
+            if st.button("Volver a explorar", key="exit_commit"):
+                _exit_commit_mode()
+                st.rerun()
+        with mode_cols[2]:
+            if st.session_state.analyst_enabled and st.button("Reconfirmar con IA", key="reanalyze_commit"):
+                st.session_state.last_analyze_key = ""
+                st.rerun()
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def _table_selection_sku(event: Any, purchase_list: list[dict]) -> str | None:
+    if event is None or not purchase_list:
+        return None
+    rows: list[int] = []
+    if hasattr(event, "selection") and event.selection:
+        raw = event.selection.get("rows") or []
+        rows = [int(i) for i in raw if isinstance(i, int)]
+    elif isinstance(event, dict):
+        selection = event.get("selection") or {}
+        raw = selection.get("rows") or []
+        rows = [int(i) for i in raw if isinstance(i, int)]
+    if not rows:
+        return None
+    idx = rows[0]
+    if 0 <= idx < len(purchase_list):
+        return str(purchase_list[idx].get("product_id") or "") or None
+    return None
 
 
 def render_sales_ranking(dash: dict | None) -> None:
@@ -175,7 +625,7 @@ def render_sales_ranking(dash: dict | None) -> None:
     st.caption("Categorías más vendidas (unidades, últimos 30 días)")
     if rows:
         st.altair_chart(
-            _lollipop(
+            charts.lollipop(
                 rows,
                 "category",
                 "Categoría",
@@ -206,15 +656,21 @@ def render_history() -> None:
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             if msg.get("mode") == "list":
-                render_inventory_dashboard(msg.get("dashboard"), msg.get("purchase_list") or [])
-                if msg.get("csv_bytes"):
-                    st.download_button(
-                        "Descargar orden de compra (CSV)",
-                        data=msg["csv_bytes"],
-                        file_name="purchase_order.csv",
-                        mime="text/csv",
-                        key=f"dl-{id(msg)}",
+                if msg is st.session_state.messages[-1] and st.session_state.live_list_active:
+                    pass
+                else:
+                    render_inventory_dashboard_static(
+                        msg.get("dashboard"),
+                        msg.get("purchase_list") or [],
                     )
+                    if msg.get("csv_bytes"):
+                        st.download_button(
+                            "Descargar orden de compra (CSV)",
+                            data=msg["csv_bytes"],
+                            file_name="purchase_order.csv",
+                            mime="text/csv",
+                            key=f"dl-{id(msg)}",
+                        )
             elif msg.get("mode") == "sales":
                 render_sales_ranking(msg.get("dashboard"))
             else:
@@ -264,17 +720,39 @@ def ask_api(prompt: str) -> dict:
 
 render_history()
 
+if st.session_state.live_list_active:
+    with st.container():
+        st.markdown("---")
+        st.markdown("### 🎯 Panel de reposición")
+        render_live_panel()
+
 with st.sidebar:
-    st.markdown("### SupplyMate")
+    st.markdown("### 📦 SupplyMate")
     st.markdown(
-        "Preguntá **qué comprar**, **qué está pasando** o **cuáles categorías venden más**."
+        "1. **Explorar (Ask)** — preguntá y recortá con clicks  \n"
+        "2. **Armar OC (Agent)** — congelá el recorte y exportá  \n"
+        "3. Python calcula qty · LLM interpreta"
+    )
+    st.session_state.analyst_enabled = st.toggle(
+        "Analista IA",
+        value=st.session_state.analyst_enabled,
     )
     st.divider()
-    st.markdown("Producto puntual: `6033436`")
+    components.render_health_legend()
+    st.divider()
+    st.markdown("**SKU demo:** `6033436` → qty **172**")
     if st.button("Limpiar chat", width="stretch"):
         st.session_state.messages = []
         st.session_state.pending_prompt = None
-        st.session_state.last_purchase_csv = None
+        st.session_state.live_list_active = False
+        st.session_state.analytical_scope = scope_svc.reset().model_dump()
+        st.session_state.slice_data = None
+        st.session_state.highlight_calc = None
+        st.session_state.panel_mode = "explore"
+        st.session_state.frozen_scope = None
+        st.session_state.interaction_events = []
+        st.session_state.analyze_data = None
+        st.session_state.last_analyze_key = ""
         st.rerun()
 
 prompt = st.session_state.pending_prompt or st.chat_input(
@@ -298,20 +776,22 @@ if prompt:
         csv_bytes = None
 
         if mode == "list":
-            render_inventory_dashboard(dash, purchase_list)
-            csv_bytes = fetch_purchase_csv(limit=max(len(purchase_list), 1))
-            if csv_bytes:
-                st.session_state.last_purchase_csv = csv_bytes
-                st.download_button(
-                    "Descargar orden de compra (CSV)",
-                    data=csv_bytes,
-                    file_name="purchase_order.csv",
-                    mime="text/csv",
-                    key="dl-live",
-                )
+            st.session_state.live_list_active = True
+            st.session_state.root_question = prompt
+            st.session_state.panel_mode = "explore"
+            st.session_state.frozen_scope = None
+            st.session_state.interaction_events = []
+            st.session_state.analyze_data = None
+            st.session_state.last_analyze_key = ""
+            _append_event(source="chat", action="reset", label_human=prompt)
+            _set_scope(scope_svc.reset())
+            st.session_state.highlight_calc = None
+            render_live_panel()
         elif mode == "sales":
+            st.session_state.live_list_active = False
             render_sales_ranking(dash)
         elif mode == "single" and data.get("product_name"):
+            st.session_state.live_list_active = False
             ctx = data.get("context") or {}
             calc = data.get("calculation") or {}
             st.markdown(f"**{data['product_name']}**")

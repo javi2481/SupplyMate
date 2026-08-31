@@ -189,3 +189,50 @@ async def test_llm_unknown_does_not_force_a_random_sku():
     with patch("app.agent.classify_intent", new=AsyncMock(return_value="unknown")):
         with pytest.raises(ProductNotFoundError):
             await run_supplymate("hola cómo va el día")
+
+
+@pytest.mark.asyncio
+async def test_run_analyze_priorities_subset_of_purchase_list():
+    import json
+
+    from app.agent import run_analyze
+    from app.models import AnalyzeRequest, AnalyticalScope
+
+    scope = AnalyticalScope()
+    slice_data = catalog_service.replenishment_slice(scope, limit=25)
+    if not slice_data.purchase_list:
+        pytest.skip("empty purchase list")
+    item = slice_data.purchase_list[0]
+    n = len(slice_data.purchase_list)
+    total = sum(i.recommended_quantity for i in slice_data.purchase_list)
+    payload = {
+        "panel_title": "T",
+        "summary": f"{n} productos",
+        "bullets": [f"{n} SKUs · {total} unidades"],
+        "purchase_priorities": [
+            {
+                "product_id": item.product_id,
+                "product_name": item.product_name,
+                "recommended_quantity": item.recommended_quantity,
+                "reason": "x",
+            }
+        ],
+        "navigation_hints": [],
+        "suggested_questions": [],
+        "highlight_kpis": [],
+    }
+
+    async def fake_run(agent, prompt, **kwargs):
+        class Result:
+            final_output = json.dumps(payload)
+
+        return Result()
+
+    with patch("app.agent.Runner.run", new=AsyncMock(side_effect=fake_run)):
+        response = await run_analyze(
+            AnalyzeRequest(mode="explore", scope=scope, root_question="q")
+        )
+    assert response.insight_source == "llm"
+    assert response.insight is not None
+    ids = {p.product_id for p in response.insight.purchase_priorities}
+    assert ids <= {i.product_id for i in response.purchase_list}

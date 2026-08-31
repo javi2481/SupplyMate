@@ -106,6 +106,59 @@ def test_dashboard_endpoint():
     assert body["by_category"]
 
 
+def test_replenishment_slice_endpoint():
+    response = client.get("/replenishment/slice", params={"limit": 5})
+    assert response.status_code == 200
+    body = response.json()
+    assert "scope" in body
+    assert "evidence" in body
+    assert body["dashboard"]["skus"] > 0
+    assert len(body["purchase_list"]) <= 5
+    assert isinstance(body["suggested_filters"], list)
+
+
+def test_slice_with_category_filter():
+    root = client.get("/replenishment/slice", params={"limit": 25}).json()
+    if not root["dashboard"]["by_category"]:
+        return
+    cat = root["dashboard"]["by_category"][0]["category"]
+    filtered = client.get(
+        "/replenishment/slice",
+        params={"category": cat, "limit": 25},
+    ).json()
+    assert filtered["dashboard"]["skus"] <= root["dashboard"]["skus"]
+    assert cat in filtered["scope"]["categories"]
+
+
+def test_slice_empty_category_returns_200():
+    response = client.get(
+        "/replenishment/slice",
+        params={"category": "__no_such_category__", "limit": 5},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["purchase_list"] == []
+    assert "Ningún producto" in body["evidence"]
+
+
+def test_csv_matches_filtered_list():
+    root = client.get("/replenishment/slice", params={"limit": 3}).json()
+    if not root["dashboard"]["by_category"]:
+        return
+    cat = root["dashboard"]["by_category"][0]["category"]
+    params = {"category": cat, "limit": 3}
+    json_items = client.get("/replenishment/purchase-list", params=params).json()
+    import csv
+    import io
+
+    csv_resp = client.get("/replenishment/purchase-list.csv", params=params)
+    rows = list(csv.reader(io.StringIO(csv_resp.text)))
+    assert len(rows) == len(json_items) + 1
+    for i, item in enumerate(json_items):
+        assert rows[i + 1][1] == item["product_id"]
+        assert int(rows[i + 1][4]) == item["recommended_quantity"]
+
+
 def test_purchase_list_csv():
     import csv
     import io

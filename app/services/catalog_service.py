@@ -3,17 +3,19 @@ from __future__ import annotations
 from datetime import date
 
 from app.models import (
+    AnalyticalScope,
     InventoryDashboard,
     ProductMaster,
     ProductNotFoundError,
     ProductSearchHit,
     PurchaseListItem,
     ReplenishmentRecommendation,
+    ReplenishmentSlice,
     SalesHistory,
 )
 from app.products import resolve_product_id
 from app.replenishment import calculate_replenishment
-from app.services import dashboard, metrics
+from app.services import dashboard, metrics, suggested_filters
 from app.store import SALES_AS_OF, get_store
 
 _sku_rows_cache: list[dict] | None = None
@@ -101,9 +103,64 @@ def list_purchase_recommendations(
     return items
 
 
-def chat_dashboard(limit: int = 25) -> tuple[InventoryDashboard, list[PurchaseListItem]]:
-    rows = _sku_analytics_rows()
+def chat_dashboard(
+    limit: int = 25,
+    scope: AnalyticalScope | None = None,
+) -> tuple[InventoryDashboard, list[PurchaseListItem]]:
+    rows = dashboard.filter_rows(_sku_analytics_rows(), scope)
     return dashboard.from_rows(rows), dashboard.purchase_items(rows, limit=limit)
+
+
+EMPTY_SLICE_EVIDENCE = (
+    "Ningún producto cumple estos criterios. "
+    "Probá quitar un filtro del breadcrumb o usar **Limpiar filtros**."
+)
+
+
+def format_slice_evidence(
+    snap: InventoryDashboard,
+    items: list[PurchaseListItem],
+    scope: AnalyticalScope,
+) -> str:
+    if not items:
+        return EMPTY_SLICE_EVIDENCE
+    total_qty = sum(item.recommended_quantity for item in items)
+    lines = [
+        f"**{len(items)}** productos en este recorte · **{total_qty}** unidades recomendadas.",
+        f"**{snap.skus}** SKUs en el recorte · **{snap.stockout_risk}** en riesgo de quiebre.",
+    ]
+    if scope.categories:
+        lines.append(f"Categorías activas: {', '.join(scope.categories)}.")
+    if scope.coverage_buckets:
+        lines.append(f"Cobertura activa: {', '.join(scope.coverage_buckets)}.")
+    if scope.health_buckets:
+        labels = [
+            metrics.BUCKET_LABELS.get(h, h) for h in scope.health_buckets
+        ]
+        lines.append(f"Estado activo: {', '.join(labels)}.")
+    if scope.suppliers:
+        lines.append(f"Proveedores activos: {', '.join(scope.suppliers)}.")
+    if snap.avg_coverage is not None:
+        lines.append(f"Cobertura promedio del recorte: **{snap.avg_coverage:.1f} días**.")
+    return " ".join(lines)
+
+
+def replenishment_slice(
+    scope: AnalyticalScope | None = None,
+    *,
+    limit: int = 25,
+) -> ReplenishmentSlice:
+    active = scope or AnalyticalScope()
+    snap, items = chat_dashboard(limit=limit, scope=active)
+    evidence = format_slice_evidence(snap, items, active)
+    chips = suggested_filters.suggest_next_filters(snap, items, active)
+    return ReplenishmentSlice(
+        scope=active,
+        evidence=evidence,
+        dashboard=snap,
+        purchase_list=items,
+        suggested_filters=chips,
+    )
 
 
 def format_dashboard_answer(
@@ -192,11 +249,10 @@ PURCHASE_CSV_HEADERS = (
 )
 
 
-def purchase_list_csv(limit: int = 25) -> str:
+def purchase_list_csv_from_items(items: list[PurchaseListItem]) -> str:
     import csv
     import io
 
-    items = purchase_list_items(list_purchase_recommendations(limit=limit))
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(PURCHASE_CSV_HEADERS)
@@ -211,3 +267,11 @@ def purchase_list_csv(limit: int = 25) -> str:
             ]
         )
     return buf.getvalue()
+
+
+def purchase_list_csv(
+    limit: int = 25,
+    scope: AnalyticalScope | None = None,
+) -> str:
+    _, items = chat_dashboard(limit=limit, scope=scope)
+    return purchase_list_csv_from_items(items)

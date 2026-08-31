@@ -29,3 +29,29 @@ _catalog_env = os.getenv("SUPPLYMATE_CATALOG_XLSX", "")
 CATALOG_XLSX = Path(_catalog_env) if _catalog_env.strip() else None
 
 API_BASE_URL = os.getenv("SUPPLYMATE_API_URL", "http://127.0.0.1:8000")
+
+SUPPLYMATE_ENV = os.getenv("SUPPLYMATE_ENV", "development").lower()
+MAX_CHAT_MESSAGE_LENGTH = int(os.getenv("MAX_CHAT_MESSAGE_LENGTH", "2000"))
+MAX_SCOPE_VALUE_LENGTH = int(os.getenv("MAX_SCOPE_VALUE_LENGTH", "200"))
+CHAT_RATE_LIMIT_PER_MIN = int(os.getenv("CHAT_RATE_LIMIT_PER_MIN", "10"))
+ANALYZE_RATE_LIMIT_PER_MIN = int(os.getenv("ANALYZE_RATE_LIMIT_PER_MIN", "10"))
+
+
+def is_production() -> bool:
+    return SUPPLYMATE_ENV == "production"
+
+
+def is_test_env() -> bool:
+    return SUPPLYMATE_ENV == "test"
+
+
+def effective_chat_rate_limit() -> int:
+    if is_test_env():
+        return 10_000
+    return CHAT_RATE_LIMIT_PER_MIN
+
+
+def effective_analyze_rate_limit() -> int:
+    if is_test_env():
+        return 10_000
+    return ANALYZE_RATE_LIMIT_PER_MIN

@@ -4,7 +4,7 @@ MVP de AI Engineering para reabastecimiento en pymes de distribución.
 
 **Principio:** *LLM orchestrates, deterministic code decides.*
 
-Un chat: preguntás **cuánto pedir** o **qué está pasando**, y el dashboard (KPIs + gráficos + OC) sale en la respuesta.
+Un chat: preguntás **cuánto pedir** o **qué está pasando**, y el dashboard (KPIs + gráficos + OC) sale en la respuesta. Tras *¿Qué productos tengo que comprar?* podés **recortar** el panel con clicks (categoría, cobertura, chips) y exportar **esa** OC — sin volver a preguntar al LLM.
 
 Vocabulario: Riesgo de quiebre, Falta de stock, Sobrestock, Cobertura, Cantidad recomendada. SKU demo: `6033436`.
 
@@ -62,8 +62,8 @@ Explanation (LLM, solo narra los números)
 | CSVs en [`data/`](data/) | **API simulada** (~13k SKUs) |
 | [`app/services/metrics.py`](app/services/metrics.py) | Labels + Coverage + health buckets |
 | 3 tools + [`app/replenishment.py`](app/replenishment.py) | Fórmula 7 días |
-| REST | search, replenishment, `/chat`, dashboard, `purchase-list.csv` |
-| Streamlit | Chat + dashboard (lollipop + histograma) |
+| REST | search, replenishment, `/chat`, `/replenishment/slice`, `/replenishment/analyze`, dashboard, `purchase-list.csv` |
+| Streamlit | Chat + panel **Explorar (Ask)** / **Armar OC (Agent)** + Analista IA |
 
 **Fórmula:**
 
@@ -75,7 +75,7 @@ stock_target   = demand_horizon + demand_lead + safety_stock
 recommended    = max(0, stock_target - current_stock)
 ```
 
-SDD: [`openspec/changes/mvp-core/`](openspec/changes/mvp-core/) + [`openspec/changes/dual-surface-analytics/`](openspec/changes/dual-surface-analytics/).
+SDD: [`openspec/changes/mvp-core/`](openspec/changes/mvp-core/) + [`openspec/changes/dual-surface-analytics/`](openspec/changes/dual-surface-analytics/) + [`openspec/changes/interactive-drilldown/`](openspec/changes/interactive-drilldown/) + [`openspec/changes/llm-drilldown-insights/`](openspec/changes/llm-drilldown-insights/).
 
 ## Qué demuestra el MVP
 
@@ -115,10 +115,22 @@ streamlit run ui/streamlit_app.py
 
 Abrí http://localhost:8501.
 
+Smoke de API (con uvicorn en :8000):
+
+```powershell
+.\scripts\smoke_api.ps1
+```
+
 Ejemplos:
 
 - `¿Cuánto debería pedir de 6033436?` → qty + **Cómo se calculó**
-- `¿Qué productos tengo que comprar?` → **dashboard en el chat** (KPIs + gráficos + tabla) + CSV
+- `¿Qué productos tengo que comprar?` → panel **Explorar** (clicks + Analista IA) → **Listo — armar OC** → **Exportar OC** en modo Agent
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/replenishment/analyze \
+  -H "Content-Type: application/json" \
+  -d "{\"mode\":\"explore\",\"scope\":{},\"events\":[],\"root_question\":\"¿Qué comprar?\"}"
+```
 
 ## Flujo en terminal
 
@@ -126,6 +138,8 @@ Ejemplos:
 curl -s http://127.0.0.1:8000/health
 curl -s "http://127.0.0.1:8000/products/search?q=47%20street"
 curl -s http://127.0.0.1:8000/products/6033436/replenishment
+curl -s "http://127.0.0.1:8000/replenishment/slice?limit=5"
+curl -s "http://127.0.0.1:8000/replenishment/slice?category=Cabello&limit=5"
 curl -s "http://127.0.0.1:8000/replenishment/purchase-list.csv?limit=10" -o purchase_order.csv
 curl -s -X POST http://127.0.0.1:8000/chat \
   -H "Content-Type: application/json" \
@@ -139,26 +153,41 @@ curl -s -X POST http://127.0.0.1:8000/chat \
 | 1 agente + 3 tools | RAG, embeddings, vector DB |
 | Cálculo determinístico | Forecasting / ML / EOQ |
 | Catálogo CSV | Postgres app DB / dbt / Airflow / Superset |
-| Streamlit (chat + dashboard) | Frontend React / BI aparte obligatorio |
-| Export CSV OC | Multi-agent / LangChain |
-| SDD + Strict TDD | Sessions / historial de chat |
+| Streamlit Explorar / Armar OC + Analista IA | Frontend React / BI aparte obligatorio |
+| Export CSV OC (scope congelado en Agent) | Multi-agent / LangChain |
+| `/replenishment/analyze` (LLM interpreta, Python calcula) | LLM calcula qty o filtra filas |
 
 ## Documentación / SDD
 
 | Artefacto | Contenido |
 |-----------|-----------|
 | [`openspec/config.yaml`](openspec/config.yaml) | Strict TDD + stack |
+| [`openspec/changes/interactive-drilldown/`](openspec/changes/interactive-drilldown/) | Slice API + scope + chips Python |
+| [`openspec/changes/engineering-quality/`](openspec/changes/engineering-quality/) | CI, seguridad OWASP mínima, trazabilidad |
 | [`openspec/changes/dual-surface-analytics/`](openspec/changes/dual-surface-analytics/) | Métricas + dashboard en chat |
 | [`docs/api-simulada.md`](docs/api-simulada.md) | Contrato CSV |
 
-**Estado:** un producto — asistente + dashboard en el chat, qty calculada en Python.
+**Estado:** asistente + panel de reposición recortable; qty y filtros en Python; LLM solo en la pregunta libre.
 
 ## Tests
 
 ```bash
 pip install -e ".[dev]"
 pytest
+pytest -m performance   # smoke de rendimiento (main CI)
 ```
+
+CI (GitHub Actions): pytest + cobertura ≥85% en módulos críticos + Docker smoke.
+
+## Calidad y mantenimiento
+
+| Doc | Contenido |
+|-----|-----------|
+| [`docs/maintenance-policy.md`](docs/maintenance-policy.md) | Leyes de Lehman, sprint preventivo |
+| [`docs/beta-test-protocol.md`](docs/beta-test-protocol.md) | Escenario beta + checklist UX |
+| [`docs/security-audit-osstmm-lite.md`](docs/security-audit-osstmm-lite.md) | Auditoría web lite |
+| [`docs/compatibility-matrix.md`](docs/compatibility-matrix.md) | Browsers / SO |
+| [`openspec/changes/engineering-quality/traceability-matrix.md`](openspec/changes/engineering-quality/traceability-matrix.md) | MUST → test |
 
 ## Docker (API)
 

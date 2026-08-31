@@ -9,9 +9,21 @@ from openai import AsyncOpenAI
 from app import config
 from app.intent_classifier import classify_intent
 from app.intents import is_purchase_list_query, is_top_categories_query, match_rule_intent
-from app.models import ChatResponse, ProductNotFoundError, SupplyContext
+from app.models import (
+    AnalyticalScope,
+    AnalyzeRequest,
+    AnalyzeResponse,
+    ChatResponse,
+    CommitSummary,
+    DashboardInsight,
+    ProductNotFoundError,
+    SupplyContext,
+)
 from app.products import message_looks_like_sku, resolve_from_message, resolve_product_id
-from app.services import catalog_service
+from app.services import catalog_service, insight_cache, prompt_compiler
+from app.services import insight_validator
+from app.services import panel_modes
+from app.services import scope as scope_svc
 from app.tools import (
     get_inventory,
     get_replenishment_params,
@@ -38,6 +50,21 @@ Use ONLY the numbers provided in the JSON payload.
 Do not invent or change recommended_quantity.
 Keep 3-5 short sentences for a warehouse manager.
 Never use English metric names; say cantidad recomendada, demanda diaria, punto de reorden, stock de seguridad.
+""".strip()
+
+INSIGHT_INSTRUCTIONS = """
+You are SupplyMate Analista in EXPLORAR mode.
+Respond ONLY with valid JSON for DashboardInsight. Spanish.
+Use ONLY numbers from the user payload. Do not invent SKUs or quantities.
+purchase_priorities must use product_id and recommended_quantity exactly from purchase_list_top.
+""".strip()
+
+COMMIT_INSTRUCTIONS = """
+You are SupplyMate in ARMAR OC mode (confirmación).
+Respond ONLY with valid JSON for CommitSummary. Spanish.
+Use ONLY numbers from the payload. Do not suggest new filters.
+top_priorities must match purchase_list_top SKUs and quantities exactly.
+oc_summary must mention SKU count and total recommended units from the payload.
 """.strip()
 
 PURCHASE_LIST_LIMIT = 25
@@ -101,6 +128,131 @@ def build_explain_agent() -> Agent:
         instructions=EXPLAIN_INSTRUCTIONS,
         model=get_model(),
     )
+
+
+def build_insight_agent() -> Agent:
+    return Agent(
+        name="SupplyMateInsight",
+        instructions=INSIGHT_INSTRUCTIONS,
+        model=get_model(),
+    )
+
+
+def build_commit_agent() -> Agent:
+    return Agent(
+        name="SupplyMateCommit",
+        instructions=COMMIT_INSTRUCTIONS,
+        model=get_model(),
+    )
+
+
+def _parse_json_output(text: str) -> dict:
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.split("\n")
+        lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    return json.loads(text)
+
+
+def _fallback_analyze_response(
+    request: AnalyzeRequest,
+    slice_data,
+    *,
+    prompt_hash: str = "",
+) -> AnalyzeResponse:
+    return AnalyzeResponse(
+        mode=request.mode,
+        scope=request.scope,
+        frozen_scope=request.frozen_scope,
+        evidence=slice_data.evidence,
+        dashboard=slice_data.dashboard,
+        purchase_list=slice_data.purchase_list,
+        insight=None,
+        commit_summary=None,
+        insight_source="fallback",
+        compiled_prompt_hash=prompt_hash,
+    )
+
+
+async def run_analyze(request: AnalyzeRequest) -> AnalyzeResponse:
+    panel_modes.validate_commit_request(
+        request.mode, request.scope, request.frozen_scope
+    )
+    effective = panel_modes.effective_scope(
+        request.mode, request.scope, request.frozen_scope
+    )
+    scope_key = scope_svc.cache_key(effective)
+    ev_hash = insight_cache.events_hash(request.events)
+    cache_key = insight_cache.cache_key(request.mode, scope_key, ev_hash)
+    cached = insight_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    slice_data = catalog_service.replenishment_slice(effective, limit=25)
+    root_dash, _ = catalog_service.chat_dashboard(limit=1, scope=AnalyticalScope())
+    prompt = prompt_compiler.compile_analyze_prompt(
+        mode=request.mode,
+        root_question=request.root_question,
+        events=request.events,
+        slice_data=slice_data,
+        root_dashboard=root_dash,
+    )
+    phash = prompt_compiler.prompt_hash(prompt)
+
+    try:
+        agent = (
+            build_commit_agent()
+            if request.mode == "commit"
+            else build_insight_agent()
+        )
+        run = await Runner.run(agent, prompt)
+        raw = _parse_json_output(str(run.final_output))
+        if request.mode == "commit":
+            summary = CommitSummary.model_validate(raw)
+            errors = insight_validator.validate_commit_summary(summary, slice_data)
+            if errors:
+                response = _fallback_analyze_response(
+                    request, slice_data, prompt_hash=phash
+                )
+            else:
+                response = AnalyzeResponse(
+                    mode=request.mode,
+                    scope=request.scope,
+                    frozen_scope=request.frozen_scope,
+                    evidence=slice_data.evidence,
+                    dashboard=slice_data.dashboard,
+                    purchase_list=slice_data.purchase_list,
+                    commit_summary=summary,
+                    insight_source="llm",
+                    compiled_prompt_hash=phash,
+                )
+        else:
+            insight = DashboardInsight.model_validate(raw)
+            errors = insight_validator.validate_insight(insight, slice_data)
+            if errors:
+                response = _fallback_analyze_response(
+                    request, slice_data, prompt_hash=phash
+                )
+            else:
+                response = AnalyzeResponse(
+                    mode=request.mode,
+                    scope=request.scope,
+                    frozen_scope=request.frozen_scope,
+                    evidence=slice_data.evidence,
+                    dashboard=slice_data.dashboard,
+                    purchase_list=slice_data.purchase_list,
+                    insight=insight,
+                    insight_source="llm",
+                    compiled_prompt_hash=phash,
+                )
+    except (json.JSONDecodeError, ValueError, TypeError, RuntimeError):
+        response = _fallback_analyze_response(request, slice_data, prompt_hash=phash)
+
+    insight_cache.set(cache_key, response)
+    return response
 
 
 async def _run_top_categories() -> ChatResponse:

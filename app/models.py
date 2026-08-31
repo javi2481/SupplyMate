@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, computed_field
 
+PanelMode = Literal["explore", "commit"]
+
 
 class ChatRequest(BaseModel):
-    message: str = Field(min_length=1)
+    message: str = Field(min_length=1, max_length=2000)
 
 
 class Inventory(BaseModel):
@@ -179,6 +181,98 @@ class InventoryDashboard(BaseModel):
     by_category: list[CategoryBar] = Field(default_factory=list)
     by_sales: list[CategorySalesBar] = Field(default_factory=list)
     coverage: list[CoverageBar] = Field(default_factory=list)
+
+
+class AnalyticalScope(BaseModel):
+    categories: list[str] = Field(default_factory=list)
+    coverage_buckets: list[str] = Field(default_factory=list)
+    health_buckets: list[str] = Field(default_factory=list)
+    suppliers: list[str] = Field(default_factory=list)
+    highlight_product_id: str = ""
+
+
+class SuggestedFilter(BaseModel):
+    action: str
+    args: dict[str, str] = Field(default_factory=dict)
+    label: str
+
+
+class ReplenishmentSlice(BaseModel):
+    scope: AnalyticalScope
+    evidence: str
+    dashboard: InventoryDashboard
+    purchase_list: list[PurchaseListItem] = Field(default_factory=list)
+    suggested_filters: list[SuggestedFilter] = Field(default_factory=list)
+
+
+class InteractionEvent(BaseModel):
+    source: Literal[
+        "chart_category",
+        "chart_coverage",
+        "table_row",
+        "chip",
+        "breadcrumb",
+        "reset",
+        "chat",
+        "mode_transition",
+    ]
+    action: Literal[
+        "add_filter",
+        "remove_filter",
+        "highlight_sku",
+        "reset",
+        "enter_commit",
+        "exit_commit",
+    ]
+    dimension: str = ""
+    value: str = ""
+    label_human: str = ""
+
+
+class PurchasePriority(BaseModel):
+    product_id: str
+    product_name: str
+    recommended_quantity: int
+    reason: str = Field(max_length=200)
+
+
+class DashboardInsight(BaseModel):
+    panel_title: str = ""
+    summary: str = ""
+    bullets: list[str] = Field(default_factory=list, max_length=5)
+    purchase_priorities: list[PurchasePriority] = Field(default_factory=list, max_length=5)
+    navigation_hints: list[str] = Field(default_factory=list, max_length=4)
+    suggested_questions: list[str] = Field(default_factory=list, max_length=3)
+    highlight_kpis: list[str] = Field(default_factory=list)
+
+
+class CommitSummary(BaseModel):
+    headline: str = ""
+    oc_summary: str = ""
+    top_priorities: list[PurchasePriority] = Field(default_factory=list, max_length=3)
+    checklist: list[str] = Field(default_factory=list, max_length=4)
+
+
+class AnalyzeRequest(BaseModel):
+    mode: PanelMode = "explore"
+    scope: AnalyticalScope
+    frozen_scope: AnalyticalScope | None = None
+    events: list[InteractionEvent] = Field(default_factory=list, max_length=50)
+    root_question: str = Field(default="", max_length=500)
+    insight_level: Literal["lite", "full"] = "full"
+
+
+class AnalyzeResponse(BaseModel):
+    mode: PanelMode
+    scope: AnalyticalScope
+    frozen_scope: AnalyticalScope | None = None
+    evidence: str
+    dashboard: InventoryDashboard
+    purchase_list: list[PurchaseListItem] = Field(default_factory=list)
+    insight: DashboardInsight | None = None
+    commit_summary: CommitSummary | None = None
+    insight_source: Literal["llm", "fallback"]
+    compiled_prompt_hash: str = ""
 
 
 class ChatResponse(BaseModel):
