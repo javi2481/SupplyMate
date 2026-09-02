@@ -13,6 +13,23 @@ from app.explore_answer import (
     format_explore_answer,
     group_summaries_from_resolved,
 )
+from app.guidance import guidance_after_slice, guidance_for_resolution
+from app.intent_classifier import classify_intent
+from app.intents import is_purchase_list_query, is_top_categories_query, match_rule_intent
+from app.llm_log import emit
+from app.models import (
+    AnalyticalScope,
+    AnalyzeRequest,
+    AnalyzeResponse,
+    ChatInterpretation,
+    ChatResponse,
+    CommitSummary,
+    DashboardInsight,
+    GuidanceDecision,
+    GuidanceChip,
+    ProductNotFoundError,
+    SupplyContext,
+)
 from app.intent_classifier import classify_intent
 from app.intents import is_purchase_list_query, is_top_categories_query, match_rule_intent
 from app.llm_log import emit
@@ -30,7 +47,8 @@ from app.models import (
 from app.products import NUMERIC_CODE_RE, message_looks_like_sku, resolve_from_message, resolve_product_id
 from app.query_interpretation import interpret_query
 from app.reference_resolver import resolve_references
-from app.scope_builder import build_resolution_result
+from app.scope_builder import build_resolution_result, promote_new_query_if_needed
+from app.query_interpretation import _scope_empty
 from app.services import catalog_service, insight_cache, prompt_compiler
 from app.services import insight_validator
 from app.services import panel_modes
@@ -314,11 +332,20 @@ async def _run_explore(
     *,
     interpretation: ChatInterpretation | None = None,
     group_summaries=None,
+    guidance: GuidanceDecision | None = None,
 ) -> ChatResponse:
     slice_data = catalog_service.replenishment_slice(scope, limit=PURCHASE_LIST_LIMIT)
     chat_interp = interpretation or ChatInterpretation()
     summaries = group_summaries or []
-    answer = format_explore_answer(slice_data, chat_interp, summaries)
+    guide = guidance or slice_data.guidance or guidance_after_slice(slice_data)
+    if guide.action in ("ask_clarification", "draft_oc"):
+        chat_interp = chat_interp.model_copy(
+            update={
+                "guidance_question": guide.question,
+                "guidance_options": guide.options,
+            }
+        )
+    answer = format_explore_answer(slice_data, chat_interp, summaries, guide)
     return ChatResponse(
         answer=answer,
         mode="explore",
@@ -327,6 +354,7 @@ async def _run_explore(
         group_summaries=summaries,
         purchase_list=slice_data.purchase_list,
         dashboard=slice_data.dashboard,
+        guidance=guide,
     )
 
 
@@ -407,13 +435,77 @@ async def _run_single_product(message: str) -> ChatResponse:
     )
 
 
-async def run_supplymate(message: str) -> ChatResponse:
+async def run_apply_chip(
+    scope: AnalyticalScope,
+    chip: GuidanceChip,
+) -> ChatResponse:
+    from app.guidance_chips import apply_guidance_chip
+
+    new_scope, enter_commit = apply_guidance_chip(scope, chip)
+    response = await _run_explore(
+        f"chip:{chip.label}",
+        new_scope,
+        interpretation=ChatInterpretation(
+            understood_labels=_labels_from_scope(new_scope),
+            relation="refinement",
+        ),
+    )
+    if enter_commit:
+        response = response.model_copy(
+            update={
+                "mode": "commit_ready",
+            }
+        )
+    return response
+
+
+async def run_supplymate(
+    message: str,
+    scope: AnalyticalScope | None = None,
+    *,
+    chip: GuidanceChip | None = None,
+) -> ChatResponse:
     """Route by interpreted intent + catalog resolution, then deterministic Python."""
-    interpretation = await interpret_query(message)
+    if chip is not None:
+        return await run_apply_chip(scope or AnalyticalScope(), chip)
+
+    previous = scope
+    interpretation = await interpret_query(message, previous_scope=previous)
     resolved = resolve_references(interpretation)
-    resolution = build_resolution_result(interpretation, resolved)
+    interpretation = promote_new_query_if_needed(interpretation, resolved, previous)
+    resolution = build_resolution_result(interpretation, resolved, previous)
 
     if resolution.blocking:
+        unresolved_all = resolved and all(r.match_kind == "unresolved" for r in resolved)
+        if (
+            unresolved_all
+            and interpretation.relation == "refinement"
+            and not _scope_empty(previous)
+        ):
+            token = next((r.user_text for r in resolved if r.user_text), message)
+            guide = guidance_for_resolution([], previous) if previous else GuidanceDecision()
+            question = (
+                f"No encontré productos relacionados con «{token}» en este recorte. "
+                "Podés elegir una de estas opciones o preguntar por otro rubro."
+            )
+            options = guide.options or []
+            return await _run_explore(
+                message,
+                previous,  # type: ignore[arg-type]
+                interpretation=ChatInterpretation(
+                    understood_labels=_labels_from_scope(previous),
+                    relation="refinement",
+                    guidance_question=question,
+                    guidance_options=options,
+                    confidence="low",
+                ),
+                guidance=GuidanceDecision(
+                    action="ask_clarification",
+                    reason="unresolved_refinement",
+                    question=question,
+                    options=options,
+                ),
+            )
         if interpretation.intent == "single_sku" or any(
             r.match_kind == "unresolved" and NUMERIC_CODE_RE.fullmatch(r.user_text.strip())
             for r in resolved
@@ -423,6 +515,9 @@ async def run_supplymate(message: str) -> ChatResponse:
                 message,
             )
             raise ProductNotFoundError(sku)
+        if unresolved_all:
+            token = next((r.user_text for r in resolved if r.user_text), message)
+            raise ProductNotFoundError(token)
         return await _run_disambiguation(message, resolution)
 
     if interpretation.intent == "sales_ranking":
@@ -440,7 +535,10 @@ async def run_supplymate(message: str) -> ChatResponse:
                 return await _run_explore(
                     message,
                     resolution.scope,
-                    interpretation=ChatInterpretation(understood_labels=["Riesgo de quiebre"]),
+                    interpretation=ChatInterpretation(
+                        understood_labels=["Riesgo de quiebre"],
+                        relation=interpretation.relation,
+                    ),
                 )
             return await _run_purchase_list(message, resolution.scope)
 
@@ -448,14 +546,19 @@ async def run_supplymate(message: str) -> ChatResponse:
         labels = [s.label for s in summaries] or [
             r.label or r.user_text for r in resolved if r.match_kind == "group"
         ]
+        if interpretation.relation == "refinement" and previous:
+            labels = _labels_from_scope(resolution.scope) or labels
+        guide = guidance_for_resolution(resolved, resolution.scope)
         return await _run_explore(
             message,
             resolution.scope,
             interpretation=ChatInterpretation(
                 understood_labels=labels,
                 confidence=interpretation.confidence,
+                relation=interpretation.relation,
             ),
             group_summaries=summaries,
+            guidance=guide,
         )
 
     rule = match_rule_intent(message)
@@ -481,3 +584,11 @@ async def run_supplymate(message: str) -> ChatResponse:
         "No entendí si preguntás por un producto o por la lista de reposición. "
         "Probá: «qué productos están en falta» o el nombre / código del producto."
     )
+
+
+def _labels_from_scope(scope: AnalyticalScope | None) -> list[str]:
+    if scope is None:
+        return []
+    labels = list(scope.categories) + list(scope.subcategories)
+    labels.extend(t.upper() if t.islower() else t for t in scope.name_tokens)
+    return labels

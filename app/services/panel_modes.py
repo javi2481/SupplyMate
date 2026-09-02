@@ -29,6 +29,7 @@ def scopes_match_filters(a: AnalyticalScope, b: AnalyticalScope) -> bool:
         and sorted(a.coverage_buckets) == sorted(b.coverage_buckets)
         and sorted(a.health_buckets) == sorted(b.health_buckets)
         and sorted(a.suppliers) == sorted(b.suppliers)
+        and sorted(a.name_tokens) == sorted(b.name_tokens)
     )
 
 

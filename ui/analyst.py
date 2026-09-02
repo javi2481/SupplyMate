@@ -34,7 +34,7 @@ def render_analyst_card(
 
     st.markdown("### Analista IA")
     if insight_source == "fallback":
-        st.caption("Modo determinístico — el LLM no respondió o falló validación.")
+        st.caption("No pudimos generar una explicación con IA; el análisis numérico sigue disponible.")
 
     if panel_mode == "commit" and commit_summary:
         st.markdown(f"**{commit_summary.get('headline', 'Resumen OC')}**")

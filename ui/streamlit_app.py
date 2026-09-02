@@ -16,7 +16,7 @@ import altair as alt
 import httpx
 import streamlit as st
 
-from app.models import AnalyticalScope, InteractionEvent
+from app.models import AnalyticalScope, GuidanceChip, InteractionEvent
 from app.services import dashboard as dash_svc
 from app.services import metrics, suggested_filters
 from app.services import panel_modes
@@ -65,6 +65,8 @@ if "analyze_data" not in st.session_state:
     st.session_state.analyze_data = None
 if "last_analyze_key" not in st.session_state:
     st.session_state.last_analyze_key = ""
+if "guidance" not in st.session_state:
+    st.session_state.guidance = None
 
 
 def _append_event(
@@ -166,6 +168,8 @@ def scope_query_params(scope: AnalyticalScope, *, limit: int = 25) -> list[tuple
         params.append(("health_bucket", health))
     for supplier in scope.suppliers:
         params.append(("supplier", supplier))
+    for token in scope.name_tokens:
+        params.append(("name_token", token))
     if scope.highlight_product_id:
         params.append(("highlight_product_id", scope.highlight_product_id))
     return params
@@ -212,6 +216,28 @@ def fetch_replenishment(product_id: str) -> dict | None:
     return None
 
 
+def apply_guidance_chip_action(chip_data: dict) -> None:
+    """Apply a validated guidance chip without re-interpreting through the LLM."""
+    from app.guidance_chips import apply_guidance_chip
+
+    chip = GuidanceChip.model_validate(chip_data)
+    scope = _scope_model()
+    new_scope, enter_commit = apply_guidance_chip(scope, chip)
+    _set_scope(new_scope)
+    _append_event(
+        source="chip",
+        action="add_filter",
+        label_human=chip.label,
+    )
+    st.session_state.last_analyze_key = ""
+    if enter_commit:
+        _enter_commit_mode()
+    slice_data = fetch_slice(new_scope)
+    if slice_data:
+        st.session_state.slice_data = slice_data
+        st.session_state.guidance = slice_data.get("guidance")
+
+
 def apply_filter_action(action: str, args: dict[str, str], *, source: str = "chip") -> None:
     scope = _scope_model()
     if action == suggested_filters.ACTION_FILTER_CATEGORY:
@@ -254,6 +280,16 @@ def apply_filter_action(action: str, args: dict[str, str], *, source: str = "chi
             value=supplier,
             label_human=supplier,
         )
+    elif action == suggested_filters.ACTION_FILTER_NAME_TOKEN:
+        token = args["name_token"]
+        scope = scope_svc.add(scope, "name_token", token)
+        _append_event(
+            source=source,
+            action="add_filter",
+            dimension="name_token",
+            value=token,
+            label_human=token.upper() if token.islower() else token,
+        )
     elif action == suggested_filters.ACTION_OPEN_SKU:
         pid = args["product_id"]
         scope = scope_svc.set_highlight(scope, pid)
@@ -288,6 +324,8 @@ def _breadcrumb_labels(scope: AnalyticalScope) -> list[tuple[str, str, str]]:
         crumbs.append(("health_bucket", health, label))
     for supplier in scope.suppliers:
         crumbs.append(("supplier", supplier, supplier))
+    for token in scope.name_tokens:
+        crumbs.append(("name_token", token, token.upper() if token.islower() else token))
     if scope.highlight_product_id:
         crumbs.append(("highlight", scope.highlight_product_id, f"SKU {scope.highlight_product_id}"))
     return crumbs
@@ -350,7 +388,7 @@ def render_breadcrumb(scope: AnalyticalScope, *, readonly: bool = False) -> None
 
 def render_inventory_dashboard_static(dash: dict | None, purchase_list: list[dict]) -> None:
     dash = dash or {}
-    components.render_kpi_strip(dash)
+    components.render_kpi_strip(dash, purchase_lines=len(purchase_list))
     components.render_health_legend()
     components.render_coverage_strip(dash.get("coverage") or [])
 
@@ -404,8 +442,34 @@ def render_live_panel() -> None:
         st.markdown("</div>", unsafe_allow_html=True)
         return
     st.session_state.slice_data = slice_data
+    st.session_state.guidance = slice_data.get("guidance")
 
     render_breadcrumb(scope, readonly=not explore_mode)
+    guidance = st.session_state.guidance or {}
+    if explore_mode and guidance.get("action") in ("ask_clarification", "draft_oc"):
+        options = guidance.get("options") or []
+        chips = guidance.get("chips") or []
+        if options:
+            if guidance.get("progress_label"):
+                step = guidance.get("progress_step") or 0
+                total = guidance.get("progress_total") or 0
+                st.caption(
+                    f"Paso {step} de {total} · {guidance.get('progress_label')}"
+                )
+            st.markdown(guidance.get("question") or "¿Cómo querés afinar este recorte?")
+            guide_cols = st.columns(min(len(options), 4))
+            for i, opt in enumerate(options[:6]):
+                chip_payload = chips[i] if i < len(chips) else None
+                if guide_cols[i % len(guide_cols)].button(
+                    opt,
+                    key=f"guide-{scope_svc.cache_key(scope)}-{opt}",
+                    type="secondary",
+                ):
+                    if chip_payload:
+                        apply_guidance_chip_action(chip_payload)
+                    else:
+                        st.session_state.pending_prompt = opt
+                    st.rerun()
     dash = slice_data.get("dashboard") or {}
     purchase_list = slice_data.get("purchase_list") or []
     evidence = slice_data.get("evidence") or ""
@@ -423,7 +487,7 @@ def render_live_panel() -> None:
     commit_summary = analyze_data.get("commit_summary")
     insight_source = analyze_data.get("insight_source", "fallback")
 
-    components.render_kpi_strip(dash)
+    components.render_kpi_strip(dash, purchase_lines=len(purchase_list))
     components.render_health_legend()
     components.render_coverage_strip(dash.get("coverage") or [])
 
@@ -667,9 +731,6 @@ def render_history() -> None:
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             if msg.get("mode") in ("list", "explore"):
-                labels = msg.get("understood_labels") or []
-                if labels:
-                    st.caption("Entendí: " + " · ".join(labels))
                 if msg is st.session_state.messages[-1] and st.session_state.live_list_active:
                     pass
                 else:
@@ -709,10 +770,13 @@ def render_history() -> None:
 
 
 def ask_api(prompt: str) -> dict:
+    payload: dict = {"message": prompt}
+    if st.session_state.live_list_active:
+        payload["scope"] = _scope_model().model_dump()
     try:
         response = httpx.post(
             f"{API_URL}/chat",
-            json={"message": prompt},
+            json=payload,
             timeout=180.0,
         )
     except httpx.ConnectError:
@@ -772,6 +836,7 @@ with st.sidebar:
         st.session_state.interaction_events = []
         st.session_state.analyze_data = None
         st.session_state.last_analyze_key = ""
+        st.session_state.guidance = None
         st.rerun()
 
 prompt = st.session_state.pending_prompt or st.chat_input(
@@ -795,20 +860,23 @@ if prompt:
         csv_bytes = None
 
         if mode in ("list", "explore"):
+            interp = data.get("interpretation") or {}
+            is_refine = interp.get("relation") == "refinement"
             st.session_state.live_list_active = True
             st.session_state.root_question = prompt
             st.session_state.panel_mode = "explore"
             st.session_state.frozen_scope = None
-            st.session_state.interaction_events = []
+            if not is_refine:
+                st.session_state.interaction_events = []
             st.session_state.analyze_data = None
             st.session_state.last_analyze_key = ""
-            _append_event(source="chat", action="reset", label_human=prompt)
+            st.session_state.guidance = data.get("guidance")
+            _append_event(source="chat", action="reset" if not is_refine else "add_filter", label_human=prompt)
             if data.get("scope"):
                 _set_scope(AnalyticalScope.model_validate(data["scope"]))
             else:
                 _set_scope(scope_svc.reset())
             st.session_state.highlight_calc = None
-            interp = data.get("interpretation") or {}
             labels = interp.get("understood_labels") or []
             st.session_state.messages.append(
                 {
@@ -818,6 +886,7 @@ if prompt:
                     "purchase_list": purchase_list,
                     "dashboard": dash,
                     "understood_labels": labels,
+                    "guidance_options": interp.get("guidance_options") or [],
                 }
             )
             st.rerun()

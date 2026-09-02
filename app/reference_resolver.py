@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections import Counter
 
 from app.models import QueryInterpretation, Reference, ResolvedReference
 from app.products import NUMERIC_CODE_RE, message_looks_like_sku, resolve_product_id
@@ -43,6 +42,11 @@ _QUERY_STOPWORDS = {
     "reabastecer",
     "producto",
     "productos",
+    "refiero",
+    "referia",
+    "refería",
+    "talle",
+    "talla",
 }
 
 
@@ -65,17 +69,26 @@ def _stem(token: str) -> str:
 def _token_matches_name(token: str, name: str) -> bool:
     if not token or not name:
         return False
-    stem = _stem(token)
-    if len(stem) < 3:
-        return False
-    if stem in name or token in name:
-        return True
-    for part in name.split():
-        if len(part) < 3:
-            continue
-        if stem == _stem(part) or part in token or token in part:
-            return True
-    return False
+    parts = name.split()
+    for piece in token.split():
+        stem = _stem(piece)
+        if len(stem) < 3:
+            return False
+        matched = False
+        for part in parts:
+            if len(part) < 3:
+                continue
+            if piece == part or stem == _stem(part):
+                matched = True
+                break
+        if not matched:
+            return False
+    return True
+
+
+def name_has_token(product_name: str, token: str) -> bool:
+    """Whole-word match so 'xxg' does not hit 'xxxg'."""
+    return _token_matches_name(normalize_text(token), normalize_text(product_name))
 
 
 def _qty_for_skus(sku_ids: list[str]) -> int:
@@ -171,6 +184,113 @@ def _pick_best_group(
     return best[2], best[3], best[4]
 
 
+def _display_token(token: str) -> str:
+    if re.fullmatch(r"x{1,3}g", token):
+        return token.upper()
+    return token
+
+
+def _product_matches_tokens(master, tokens: list[str]) -> bool:
+    name_norm = normalize_text(master.product_name)
+    cat_norm = normalize_text(master.category or "")
+    sub_norm = normalize_text(master.subcategory or "")
+    for piece in tokens:
+        if _token_matches_name(piece, name_norm):
+            continue
+        if cat_norm and _token_matches_name(piece, cat_norm):
+            continue
+        if sub_norm and _token_matches_name(piece, sub_norm):
+            continue
+        return False
+    return True
+
+
+def _group_from_name_hits(user_text: str, token: str, pids: list[str]) -> ResolvedReference:
+    return ResolvedReference(
+        label=_display_token(token),
+        user_text=user_text,
+        match_kind="group",
+        sku_ids=pids,
+        scope_dimension="sku_set",
+        scope_value="",
+        name_tokens=[token],
+        sku_count=len(pids),
+        recommended_quantity=_qty_for_skus(pids),
+        confidence="high",
+    )
+
+
+def _resolve_conjunction(user_text: str, tokens: list[str]) -> ResolvedReference:
+    store = get_store()
+    pids = [
+        master.product_id
+        for master in store.products.values()
+        if _product_matches_tokens(master, tokens)
+    ]
+    pids = list(dict.fromkeys(pids))
+    if not pids:
+        return ResolvedReference(user_text=user_text, match_kind="unresolved", confidence="low")
+    if len(pids) == 1:
+        master = store.get_master(pids[0])
+        qty = calculate_replenishment(
+            product_id=master.product_id,
+            current_stock=master.current_stock,
+            total_units_sold_last_30=master.units_sold_30d,
+            lead_time_days=master.lead_time_days,
+            safety_stock=master.safety_stock,
+        ).recommended_quantity
+        return ResolvedReference(
+            label=master.product_name,
+            user_text=user_text,
+            match_kind="exact_sku",
+            product_id=pids[0],
+            sku_ids=pids,
+            scope_dimension="sku_set",
+            scope_value=pids[0],
+            sku_count=1,
+            recommended_quantity=qty,
+            confidence="high",
+        )
+
+    group_dim = ""
+    group_val = ""
+    name_tokens: list[str] = []
+    for piece in tokens:
+        cats: dict[str, list[str]] = {}
+        subs: dict[str, list[str]] = {}
+        for pid in pids:
+            master = store.get_master(pid)
+            cat = (master.category or "").strip()
+            sub = (master.subcategory or "").strip()
+            if cat and _token_matches_name(piece, normalize_text(cat)):
+                cats.setdefault(cat, []).append(pid)
+            if sub and _token_matches_name(piece, normalize_text(sub)):
+                subs.setdefault(sub, []).append(pid)
+        pick = _pick_best_group(piece, cats, subs)
+        if pick and not group_val:
+            group_dim, group_val, _ = pick
+        elif not pick:
+            name_tokens.append(piece)
+
+    label_parts: list[str] = []
+    if group_val:
+        label_parts.append(_label_for_group(group_dim, group_val))
+    label_parts.extend(_display_token(t) for t in name_tokens)
+    dim: str = group_dim if group_dim in ("category", "subcategory") else "sku_set"
+    return ResolvedReference(
+        label=" ".join(label_parts) or user_text,
+        user_text=user_text,
+        match_kind="group",
+        sku_ids=pids,
+        scope_dimension=dim,  # type: ignore[arg-type]
+        scope_value=group_val,
+        name_tokens=name_tokens,
+        sku_count=len(pids),
+        recommended_quantity=_qty_for_skus(pids),
+        confidence="high",
+    )
+
+
 def resolve_single_reference(ref: Reference) -> ResolvedReference:
     raw = ref.text.strip()
     user_text = raw
@@ -210,6 +330,10 @@ def resolve_single_reference(ref: Reference) -> ResolvedReference:
     if not token:
         return ResolvedReference(user_text=user_text, match_kind="unresolved")
 
+    tokens = token.split()
+    if len(tokens) > 1:
+        return _resolve_conjunction(user_text, tokens)
+
     categories: dict[str, list[str]] = {}
     subcategories: dict[str, list[str]] = {}
     name_hits: list[str] = []
@@ -224,7 +348,7 @@ def resolve_single_reference(ref: Reference) -> ResolvedReference:
             categories.setdefault(cat, []).append(pid)
         if sub and _token_matches_name(token, normalize_text(sub)):
             subcategories.setdefault(sub, []).append(pid)
-        if _token_matches_name(token, name_norm) or token in name_norm:
+        if _token_matches_name(token, name_norm):
             name_hits.append(pid)
 
     name_hits = list(dict.fromkeys(name_hits))
@@ -298,25 +422,7 @@ def resolve_single_reference(ref: Reference) -> ResolvedReference:
         )
 
     if len(name_hits) >= 2:
-        cats = Counter(store.get_master(p).category for p in name_hits)
-        if len(cats) == 1:
-            cat = next(iter(cats))
-            return ResolvedReference(
-                label=cat,
-                user_text=user_text,
-                match_kind="group",
-                sku_ids=name_hits,
-                scope_dimension="category",
-                scope_value=cat,
-                sku_count=len(name_hits),
-                recommended_quantity=_qty_for_skus(name_hits),
-                confidence="high",
-            )
-        return ResolvedReference(
-            user_text=user_text,
-            match_kind="ambiguous",
-            confidence="low",
-        )
+        return _group_from_name_hits(user_text, token, name_hits)
 
     return ResolvedReference(user_text=user_text, match_kind="unresolved", confidence="low")
 

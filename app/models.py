@@ -16,14 +16,30 @@ BusinessIntent = Literal[
     "unknown",
 ]
 
+QueryRelation = Literal["new_query", "refinement"]
+GuidanceAction = Literal[
+    "show_analysis", "ask_clarification", "refine_analysis", "draft_oc"
+]
 ReferenceKind = Literal["product_group", "sku_hint", "filter_hint"]
 MatchKind = Literal["exact_sku", "group", "ambiguous", "unresolved"]
 ScopeDimension = Literal["category", "subcategory", "sku_set"]
 ConfidenceLevel = Literal["high", "low"]
 
 
+class GuidanceChip(BaseModel):
+    label: str
+    action: str
+    args: dict[str, str] = Field(default_factory=dict)
+    preview_skus: int = 0
+    preview_qty: int = 0
+    preview_value: float | None = None
+
+
 class ChatRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=2000)
+    message: str = Field(default="", max_length=2000)
+    scope: Optional["AnalyticalScope"] = None
+    chip: Optional[GuidanceChip] = None
+    confirm_union: bool = False
 
 
 class Inventory(BaseModel):
@@ -206,6 +222,8 @@ class AnalyticalScope(BaseModel):
     coverage_buckets: list[str] = Field(default_factory=list)
     health_buckets: list[str] = Field(default_factory=list)
     suppliers: list[str] = Field(default_factory=list)
+    name_tokens: list[str] = Field(default_factory=list)
+    guidance_dismissed: list[str] = Field(default_factory=list)
     highlight_product_id: str = ""
 
 
@@ -220,6 +238,7 @@ class QueryInterpretation(BaseModel):
     filter_hints: list[str] = Field(default_factory=list, max_length=5)
     confidence: ConfidenceLevel = "high"
     source: Literal["rules", "llm", "hybrid"] = "rules"
+    relation: QueryRelation = "new_query"
 
 
 class ResolvedReference(BaseModel):
@@ -230,6 +249,7 @@ class ResolvedReference(BaseModel):
     sku_ids: list[str] = Field(default_factory=list)
     scope_dimension: ScopeDimension = "category"
     scope_value: str = ""
+    name_tokens: list[str] = Field(default_factory=list)
     sku_count: int = 0
     recommended_quantity: int = 0
     confidence: ConfidenceLevel = "high"
@@ -252,8 +272,23 @@ class GroupSummary(BaseModel):
 class ChatInterpretation(BaseModel):
     understood_labels: list[str] = Field(default_factory=list)
     confidence: ConfidenceLevel = "high"
+    relation: QueryRelation = "new_query"
     disambiguation_question: str = ""
     disambiguation_options: list[str] = Field(default_factory=list)
+    guidance_question: str = ""
+    guidance_options: list[str] = Field(default_factory=list)
+
+
+class GuidanceDecision(BaseModel):
+    action: GuidanceAction = "show_analysis"
+    reason: str = ""
+    question: str = ""
+    options: list[str] = Field(default_factory=list)
+    chips: list[GuidanceChip] = Field(default_factory=list)
+    progress_label: str = ""
+    progress_step: int = 0
+    progress_total: int = 0
+    reference: str = ""
 
 
 class SuggestedFilter(BaseModel):
@@ -268,6 +303,7 @@ class ReplenishmentSlice(BaseModel):
     dashboard: InventoryDashboard
     purchase_list: list[PurchaseListItem] = Field(default_factory=list)
     suggested_filters: list[SuggestedFilter] = Field(default_factory=list)
+    guidance: GuidanceDecision | None = None
 
 
 class InteractionEvent(BaseModel):
@@ -353,6 +389,7 @@ class ChatResponse(BaseModel):
     scope: AnalyticalScope | None = None
     interpretation: ChatInterpretation | None = None
     group_summaries: list[GroupSummary] = Field(default_factory=list)
+    guidance: GuidanceDecision | None = None
 
 
 class ProductNotFoundError(Exception):

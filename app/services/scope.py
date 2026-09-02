@@ -13,6 +13,8 @@ _LIMITS: dict[str, int] = {
     "coverage_buckets": 5,
     "health_buckets": 4,
     "suppliers": 5,
+    "name_tokens": 5,
+    "guidance_dismissed": 8,
 }
 
 _FIELD_BY_DIMENSION: dict[str, str] = {
@@ -21,6 +23,8 @@ _FIELD_BY_DIMENSION: dict[str, str] = {
     "coverage_bucket": "coverage_buckets",
     "health_bucket": "health_buckets",
     "supplier": "suppliers",
+    "name_token": "name_tokens",
+    "guidance_dismissed": "guidance_dismissed",
 }
 
 
@@ -30,6 +34,12 @@ def empty_scope() -> AnalyticalScope:
 
 def reset() -> AnalyticalScope:
     return empty_scope()
+
+
+def dismiss_guidance(scope: AnalyticalScope, facet: str) -> AnalyticalScope:
+    if not facet:
+        return scope
+    return add(scope, "guidance_dismissed", facet)
 
 
 def add(scope: AnalyticalScope, dimension: str, value: str) -> AnalyticalScope:
@@ -82,6 +92,7 @@ def scope_from_query_params(
     coverage_buckets: list[str] | None = None,
     health_buckets: list[str] | None = None,
     suppliers: list[str] | None = None,
+    name_tokens: list[str] | None = None,
     highlight_product_id: str = "",
 ) -> AnalyticalScope:
     return AnalyticalScope(
@@ -90,6 +101,7 @@ def scope_from_query_params(
         coverage_buckets=list(coverage_buckets or []),
         health_buckets=list(health_buckets or []),
         suppliers=list(suppliers or []),
+        name_tokens=list(name_tokens or []),
         highlight_product_id=highlight_product_id or "",
     )
 
@@ -102,6 +114,8 @@ def cache_key(scope: AnalyticalScope) -> str:
         f"coverage={','.join(sorted(scope.coverage_buckets))}",
         f"health={','.join(sorted(scope.health_buckets))}",
         f"suppliers={','.join(sorted(scope.suppliers))}",
+        f"name_tokens={','.join(sorted(scope.name_tokens))}",
+        f"guidance_dismissed={','.join(sorted(scope.guidance_dismissed))}",
         f"highlight={scope.highlight_product_id or ''}",
     ]
     return "|".join(parts)

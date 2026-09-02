@@ -201,6 +201,16 @@ async def test_run_supplymate_explore_jabones_and_shampoo():
 
 
 @pytest.mark.asyncio
+async def test_run_supplymate_explore_panales_xxg():
+    response = await run_supplymate("me refiero a pañales xxg")
+    assert response.mode == "explore"
+    assert response.scope is not None
+    assert any("Pañal" in c for c in response.scope.categories)
+    assert "xxg" in response.scope.name_tokens
+    assert response.purchase_list
+
+
+@pytest.mark.asyncio
 async def test_run_supplymate_disambiguation():
     response = await run_supplymate("¿Cuánto cuidado debo comprar?")
     assert response.mode == "disambiguation"

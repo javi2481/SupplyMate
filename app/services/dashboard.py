@@ -15,6 +15,7 @@ from app.models import (
 )
 from app.replenishment import calculate_replenishment
 from app.services import metrics
+from app.reference_resolver import name_has_token
 
 COVERAGE_ORDER = ("0–3 días", "3–7 días", "7–14 días", "14–30 días", "30+ días")
 MISSING_CATEGORY = "Sin categoría"
@@ -56,6 +57,7 @@ def filter_rows(rows: list[dict], scope: AnalyticalScope | None) -> list[dict]:
             scope.coverage_buckets,
             scope.health_buckets,
             scope.suppliers,
+            scope.name_tokens,
         )
     ):
         return list(rows)
@@ -95,6 +97,15 @@ def filter_rows(rows: list[dict], scope: AnalyticalScope | None) -> list[dict]:
             row
             for row in filtered
             if str(row.get("supplier") or "").strip() in allowed
+        ]
+    if scope.name_tokens:
+        filtered = [
+            row
+            for row in filtered
+            if all(
+                name_has_token(str(row.get("product_name") or ""), token)
+                for token in scope.name_tokens
+            )
         ]
     return filtered
 

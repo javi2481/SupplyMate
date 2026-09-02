@@ -200,7 +200,13 @@ def test_filter_rows_highlight_does_not_filter():
     assert len(out) == 2
 
 
-def test_filter_rows_empty_scope_returns_all():
-    rows = [_row(product_id="a")]
-    assert len(dashboard.filter_rows(rows, AnalyticalScope())) == 1
-    assert len(dashboard.filter_rows(rows, None)) == 1
+def test_filter_rows_name_token_whole_word():
+    rows = [
+        _row(product_id="a", product_name="PAMPERS BABYDRY XXG X 8", category="Pañales"),
+        _row(product_id="b", product_name="HUGGIES CLASSIC XXXG X 28", category="Pañales"),
+        _row(product_id="c", product_name="JABON LIQUIDO", category="Jabon de Tocador"),
+    ]
+    scope = AnalyticalScope(categories=["Pañales"], name_tokens=["xxg"])
+    out = dashboard.filter_rows(rows, scope)
+    assert [row["product_id"] for row in out] == ["a"]
+

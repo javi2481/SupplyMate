@@ -142,9 +142,16 @@ def format_slice_evidence(
         lines.append(f"Estado activo: {', '.join(labels)}.")
     if scope.suppliers:
         lines.append(f"Proveedores activos: {', '.join(scope.suppliers)}.")
+    if scope.name_tokens:
+        labels = [t.upper() if t.islower() else t for t in scope.name_tokens]
+        lines.append(f"Talle/texto activo: {', '.join(labels)}.")
     if snap.avg_coverage is not None:
         lines.append(f"Cobertura promedio del recorte: **{snap.avg_coverage:.1f} días**.")
     return " ".join(lines)
+
+
+def scoped_analytics_rows(scope: AnalyticalScope | None = None) -> list[dict]:
+    return dashboard.filter_rows(_sku_analytics_rows(), scope)
 
 
 def replenishment_slice(
@@ -152,16 +159,28 @@ def replenishment_slice(
     *,
     limit: int = 25,
 ) -> ReplenishmentSlice:
+    from app.guidance import guidance_after_slice
+
     active = scope or AnalyticalScope()
     snap, items = chat_dashboard(limit=limit, scope=active)
     evidence = format_slice_evidence(snap, items, active)
     chips = suggested_filters.suggest_next_filters(snap, items, active)
+    guidance = guidance_after_slice(
+        ReplenishmentSlice(
+            scope=active,
+            evidence=evidence,
+            dashboard=snap,
+            purchase_list=items,
+            suggested_filters=chips,
+        )
+    )
     return ReplenishmentSlice(
         scope=active,
         evidence=evidence,
         dashboard=snap,
         purchase_list=items,
         suggested_filters=chips,
+        guidance=guidance,
     )
 
 

@@ -16,6 +16,7 @@ ACTION_FILTER_CATEGORY = "filter_category"
 ACTION_FILTER_COVERAGE = "filter_coverage"
 ACTION_FILTER_HEALTH = "filter_health"
 ACTION_FILTER_SUPPLIER = "filter_supplier"
+ACTION_FILTER_NAME_TOKEN = "filter_name_token"
 ACTION_OPEN_SKU = "open_sku"
 
 

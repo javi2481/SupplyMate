@@ -48,6 +48,7 @@ def _scope_dependency(
     coverage_bucket: list[str] = Query(default=[]),
     health_bucket: list[str] = Query(default=[]),
     supplier: list[str] = Query(default=[]),
+    name_token: list[str] = Query(default=[]),
     highlight_product_id: str = Query(default=""),
 ) -> AnalyticalScope:
     highlight = highlight_product_id or ""
@@ -62,6 +63,7 @@ def _scope_dependency(
         coverage_buckets=_validate_scope_values(coverage_bucket, "coverage_bucket"),
         health_buckets=_validate_scope_values(health_bucket, "health_bucket"),
         suppliers=_validate_scope_values(supplier, "supplier"),
+        name_tokens=_validate_scope_values(name_token, "name_token"),
         highlight_product_id=sanitize_value(highlight) or "",
     )
 
@@ -146,7 +148,13 @@ async def replenishment_analyze(body: AnalyzeRequest) -> AnalyzeResponse:
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
+    if not request.chip and not (request.message or "").strip():
+        raise HTTPException(status_code=422, detail="message or chip is required")
     try:
-        return await run_supplymate(request.message)
+        return await run_supplymate(
+            request.message,
+            request.scope,
+            chip=request.chip,
+        )
     except ProductNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -18,16 +18,22 @@ Extraé la intención y las referencias del usuario en español. Respondé SOLO 
   "intent": "replenishment" | "inventory_risk" | "sales_ranking" | "single_sku" | "unknown",
   "references": [{"text": "...", "kind": "product_group"|"sku_hint"|"filter_hint"}],
   "filter_hints": ["riesgo", "quiebre", ...],
-  "confidence": "high" | "low"
+  "confidence": "high" | "low",
+  "relation": "new_query" | "refinement"
 }
 
 Reglas:
-- references: sustantivos/rubros que nombra el usuario (ej. jabones, shampoo). NO nombres de categoría interna del catálogo.
-- replenishment: cuánto comprar/pedir/reponer de algo.
+- references: sustantivos/rubros que nombra el usuario (ej. jabones, shampoo, xxg). NO nombres de categoría interna del catálogo.
+- Un talle o variante (xxg, xxxg) es product_group, no single_sku.
+- relation=refinement si el usuario recorta el análisis actual (me refiero a, sólo, los de, un talle).
+- relation=new_query si cambia de rubro (pañales → shampoo).
+- Si no hay suficiente contexto para responder bien, igual extraé la referencia y usá replenishment + refinement; Python guía las opciones.
+- replenishment: cuánto comprar/pedir/reponer, o un recorte de rubro/talle.
 - inventory_risk: riesgo, quiebre, sin stock sobre un alcance.
 - sales_ranking: categorías más vendidas.
 - single_sku: un producto concreto o código numérico.
 - confidence low si el término es genérico (cuidado, baño, etc.).
+- NUNCA inventes cantidades ni categorías internas del catálogo.
 """.strip()
 
 
@@ -75,8 +81,8 @@ def _parse_interpretation(raw: dict, message: str) -> QueryInterpretation | None
     )
 
 
-async def interpret_query_llm(message: str) -> QueryInterpretation | None:
-    ruled = interpret_query_rules(message)
+async def interpret_query_llm(message: str, previous_scope=None) -> QueryInterpretation | None:
+    ruled = interpret_query_rules(message, previous_scope)
     if ruled is not None and ruled.intent != "unknown":
         return ruled
 

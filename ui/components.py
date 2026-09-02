@@ -25,16 +25,24 @@ def _kpi_card(label: str, value: str, accent: str, hint: str) -> str:
 """
 
 
-def render_kpi_strip(dash: dict | None) -> None:
+def render_kpi_strip(dash: dict | None, *, purchase_lines: int | None = None) -> None:
     dash = dash or {}
     avg = dash.get("avg_coverage")
     avg_txt = f"{avg:.1f} d" if isinstance(avg, (int, float)) else "—"
+    skus = dash.get("skus", "—")
+    oc_lines = purchase_lines if purchase_lines is not None else "—"
     cards = [
         _kpi_card(
             metrics.LABEL_SKUS,
-            str(dash.get("skus", "—")),
+            str(skus),
             "#90CAF9",
             "SKUs en el recorte actual",
+        ),
+        _kpi_card(
+            "Líneas de OC",
+            str(oc_lines),
+            "#81D4FA",
+            "Productos con cantidad a reponer en este recorte",
         ),
         _kpi_card(
             metrics.LABEL_STOCKOUT_RISK,
