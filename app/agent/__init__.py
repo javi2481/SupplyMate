@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.agent.model import get_model
+
 __all__ = [
     "build_commit_agent",
     "build_explain_agent",

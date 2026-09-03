@@ -6,6 +6,7 @@ import time
 from agents import Agent, Runner
 
 from app.agent.llm_log import emit
+from app.agent.model import get_model
 from app.core.models import QueryInterpretation, Reference
 from app.pipeline.query_interpretation import interpret_query_rules, normalize_text
 
@@ -87,8 +88,6 @@ async def interpret_query_llm(message: str, previous_scope=None) -> QueryInterpr
         return ruled
 
     try:
-        from app.agent import get_model
-
         agent = Agent(
             name="SupplyMateQueryInterpreter",
             instructions=INTERPRETER_INSTRUCTIONS,

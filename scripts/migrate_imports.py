@@ -77,7 +77,8 @@ def apply_replacements(text: str, pairs: list[tuple[str, str]]) -> str:
 def fix_patches(text: str) -> str:
     text = text.replace('patch("app.agent.Runner.run', 'patch("app.agent.runner.Runner.run')
     text = text.replace('patch("app.agent.classify_intent', 'patch("app.agent.runner.classify_intent')
-    text = text.replace('patch("app.agent.get_model', 'patch("app.agent.runner.get_model')
+    text = text.replace('patch("app.agent.get_model', 'patch("app.agent.model.get_model')
+    text = text.replace('patch("app.agent.runner.get_model', 'patch("app.agent.model.get_model')
     text = text.replace(
         'patch("app.intent_classifier.Runner.run',
         'patch("app.agent.intent_classifier.Runner.run',

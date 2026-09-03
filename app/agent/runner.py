@@ -3,11 +3,8 @@ from __future__ import annotations
 import json
 import time
 
-from agents import Agent, Runner, set_tracing_disabled
-from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
-from openai import AsyncOpenAI
+from agents import Agent, Runner
 
-from app.core import config
 from app.agent.explore_answer import (
     format_disambiguation_answer,
     format_explore_answer,
@@ -17,6 +14,7 @@ from app.guidance import guidance_after_slice, guidance_for_resolution
 from app.agent.intent_classifier import classify_intent
 from app.agent.intents import is_purchase_list_query, is_top_categories_query, match_rule_intent
 from app.agent.llm_log import emit
+from app.agent.model import get_model
 from app.core.models import (
     AnalyticalScope,
     AnalyzeRequest,
@@ -31,10 +29,9 @@ from app.core.models import (
     SupplyContext,
 )
 from app.catalog.products import NUMERIC_CODE_RE, message_looks_like_sku, resolve_from_message, resolve_product_id
-from app.pipeline.query_interpretation import interpret_query
+from app.pipeline.query_interpretation import _scope_empty, interpret_query
 from app.pipeline.reference_resolver import resolve_references
 from app.pipeline.scope_builder import build_resolution_result, promote_new_query_if_needed
-from app.pipeline.query_interpretation import _scope_empty
 from app.services import catalog_service, insight_cache, prompt_compiler
 from app.services import insight_validator
 from app.services import panel_modes
@@ -86,8 +83,6 @@ oc_summary must mention SKU count and total recommended units from the payload.
 
 PURCHASE_LIST_LIMIT = 25
 
-_model_cache: OpenAIChatCompletionsModel | str | None = None
-
 
 async def _run_logged(agent, prompt, context=None, **kwargs):
     started = time.perf_counter()
@@ -113,33 +108,6 @@ def _hydrate_context(context: SupplyContext, product_id: str) -> None:
     context.inventory = load_inventory(product_id)
     context.sales = load_sales_history(product_id, days=30)
     context.params = load_replenishment_params(product_id)
-
-
-def get_model() -> OpenAIChatCompletionsModel | str:
-    global _model_cache
-    if _model_cache is not None:
-        return _model_cache
-
-    if config.LLM_PROVIDER == "groq":
-        if not config.GROQ_API_KEY:
-            raise RuntimeError(
-                "GROQ_API_KEY is not set. Get a free key at https://console.groq.com/keys"
-            )
-        set_tracing_disabled(True)
-        client = AsyncOpenAI(
-            api_key=config.GROQ_API_KEY,
-            base_url=config.GROQ_BASE_URL,
-        )
-        _model_cache = OpenAIChatCompletionsModel(
-            model=config.GROQ_MODEL,
-            openai_client=client,
-        )
-        return _model_cache
-
-    if not config.OPENAI_API_KEY:
-        raise RuntimeError("OPENAI_API_KEY is not set")
-    _model_cache = config.OPENAI_MODEL
-    return _model_cache
 
 
 def build_supply_agent() -> Agent:
