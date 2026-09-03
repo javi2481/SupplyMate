@@ -30,8 +30,6 @@ def render_analyst_card(
     analyst_enabled: bool,
 ) -> None:
     if not analyst_enabled:
-        st.markdown("**Por qué ves esto**")
-        st.markdown(evidence)
         return
 
     st.markdown(f"### {ui_copy.ANALYST_TITLE}")

@@ -1,4 +1,5 @@
 [client]
+showSidebarNavigation = false
 toolbarMode = "viewer"
 
 [browser]

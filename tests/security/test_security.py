@@ -51,6 +51,17 @@ def test_production_error_hides_traceback(monkeypatch):
     assert "Traceback" not in response.text
 
 
+def test_missing_catalog_returns_503(monkeypatch):
+    with patch.object(
+        catalog_service,
+        "search_products",
+        side_effect=FileNotFoundError("No catalog found"),
+    ):
+        response = client.get("/products/search", params={"q": "test"})
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Catalog unavailable"
+
+
 def test_chat_rate_limit_returns_429(monkeypatch):
     monkeypatch.setattr("app.middleware.chat_rate_limit.effective_chat_rate_limit", lambda: 2)
     reset_rate_limits()

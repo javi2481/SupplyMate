@@ -16,6 +16,11 @@ class SafeErrorMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         except HTTPException as exc:
             return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        except FileNotFoundError:
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "Catalog unavailable"},
+            )
         except Exception:
             if is_production():
                 return JSONResponse(

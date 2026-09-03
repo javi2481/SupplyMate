@@ -66,7 +66,7 @@ def _explore_harness() -> None:
     st.caption("harness-ok")
 
 
-def test_explore_layout_has_single_next_step_heading():
+def test_explore_layout_stops_at_charts_without_next_step():
     from streamlit.testing.v1 import AppTest
 
     at = AppTest.from_function(_explore_harness)
@@ -80,18 +80,63 @@ def test_explore_layout_has_single_next_step_heading():
                 return i
         return -1
 
-    next_headings = [m for m in markdown if "Siguiente paso" in m]
-    assert len(next_headings) == 1
-    assert _first("Siguiente paso") < _first("Cantidad recomendada")
-    assert _first("Cantidad recomendada") < _first("Lectura del recorte")
-    assert any("Lectura del recorte" in m for m in markdown)
+    assert not any("Siguiente paso" in m for m in markdown)
+    assert not any("Otros análisis" in m for m in markdown)
+    assert not any("Lectura del recorte" in m for m in markdown)
     assert not any("Analista IA" in m for m in markdown)
     assert not any("Refinar recorte" in m for m in markdown)
+    assert _first("Cantidad recomendada") >= 0
+    assert _first("Distribución de") >= 0
+    assert len(at.dataframe) == 0
     buttons = [b.label for b in at.button]
-    assert "Bebé" in buttons
-    assert "Adulto" in buttons
-    others = [b for b in buttons if "Cabello" in b or "proveedor" in b.lower()]
-    assert others
+    assert "Bebé" not in buttons
+    assert "Adulto" not in buttons
+
+
+def test_explore_root_scope_hides_inventory_header():
+    from streamlit.testing.v1 import AppTest
+
+    def _root_harness() -> None:
+        import streamlit as st
+        from app.core.models import AnalyticalScope
+        from ui import components
+        from ui.composition.next_step import compose_next_step
+        from ui.layout_explore import render_explore_panel
+
+        components.inject_theme()
+        render_explore_panel(
+            scope=AnalyticalScope(),
+            slice_data={
+                "dashboard": {
+                    "skus": 13125,
+                    "understock": 1322,
+                    "stockout_risk": 4022,
+                    "avg_coverage": 31.6,
+                    "by_category": [
+                        {"category": "Pañales", "recommended_quantity": 90, "sku_count": 12}
+                    ],
+                    "coverage": [{"bucket": "0-7 días", "sku_count": 100}],
+                },
+                "purchase_list": [],
+                "evidence": "",
+                "guidance": None,
+                "suggested_filters": [],
+            },
+            analyze_data={},
+            next_step=compose_next_step(None, [], []),
+            interaction_events=[],
+            highlight_calc=None,
+            analyst_enabled=False,
+            root_skus=13125,
+        )
+
+    at = AppTest.from_function(_root_harness)
+    at.run(timeout=15)
+    assert not at.exception
+    markdown = [str(item.value) for item in at.markdown]
+    assert not any("Inventario" in m for m in markdown)
+    assert not any("13125 → 13125" in m for m in markdown)
+    assert not any(b.label == "Limpiar" for b in at.button)
 
 
 def test_commit_layout_has_no_chart_keys():
@@ -136,3 +181,127 @@ def test_commit_layout_has_no_chart_keys():
     assert not any("Siguiente paso" in m for m in markdown)
     downloads = [d.label for d in at.download_button]
     assert any("Exportar OC" in label for label in downloads)
+
+
+def test_streamlit_app_renders_single_live_dashboard_for_active_thread(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from streamlit.testing.v1 import AppTest
+
+    monkeypatch.setenv("SUPPLYMATE_THREADS_PATH", str(tmp_path / "threads.json"))
+    script = Path(__file__).resolve().parents[3] / "ui" / "streamlit_app.py"
+    at = AppTest.from_file(str(script))
+    at.session_state["messages"] = [
+        {"role": "user", "content": "¿Qué productos tengo que comprar?"},
+        {
+            "role": "assistant",
+            "content": "Primer recorte",
+            "mode": "explore",
+            "purchase_list": [
+                {
+                    "product_id": "0",
+                    "product_name": "Acondicionador",
+                    "supplier": "Prov",
+                    "current_stock": 2,
+                    "days_of_supply": 5,
+                    "recommended_quantity": 8,
+                    "operational_priority": "high",
+                    "health_bucket": "understock",
+                    "average_daily_demand": 1.2,
+                }
+            ],
+            "dashboard": {
+                "skus": 500,
+                "understock": 20,
+                "stockout_risk": 8,
+                "avg_coverage": 14.2,
+                "by_category": [],
+                "coverage": [],
+            },
+        },
+        {
+            "role": "assistant",
+            "content": "4022 en riesgo de quiebre · 25 para reponer",
+            "mode": "explore",
+            "purchase_list": [
+                {
+                    "product_id": "1",
+                    "product_name": "Shampoo",
+                    "supplier": "Prov",
+                    "current_stock": 1,
+                    "days_of_supply": 2,
+                    "recommended_quantity": 12,
+                    "operational_priority": "critical",
+                    "health_bucket": "stockout_risk",
+                    "average_daily_demand": 2.5,
+                }
+            ],
+            "dashboard": {
+                "skus": 2430,
+                "understock": 255,
+                "stockout_risk": 763,
+                "avg_coverage": 30.7,
+                "by_category": [
+                    {"category": "Cuidado del Cabello", "recommended_quantity": 120, "sku_count": 10}
+                ],
+                "coverage": [
+                    {"bucket": "0-7 días", "sku_count": 40},
+                    {"bucket": "8-14 días", "sku_count": 55},
+                ],
+            },
+        },
+        {
+            "role": "user",
+            "content": "que productos tengo que comprar?",
+        },
+        {
+            "role": "assistant",
+            "content": "Error 500: Internal Server Error",
+            "mode": "error",
+        },
+    ]
+    at.session_state["live_list_active"] = True
+    at.session_state["pending_prompt"] = None
+    at.session_state["analyst_enabled"] = False
+    at.session_state["panel_mode"] = "explore"
+    at.session_state["analytical_scope"] = {"categories": ["Cuidado del Cabello"]}
+    at.session_state["interaction_events"] = []
+    at.session_state["root_question"] = "¿Qué productos tengo que comprar?"
+    at.session_state["root_skus"] = 2430
+    at.session_state["slice_data"] = {
+        "dashboard": {
+            "skus": 2430,
+            "understock": 255,
+            "stockout_risk": 763,
+            "avg_coverage": 30.7,
+            "by_category": [],
+            "coverage": [],
+        },
+        "purchase_list": [
+            {
+                "product_id": "1",
+                "product_name": "Shampoo",
+                "supplier": "Prov",
+                "current_stock": 1,
+                "days_of_supply": 2,
+                "recommended_quantity": 12,
+                "operational_priority": "critical",
+                "health_bucket": "stockout_risk",
+                "average_daily_demand": 2.5,
+            }
+        ],
+        "evidence": "Por qué ves esto",
+        "guidance": None,
+        "suggested_filters": [],
+    }
+    at.run(timeout=20)
+    assert not at.exception
+    markdown = [str(item.value) for item in at.markdown]
+    assert not any("Internal Server Error" in m for m in markdown)
+    assert not any("Primer recorte" in m for m in markdown)
+    assert not any("Cobertura promedio" in m for m in markdown)
+    assert any("sm-chat-summary" in m for m in markdown)
+    assert not any("Siguiente paso" in m for m in markdown)
+    assert not any("Otros análisis" in m for m in markdown)
+    assert len(at.dataframe) == 0
+    assert any("Cantidad recomendada" in m for m in markdown)

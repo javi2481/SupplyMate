@@ -27,6 +27,7 @@ from ui import chrome
 from ui import components
 from ui import layout_commit
 from ui import layout_explore
+from ui import theme as theme_mod
 from ui.composition import chat_policy as chat_policy_mod
 from ui.composition import copy as ui_copy
 from ui.composition import kpi_policy as kpi_policy_mod
@@ -47,6 +48,7 @@ next_step_mod = importlib.reload(next_step_mod)
 chat_policy_mod = importlib.reload(chat_policy_mod)
 threads_mod = importlib.reload(threads_mod)
 threads_rail_mod = importlib.reload(threads_rail_mod)
+theme_mod = importlib.reload(theme_mod)
 charts = importlib.reload(charts)
 components = importlib.reload(components)
 chrome = importlib.reload(chrome)
@@ -61,11 +63,20 @@ switch_thread = threads_mod.switch_thread
 compose_next_step = next_step_mod.compose_next_step
 NextStepOption = next_step_mod.NextStepOption
 chat_would_unfreeze = chat_policy_mod.chat_would_unfreeze
+is_transport_error_message = chat_policy_mod.is_transport_error_message
+live_dashboard_index = chat_policy_mod.live_dashboard_index
+should_skip_repeat_purchase_query = chat_policy_mod.should_skip_repeat_purchase_query
+hide_history_message = chat_policy_mod.hide_history_message
 
 API_URL = os.getenv("SUPPLYMATE_API_URL", "http://127.0.0.1:8000").rstrip("/")
 
 st.set_option("client.toolbarMode", "viewer")
-st.set_page_config(page_title="SupplyMate", layout="wide", page_icon="📦")
+st.set_page_config(
+    page_title="SupplyMate",
+    layout="wide",
+    page_icon="📦",
+    initial_sidebar_state="expanded",
+)
 components.inject_theme()
 
 if "messages" not in st.session_state:
@@ -131,7 +142,6 @@ def _hydrate_threads() -> None:
         return
     apply_snapshot(st.session_state, thread.snapshot)
     st.session_state.active_thread_id = thread.id
-    st.session_state["_use_snapshot_slice"] = True
 
 
 def _append_event(
@@ -254,6 +264,71 @@ def fetch_slice(scope: AnalyticalScope, limit: int = 25) -> dict | None:
     except httpx.ConnectError:
         return None
     return None
+
+
+def _slice_from_chat(data: dict) -> dict | None:
+    dashboard = data.get("dashboard")
+    if not dashboard:
+        return None
+    return {
+        "dashboard": dashboard,
+        "purchase_list": data.get("purchase_list") or [],
+        "evidence": "",
+        "guidance": data.get("guidance"),
+        "suggested_filters": data.get("suggested_filters") or [],
+    }
+
+
+def _slice_from_last_assistant_message() -> dict | None:
+    for msg in reversed(st.session_state.messages):
+        if msg.get("role") != "assistant" or msg.get("mode") not in ("list", "explore"):
+            continue
+        dashboard = msg.get("dashboard")
+        if not dashboard:
+            continue
+        return {
+            "dashboard": dashboard,
+            "purchase_list": msg.get("purchase_list") or [],
+            "evidence": "",
+            "guidance": msg.get("guidance"),
+            "suggested_filters": msg.get("suggested_filters") or [],
+        }
+    return None
+
+
+def _dashboard_has_charts(dashboard: dict | None) -> bool:
+    dash = dashboard or {}
+    return bool(dash.get("by_category") or dash.get("coverage"))
+
+
+def _merge_dashboard_charts(slice_data: dict, messages: list[dict]) -> dict:
+    dash = dict(slice_data.get("dashboard") or {})
+    if _dashboard_has_charts(dash):
+        return slice_data
+    for msg in reversed(messages):
+        if msg.get("role") != "assistant" or msg.get("mode") not in ("list", "explore"):
+            continue
+        alt = msg.get("dashboard") or {}
+        if not dash.get("by_category") and alt.get("by_category"):
+            dash["by_category"] = alt["by_category"]
+        if not dash.get("coverage") and alt.get("coverage"):
+            dash["coverage"] = alt["coverage"]
+        if _dashboard_has_charts(dash):
+            break
+    merged = dict(slice_data)
+    merged["dashboard"] = dash
+    return merged
+
+
+def _resolve_live_slice(scope: AnalyticalScope) -> dict | None:
+    slice_data = fetch_slice(scope, limit=25)
+    if slice_data is None:
+        slice_data = st.session_state.slice_data
+    if slice_data is None:
+        slice_data = _slice_from_last_assistant_message()
+    if slice_data is None:
+        return None
+    return _merge_dashboard_charts(slice_data, st.session_state.messages)
 
 
 def fetch_purchase_csv(scope: AnalyticalScope, limit: int = 25) -> bytes | None:
@@ -506,11 +581,9 @@ def render_live_panel() -> None:
     scope = _effective_panel_scope()
     mutable_scope = _scope_model()
 
-    slice_data = None
-    if st.session_state.pop("_use_snapshot_slice", False) and st.session_state.slice_data:
-        slice_data = st.session_state.slice_data
-    else:
-        slice_data = fetch_slice(scope, limit=25)
+    slice_data = st.session_state.slice_data
+    if not slice_data:
+        slice_data = _resolve_live_slice(scope)
     if slice_data is None:
         st.error(f"No pude conectar con la API en `{API_URL}`. Arrancá uvicorn primero.")
         st.markdown("</div>", unsafe_allow_html=True)
@@ -621,6 +694,32 @@ def render_live_panel() -> None:
             on_reanalyze=lambda: st.session_state.__setitem__("last_analyze_key", ""),
         )
     st.markdown("</div>", unsafe_allow_html=True)
+    _autosave()
+
+
+def _handle_sidebar() -> None:
+    with st.sidebar:
+        store = _thread_store()
+        store.refresh_all_labels()
+        action = chrome.render_thread_rail(
+            store,
+            active_id=st.session_state.get("active_thread_id"),
+        )
+        if action is None:
+            return
+        if action.kind == "new_chat":
+            prepare_new_chat(store, st.session_state)
+            st.rerun()
+        if action.kind == "select" and action.thread_id:
+            switch_thread(store, st.session_state, action.thread_id)
+            st.rerun()
+        if action.kind == "pin" and action.thread_id:
+            persist_active(store, st.session_state)
+            store.set_pinned(action.thread_id, True)
+            st.rerun()
+        if action.kind == "unpin" and action.thread_id:
+            store.set_pinned(action.thread_id, False)
+            st.rerun()
 
 
 def _table_selection_sku(event: Any, purchase_list: list[dict]) -> str | None:
@@ -678,13 +777,60 @@ El punto de reorden es una alarma de salud; no entra en esta cuenta.
         )
 
 
+def _explore_summary_line(dash: dict | None, purchase_list: list[dict]) -> str:
+    dash = dash or {}
+    stockout = dash.get("stockout_risk")
+    n = len(purchase_list)
+    if stockout is not None and n:
+        return f"{stockout} en riesgo de quiebre · {n} para reponer"
+    if stockout is not None:
+        return f"{stockout} en riesgo de quiebre"
+    if n:
+        return f"{n} para reponer"
+    return ""
+
+
+_SUMMARY_ICON = (
+    '<span class="sm-chat-summary-icon" aria-hidden="true">'
+    '<svg viewBox="0 0 24 24"><path d="M3 17h2v-7H3v7Zm8 0h2V7h-2v10Zm8 0h2V4h-2v13Z"/></svg>'
+    "</span>"
+)
+
+
+def _live_summary_source() -> tuple[dict, list[dict]]:
+    slice_data = st.session_state.get("slice_data") or {}
+    dash = slice_data.get("dashboard") or {}
+    purchase = slice_data.get("purchase_list") or []
+    return dash, purchase
+
+
 def render_history() -> None:
-    for msg in st.session_state.messages:
+    messages = st.session_state.messages
+    live = st.session_state.live_list_active
+    live_idx = live_dashboard_index(messages, live=live)
+    live_dash, live_purchase = _live_summary_source() if live else ({}, [])
+    for i, msg in enumerate(messages):
+        if hide_history_message(messages, i, live=live):
+            continue
+        is_live_anchor = live_idx is not None and i == live_idx
+        live_dashboard_turn = (
+            is_live_anchor
+            and msg.get("role") == "assistant"
+            and msg.get("mode") in ("list", "explore")
+        )
         with st.chat_message(msg["role"]):
             if msg.get("mode") in ("list", "explore"):
-                if msg is st.session_state.messages[-1] and st.session_state.live_list_active:
-                    pass
-                else:
+                if live_dashboard_turn:
+                    summary = _explore_summary_line(
+                        live_dash or msg.get("dashboard"),
+                        live_purchase or msg.get("purchase_list") or [],
+                    )
+                    if summary:
+                        st.markdown(
+                            f"<div class='sm-chat-summary'>{_SUMMARY_ICON}{summary}</div>",
+                            unsafe_allow_html=True,
+                        )
+                elif not live:
                     render_inventory_dashboard_static(
                         msg.get("dashboard"),
                         msg.get("purchase_list") or [],
@@ -716,7 +862,7 @@ def render_history() -> None:
                     )
                 if msg.get("calculation"):
                     render_calculation(msg["calculation"])
-            if msg.get("content"):
+            if msg.get("content") and not live_dashboard_turn:
                 st.markdown(msg["content"])
 
 
@@ -742,6 +888,9 @@ def _apply_explore_chat(prompt: str, data: dict, *, is_refine: bool) -> None:
     else:
         _set_scope(scope_svc.reset())
     st.session_state.highlight_calc = None
+    chat_slice = _slice_from_chat(data)
+    if chat_slice:
+        st.session_state.slice_data = chat_slice
     _autosave()
 
 
@@ -771,7 +920,7 @@ def ask_api(prompt: str) -> dict:
             "mode": "error",
         }
     if response.status_code >= 400:
-        return {"answer": f"Error {response.status_code}: {response.text}", "mode": "error"}
+        return {"answer": ui_copy.CHAT_CATALOG_ERROR, "mode": "error"}
 
     return response.json()
 
@@ -785,10 +934,16 @@ if (
 ):
     st.session_state.pending_prompt = ui_copy.DEFAULT_STARTUP_QUERY
 
+_handle_sidebar()
+
 chrome.render_header(
     st.session_state.panel_mode,
     live=st.session_state.live_list_active,
 )
+if st.session_state.live_list_active:
+    primed = _resolve_live_slice(_effective_panel_scope())
+    if primed:
+        st.session_state.slice_data = primed
 render_history()
 
 if st.session_state.pending_unfreeze:
@@ -811,35 +966,24 @@ if st.session_state.live_list_active:
     with st.container():
         render_live_panel()
 
-with st.sidebar:
-    store = _thread_store()
-    action = chrome.render_thread_rail(
-        store,
-        active_id=st.session_state.get("active_thread_id"),
-    )
-    if action is not None:
-        if action.kind == "new_chat":
-            prepare_new_chat(store, st.session_state)
-            st.rerun()
-        elif action.kind == "select" and action.thread_id:
-            switch_thread(store, st.session_state, action.thread_id)
-            st.session_state["_use_snapshot_slice"] = True
-            st.rerun()
-        elif action.kind == "pin" and action.thread_id:
-            persist_active(store, st.session_state)
-            store.set_pinned(action.thread_id, True)
-            st.rerun()
-        elif action.kind == "unpin" and action.thread_id:
-            store.set_pinned(action.thread_id, False)
-            st.rerun()
-    st.caption(ui_copy.APP_TAGLINE)
-
 with st.bottom:
+    st.markdown(
+        "<div class='sm-composer'><div class='sm-composer-shell'>"
+        "<span class='sm-composer-clip' aria-hidden='true'>+</span>"
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
     prompt = st.session_state.pending_prompt or st.chat_input(ui_copy.CHAT_PLACEHOLDER)
 if st.session_state.pending_prompt:
     st.session_state.pending_prompt = None
 
 if prompt:
+    if should_skip_repeat_purchase_query(
+        live=st.session_state.live_list_active,
+        prompt=prompt,
+    ):
+        st.rerun()
+
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -912,10 +1056,14 @@ if prompt:
             if calc:
                 render_calculation(calc)
 
+        keep_error_turn = not (mode == "error" and st.session_state.live_list_active)
         if not skip_tail_append:
-            st.markdown(data.get("answer", ""))
+            if keep_error_turn:
+                st.markdown(data.get("answer", ""))
+            else:
+                st.error(data.get("answer") or ui_copy.CHAT_CATALOG_ERROR)
 
-    if not skip_tail_append:
+    if not skip_tail_append and keep_error_turn:
         st.session_state.messages.append(
         {
             "role": "assistant",

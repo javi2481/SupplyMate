@@ -28,6 +28,23 @@ def _seed_store(path: Path, *, pinned: bool = False) -> ThreadStore:
             "guidance": None,
         },
     )
+    store.upsert_session(
+        "panales",
+        {
+            "messages": [{"role": "user", "content": "¿Qué hay en pañales?"}],
+            "analytical_scope": AnalyticalScope(categories=["Pañales"], subcategories=["Bebé"]).model_dump(),
+            "panel_mode": "explore",
+            "frozen_scope": None,
+            "live_list_active": True,
+            "slice_data": {"dashboard": {"skus": 120}, "purchase_list": [{}] * 4},
+            "analyze_data": None,
+            "interaction_events": [],
+            "root_skus": 120,
+            "root_question": "¿Qué hay en pañales?",
+            "highlight_calc": None,
+            "guidance": None,
+        },
+    )
     if pinned:
         store.set_pinned("cabello", True)
     return store
@@ -88,7 +105,8 @@ def test_empty_fijados_caption_no_limpiar_chat(tmp_path: Path):
     at.run(timeout=15)
     assert not at.exception
     captions = [str(c.value) for c in at.caption]
-    assert ui_copy.PINNED_EMPTY in captions
+    markdown = [str(m.value) for m in at.markdown]
+    assert ui_copy.PINNED_EMPTY in captions or any(ui_copy.PINNED_EMPTY in m for m in markdown)
     assert not any(b.label == "Limpiar chat" for b in at.button)
 
 
@@ -126,3 +144,38 @@ def test_selecting_history_row_restores_messages_and_scope(tmp_path: Path):
     assert messages[0]["content"] == "¿Qué hay en cabello?"
     assert at.session_state["analytical_scope"]["categories"] == ["Cuidado del Cabello"]
     assert at.session_state["live_list_active"] is True
+
+
+def test_sidebar_search_filters_thread_rows(tmp_path: Path):
+    from streamlit.testing.v1 import AppTest
+
+    path = tmp_path / "threads.json"
+    _seed_store(path, pinned=True)
+    at = AppTest.from_function(_rail_harness)
+    at.session_state["thread_store_path"] = str(path)
+    at.run(timeout=15)
+    assert not at.exception
+    search = at.text_input(key="rail-search")
+    assert search is not None, "No se encontró el input de búsqueda"
+    search.set_value("bebé").run(timeout=15)
+    assert not at.exception
+    labels = [b.label for b in at.button]
+    assert "Pañales · Bebé" in labels
+    assert "Cuidado del Cabello" not in labels
+
+
+def test_sidebar_search_shows_no_results_message(tmp_path: Path):
+    from streamlit.testing.v1 import AppTest
+
+    path = tmp_path / "threads.json"
+    _seed_store(path, pinned=True)
+    at = AppTest.from_function(_rail_harness)
+    at.session_state["thread_store_path"] = str(path)
+    at.run(timeout=15)
+    assert not at.exception
+    search = at.text_input(key="rail-search")
+    search.set_value("inexistente").run(timeout=15)
+    assert not at.exception
+    markdown = [str(item.value) for item in at.markdown]
+    assert any(ui_copy.SEARCH_NO_RESULTS in item for item in markdown)
+    assert not any(ui_copy.PINNED_SECTION in item for item in markdown)

@@ -10,6 +10,18 @@ def _token_label(token: str) -> str:
     return token.upper() if token.islower() else token
 
 
+def scope_has_filters(scope: AnalyticalScope) -> bool:
+    return bool(
+        scope.categories
+        or scope.subcategories
+        or scope.coverage_buckets
+        or scope.health_buckets
+        or scope.suppliers
+        or scope.name_tokens
+        or scope.highlight_product_id
+    )
+
+
 def compact_scope_parts(scope: AnalyticalScope) -> list[str]:
     parts: list[str] = []
     parts.extend(scope.categories)

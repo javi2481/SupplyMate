@@ -83,6 +83,15 @@ def test_title_skips_default_startup_question():
     assert title == "Nuevo chat"
 
 
+def test_title_uses_catalog_line_for_full_inventario():
+    title = title_for_thread(
+        AnalyticalScope(),
+        [{"role": "user", "content": "¿Qué productos tengo que comprar?"}],
+        snap={"root_skus": 13125, "slice_data": {"dashboard": {"skus": 13125}}},
+    )
+    assert title == "Catálogo · 13125 SKUs"
+
+
 def test_title_uses_first_non_boilerplate_user_question():
     title = title_for_thread(
         AnalyticalScope(),
@@ -186,6 +195,41 @@ def test_new_chat_should_persist_dirty_not_empty_home():
     assert new_chat_should_persist(messages=[{"role": "user", "content": "x"}], live_list_active=False)
     assert new_chat_should_persist(messages=[], live_list_active=True)
     assert not new_chat_should_persist(messages=[], live_list_active=False)
+
+
+def test_search_matches_title_and_subtitle_case_insensitively(tmp_path: Path):
+    store = ThreadStore(tmp_path / "threads.json")
+    store.upsert_session(
+        "cabello",
+        _session(
+            analytical_scope=AnalyticalScope(categories=["Cuidado del Cabello"]).model_dump(),
+            slice_data={"dashboard": {"skus": 2430}, "purchase_list": [{}] * 25},
+        ),
+    )
+    store.upsert_session(
+        "panales",
+        _session(
+            analytical_scope=AnalyticalScope(categories=["Pañales"], subcategories=["Bebé"]).model_dump(),
+            slice_data={"dashboard": {"skus": 120}, "purchase_list": [{}] * 4},
+            messages=[{"role": "user", "content": "Reposición urgente"}],
+        ),
+    )
+    assert [thread.id for thread in store.search("cabello")] == ["cabello"]
+    assert [thread.id for thread in store.search("2430 skus")] == ["cabello"]
+    assert [thread.id for thread in store.search("bebé")] == ["panales"]
+    assert {thread.id for thread in store.search("")} == {"cabello", "panales"}
+
+
+def test_search_matches_without_accent(tmp_path: Path):
+    store = ThreadStore(tmp_path / "threads.json")
+    store.upsert_session(
+        "panales",
+        _session(
+            analytical_scope=AnalyticalScope(categories=["Pañales"], subcategories=["Bebé"]).model_dump(),
+            messages=[{"role": "user", "content": "Reposición urgente"}],
+        ),
+    )
+    assert [thread.id for thread in store.search("bebe")] == ["panales"]
 
 
 def test_prepare_new_chat_persists_dirty_and_skips_empty_home(tmp_path: Path):

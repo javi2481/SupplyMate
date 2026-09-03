@@ -15,6 +15,7 @@ class KpiCard:
     value: str
     accent: str
     hint: str
+    icon_key: str | None = None
 
 
 def _fmt_coverage(avg: Any) -> str:
@@ -36,24 +37,28 @@ def explore_kpi_cards(
             str(dash.get("skus", "—")),
             "#90CAF9",
             "SKUs en el recorte actual",
+            icon_key="products",
         ),
         KpiCard(
             metrics.LABEL_UNDERSTOCK,
             str(dash.get("understock", "—")),
             HEALTH_COLORS[metrics.BUCKET_UNDERSTOCK],
             "Necesitan reposición calculada",
+            icon_key="understock",
         ),
         KpiCard(
             metrics.LABEL_STOCKOUT_RISK,
             str(dash.get("stockout_risk", "—")),
             HEALTH_COLORS[metrics.BUCKET_STOCKOUT_RISK],
             metrics.METRIC_CONTRACTS["stockout_risk"].caveat,
+            icon_key="stockout_risk",
         ),
         KpiCard(
             f"{metrics.LABEL_COVERAGE} prom.",
             _fmt_coverage(dash.get("avg_coverage")),
             "#AED581",
             metrics.METRIC_CONTRACTS["coverage"].caveat,
+            icon_key="coverage",
         ),
     ]
 

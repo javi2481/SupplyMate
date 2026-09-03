@@ -3,10 +3,11 @@ import os
 
 from dotenv import load_dotenv
 
-ROOT_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(ROOT_DIR / ".env")
+APP_DIR = Path(__file__).resolve().parent.parent
+REPO_ROOT = APP_DIR.parent
+load_dotenv(REPO_ROOT / ".env")
 
-DATA_DIR = Path(os.getenv("SUPPLYMATE_DATA_DIR", ROOT_DIR / "data"))
+DATA_DIR = Path(os.getenv("SUPPLYMATE_DATA_DIR", REPO_ROOT / "data"))
 
 # Prefer Groq free tier; OpenAI remains optional fallback.
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq").lower()

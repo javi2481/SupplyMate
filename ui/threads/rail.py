@@ -1,4 +1,4 @@
-"""ChatGPT-shaped thread rail — fiel al mockup aprobado."""
+"""ChatGPT-shaped thread rail — alineado al mockup visual."""
 
 from __future__ import annotations
 
@@ -19,46 +19,86 @@ class RailAction:
     thread_id: str | None = None
 
 
-def render_thread_rail(store: ThreadStore, *, active_id: str | None) -> RailAction | None:
+def render_thread_rail(
+    store: ThreadStore,
+    *,
+    active_id: str | None,
+) -> RailAction | None:
     clicked: RailAction | None = None
 
-    # Nuevo chat — ancho completo, botón primario
-    if st.button(ui_copy.NEW_CHAT, key="rail-new-chat", use_container_width=True, type="primary"):
+    if st.button(
+        ui_copy.NEW_CHAT,
+        key="rail-new-chat",
+        use_container_width=True,
+        type="primary",
+    ):
         clicked = RailAction("new_chat")
 
-    # ── Fijados ──────────────────────────────────────────────────────────────
-    st.markdown(
-        "<div style='font-size:0.72rem;font-weight:600;letter-spacing:.06em;"
-        "opacity:.55;text-transform:uppercase;margin-top:14px;margin-bottom:4px'>"
-        f"{ui_copy.PINNED_SECTION}</div>",
-        unsafe_allow_html=True,
-    )
-    pinned = store.pinned_threads()
-    if not pinned:
-        st.caption(ui_copy.PINNED_EMPTY)
-    else:
-        action = _render_thread_rows(pinned, active_id=active_id, prefix="pin")
-        if action is not None:
-            clicked = action
+    query = st.text_input(
+        ui_copy.SEARCH_PLACEHOLDER,
+        key="rail-search",
+        placeholder=ui_copy.SEARCH_PLACEHOLDER,
+        label_visibility="collapsed",
+    ).strip()
+    matched = store.search(query) if query else None
+    matches = {thread.id for thread in matched} if matched is not None else None
 
-    # ── Historial de chats ───────────────────────────────────────────────────
-    st.markdown(
-        "<div style='font-size:0.72rem;font-weight:600;letter-spacing:.06em;"
-        "opacity:.55;text-transform:uppercase;margin-top:14px;margin-bottom:4px'>"
-        f"{ui_copy.HISTORY_SECTION}</div>",
-        unsafe_allow_html=True,
-    )
-    groups = group_history_by_day(store.history_threads())
-    for day_label, threads in groups:
+    if query and not matched:
         st.markdown(
-            f"<div style='font-size:0.72rem;opacity:.45;margin:6px 0 2px'>"
-            f"{day_label}</div>",
+            f"<p class='rail-empty'>{ui_copy.SEARCH_NO_RESULTS}</p>",
             unsafe_allow_html=True,
         )
-        action = _render_thread_rows(threads, active_id=active_id, prefix="hist")
-        if action is not None:
-            clicked = action
+    else:
+        st.markdown(f"<p class='rail-section'>{ui_copy.PINNED_SECTION}</p>", unsafe_allow_html=True)
+        pinned = store.pinned_threads()
+        if matches is not None:
+            pinned = [thread for thread in pinned if thread.id in matches]
+        if not pinned:
+            st.markdown(f"<p class='rail-empty'>{ui_copy.PINNED_EMPTY}</p>", unsafe_allow_html=True)
+        else:
+            action = _render_thread_rows(pinned, active_id=active_id, prefix="pin")
+            if action is not None:
+                clicked = action
 
+        st.markdown(
+            f"<p class='rail-section'>{ui_copy.HISTORY_SECTION}</p>",
+            unsafe_allow_html=True,
+        )
+        history = store.history_threads()
+        if matches is not None:
+            history = [thread for thread in history if thread.id in matches]
+        groups = group_history_by_day(history)
+        if not groups:
+            st.markdown("<p class='rail-empty'>Sin chats recientes</p>", unsafe_allow_html=True)
+        for day_label, threads in groups:
+            st.markdown(f"<p class='rail-day'>{day_label}</p>", unsafe_allow_html=True)
+            action = _render_thread_rows(threads, active_id=active_id, prefix="hist")
+            if action is not None:
+                clicked = action
+
+    if active_id:
+        active = store.get(active_id)
+        if active is not None:
+            if active.pinned:
+                if st.button(
+                    ui_copy.UNPIN_THREAD,
+                    key="rail-unpin-active",
+                    use_container_width=True,
+                ):
+                    clicked = RailAction("unpin", active_id)
+            else:
+                if st.button(
+                    ui_copy.PIN_THREAD,
+                    key="rail-pin-active",
+                    use_container_width=True,
+                ):
+                    clicked = RailAction("pin", active_id)
+
+    st.markdown(
+        f"<div class='rail-footer'>{ui_copy.APP_NAME}</div>",
+        unsafe_allow_html=True,
+    )
+    st.toggle(ui_copy.AI_READING_TOGGLE, key="analyst_enabled")
     return clicked
 
 
@@ -66,36 +106,19 @@ def _render_thread_rows(threads, *, active_id: str | None, prefix: str) -> RailA
     clicked: RailAction | None = None
     for thread in threads:
         is_active = thread.id == active_id
-        active_style = (
-            "border-left:3px solid var(--primary-color,#e05252);padding-left:8px;border-radius:4px;"
-            if is_active
-            else "border-left:3px solid transparent;padding-left:8px;"
-        )
-        # Bloque título + subtítulo: si el botón invisible ocupa todo el ancho,
-        # usamos un contenedor con markdown + button superpuesto via columnas
-        title_html = (
-            f"<div style='font-weight:600;font-size:0.9rem;line-height:1.3;{active_style}'>"
-            f"{thread.title}</div>"
-        )
-        sub_html = ""
+        row_class = "rail-row rail-row-active" if is_active else "rail-row"
+        st.markdown(f"<div class='{row_class}'>", unsafe_allow_html=True)
+        if st.button(
+            thread.title,
+            key=f"{prefix}-open-{thread.id}",
+            use_container_width=True,
+            type="secondary",
+        ):
+            clicked = RailAction("select", thread.id)
         if thread.subtitle:
-            sub_html = (
-                f"<div style='font-size:0.75rem;opacity:.55;padding-left:11px'>"
-                f"{thread.subtitle}</div>"
+            st.markdown(
+                f"<p class='rail-subtitle'>{thread.subtitle}</p>",
+                unsafe_allow_html=True,
             )
-        info_col, pin_col = st.columns([7, 1])
-        with info_col:
-            st.markdown(title_html + sub_html, unsafe_allow_html=True)
-            if st.button(
-                "·",
-                key=f"{prefix}-open-{thread.id}",
-                help=thread.title,
-                use_container_width=True,
-            ):
-                clicked = RailAction("select", thread.id)
-        with pin_col:
-            icon = "📌" if not thread.pinned else "✕"
-            help_text = ui_copy.PIN_THREAD if not thread.pinned else ui_copy.UNPIN_THREAD
-            if st.button(icon, key=f"{prefix}-toggle-{thread.id}", help=help_text):
-                clicked = RailAction("unpin" if thread.pinned else "pin", thread.id)
+        st.markdown("</div>", unsafe_allow_html=True)
     return clicked

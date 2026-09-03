@@ -24,6 +24,10 @@ def test_explore_kpis_exclude_oc_lines_and_value():
     assert "Valor estimado" not in labels
     assert cards[0].value == "441"
     assert cards[3].value == "6.4 d"
+    assert cards[0].icon_key == "products"
+    assert cards[1].icon_key == "understock"
+    assert cards[2].icon_key == "stockout_risk"
+    assert cards[3].icon_key == "coverage"
 
 
 def test_commit_kpis_include_oc_and_priorities():
@@ -52,6 +56,7 @@ def test_commit_kpis_include_oc_and_priorities():
     assert by_label["Críticas"] == "1"
     assert by_label["Altas"] == "1"
     assert "Valor estimado" in by_label
+    assert all(card.icon_key is None for card in cards)
 
 
 def test_explore_table_column_order_and_signal_rename():

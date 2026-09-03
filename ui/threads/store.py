@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import unicodedata
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
@@ -52,6 +53,12 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _normalize_search_text(value: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", value)
+    stripped = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+    return stripped.casefold()
+
+
 def _strip_csv(value: Any) -> Any:
     if isinstance(value, dict):
         return {k: _strip_csv(v) for k, v in value.items() if k != "csv_bytes"}
@@ -86,13 +93,29 @@ def _as_scope(scope: AnalyticalScope | Mapping[str, Any] | None) -> AnalyticalSc
     return AnalyticalScope.model_validate(scope)
 
 
+def _catalog_sku_count(snap: Mapping[str, Any] | None) -> int | None:
+    if not snap:
+        return None
+    root = snap.get("root_skus")
+    if isinstance(root, int):
+        return root
+    dash = (snap.get("slice_data") or {}).get("dashboard") or {}
+    skus = dash.get("skus")
+    return skus if isinstance(skus, int) else None
+
+
 def title_for_thread(
     scope: AnalyticalScope | Mapping[str, Any] | None,
     messages: list[Mapping[str, Any]] | None,
+    *,
+    snap: Mapping[str, Any] | None = None,
 ) -> str:
     line = compact_scope_line(_as_scope(scope))
     if line != "Inventario":
         return line
+    catalog_skus = _catalog_sku_count(snap)
+    if catalog_skus is not None and catalog_skus > 0:
+        return f"Catálogo · {catalog_skus} SKUs"
     for msg in messages or []:
         if msg.get("role") != "user":
             continue
@@ -179,18 +202,29 @@ class Thread:
 
 
 def _subtitle_from_snap(snap: dict[str, Any]) -> str:
-    """Derive subtitle from snapshot: e.g. '2430 SKUs · 25 para reponer'."""
+    """Subtítulo del hilo: solo cuando hay recorte (no catálogo completo)."""
+    scope = _as_scope(snap.get("analytical_scope"))
+    if compact_scope_line(scope) == "Inventario":
+        return ""
     dash = (snap.get("slice_data") or {}).get("dashboard") or {}
     skus = dash.get("skus")
     purchase_list = (snap.get("slice_data") or {}).get("purchase_list") or []
-    root_skus = snap.get("root_skus")
     parts: list[str] = []
-    sku_val = skus if isinstance(skus, int) else (root_skus if isinstance(root_skus, int) else None)
-    if sku_val is not None:
-        parts.append(f"{sku_val} SKUs")
-    if len(purchase_list) > 0:
+    if isinstance(skus, int):
+        parts.append(f"{skus} SKUs")
+    if purchase_list:
         parts.append(f"{len(purchase_list)} para reponer")
     return " · ".join(parts)
+
+
+def _refresh_thread_labels(thread: Thread) -> None:
+    snap = thread.snapshot
+    thread.title = title_for_thread(
+        snap.get("analytical_scope"),
+        snap.get("messages") or [],
+        snap=snap,
+    )
+    thread.subtitle = _subtitle_from_snap(snap)
 
 
 class ThreadStore:
@@ -216,9 +250,30 @@ class ThreadStore:
             return
         for item in raw_threads:
             if isinstance(item, dict):
-                self.threads.append(Thread.from_dict(item))
+                thread = Thread.from_dict(item)
+                _refresh_thread_labels(thread)
+                self.threads.append(thread)
         active = payload.get("active_id")
         self.active_id = str(active) if active else None
+
+    def refresh_all_labels(self) -> None:
+        for thread in self.threads:
+            _refresh_thread_labels(thread)
+
+    def search(self, query: str) -> list[Thread]:
+        """Filter threads by title/subtitle. Presentation-free; rail owns copy and layout."""
+        raw = query.strip()
+        if not raw:
+            return list(self.threads)
+        needle = _normalize_search_text(raw)
+        matches: list[Thread] = []
+        for thread in self.threads:
+            haystack = _normalize_search_text(
+                " ".join(part for part in (thread.title, thread.subtitle) if part)
+            )
+            if needle in haystack:
+                matches.append(thread)
+        return matches
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -250,7 +305,7 @@ class ThreadStore:
 
     def upsert_session(self, thread_id: str | None, session: Mapping[str, Any]) -> Thread:
         snap = snapshot_from_session(session)
-        title = title_for_thread(snap.get("analytical_scope"), snap.get("messages") or [])
+        title = title_for_thread(snap.get("analytical_scope"), snap.get("messages") or [], snap=snap)
         subtitle = _subtitle_from_snap(snap)
         existing = self.get(thread_id) if thread_id else None
         if existing is None:
