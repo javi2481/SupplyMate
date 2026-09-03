@@ -18,3 +18,4 @@ build/
 *.duckdb.wal
 .hypothesis/
 graphify-out/
+.gstack/

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from app.services.analytics import metrics
 from ui.composition.kpi_policy import commit_kpi_cards, explore_kpi_cards
 from ui.composition.table_policy import EXPLORE_COLUMNS, SIGNAL_COLUMN, build_explore_rows
+from ui.theme import HEALTH_COLORS, SHELL_TOKENS
 
 
 def test_explore_kpis_exclude_oc_lines_and_value():
@@ -28,6 +30,25 @@ def test_explore_kpis_exclude_oc_lines_and_value():
     assert cards[1].icon_key == "understock"
     assert cards[2].icon_key == "stockout_risk"
     assert cards[3].icon_key == "coverage"
+
+
+def test_explore_kpi_accents_use_brand_blue_and_health():
+    brand = SHELL_TOKENS["primary_accent"]
+    cards = explore_kpi_cards(
+        {
+            "skus": 10,
+            "understock": 2,
+            "stockout_risk": 1,
+            "avg_coverage": 5.0,
+        }
+    )
+    by_label = {c.label: c.accent for c in cards}
+    assert by_label["Productos"] == brand
+    assert by_label["Cobertura prom."] == brand
+    assert by_label["Falta de stock"] == HEALTH_COLORS[metrics.BUCKET_UNDERSTOCK]
+    assert by_label["Riesgo de quiebre"] == HEALTH_COLORS[metrics.BUCKET_STOCKOUT_RISK]
+    assert HEALTH_COLORS[metrics.BUCKET_UNDERSTOCK] == "#FB8C00"
+    assert HEALTH_COLORS[metrics.BUCKET_STOCKOUT_RISK] == "#E53935"
 
 
 def test_commit_kpis_include_oc_and_priorities():

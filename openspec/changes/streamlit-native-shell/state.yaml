@@ -1,0 +1,14 @@
+change: streamlit-native-shell
+status: verified
+strict_tdd: true
+depends_on:
+  - ui-v2
+  - chat-shell
+  - ui-mockup-polish
+phases:
+  proposal: done
+  specs: done
+  design: done
+  tasks: done
+  apply: done
+  verify: done
