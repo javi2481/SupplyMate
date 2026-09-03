@@ -1,32 +1,61 @@
 # SupplyMate
 
-MVP de AI Engineering para reabastecimiento en pymes de distribución.
+*English* · [Español](README.es.md)
 
-**Principio:** *LLM orchestrates, deterministic code decides.*
+AI Engineering MVP for replenishment in distribution SMBs.
 
-## El flujo (menos de 2 minutos)
+**Principle:** *LLM orchestrates, deterministic code decides.*
 
-1. Preguntá: **¿Qué productos tengo que comprar?**
-2. Click **Riesgo de quiebre** → click una categoría → seleccioná un SKU
-3. Mirá el cálculo (Python, no el LLM) — *Hechos calculados por Python*
-4. **Listo — armar OC** → exportá el CSV de esa recorte
+## Why it exists
 
-Clicks, filtros y CSV = **0 llamadas al LLM**. El modelo entra en la pregunta libre, el insight del recorte y el resumen de OC.
+A distribution SMB needs to answer:
 
-SKU demo: `6033436`. Vocabulario: Riesgo de quiebre, Falta de stock, Sobrestock, Cobertura, Cantidad recomendada.
+> How much of product X should I order to cover the next 7 days?
 
-## Por qué existe
+If the LLM invents stock, sales, or quantity, the system is not trustworthy. SupplyMate separates roles:
 
-Una pyme de distribución necesita:
+- the **LLM orchestrates** (intent, explanation, insight)
+- **Python code decides** (formula, filters, CSV)
 
-> ¿Cuánto debería pedir del producto X para cubrir los próximos 7 días?
+## Who this is for
 
-Si el LLM inventa el stock, las ventas o la cantidad, el sistema no es confiable. SupplyMate separa roles:
+- **Applied AI engineers** who want a *tool-calling + deterministic logic + validated insights* case study
+- **Operations / supply** teams who need an exportable purchase order on the same slice they see
+- **Interviews** — small, testable, easy-to-narrate MVP
 
-- el **LLM orquesta** (intención, explicación, insight)
-- el **código Python decide** (fórmula, filtros, CSV)
+## Why not just use X?
 
-## Política de reposición (honesta)
+| Alternative | Why not in this MVP |
+|-------------|---------------------|
+| **RAG / embeddings / vector DB** | Structured CSV; lexical SKU matching. No embedding models at runtime. |
+| **LangChain / LangGraph** | Overkill for 3 inventory tools; OpenAI Agents SDK |
+| **Let the LLM calculate** | Critical numbers are not hallucinated; Python calculates and validates narration |
+| **Multi-agent swarm** | Separate LLM roles (intent / explain / insight / commit), not a swarm |
+| **Forecasting / ML / EOQ** | Out of scope; policy is explicit and simple |
+| **Postgres / dbt / Airflow / Superset** | Overkill; dashboard lives in chat |
+
+## How it works
+
+```text
+User
+  ↓
+/chat  ── regex or intent classifier
+  ├── list / dashboard  → Python slice (0 LLM per click)
+  └── single SKU        → 3 tools → calculate_replenishment → explanation (validated)
+/replenishment/slice     → same filters as CSV export
+/replenishment/analyze   → insight or PO summary, validator, deterministic fallback
+```
+
+| Piece | Role |
+|-------|------|
+| CSVs in [`data/`](data/) | Simulated catalog (~13k SKUs) |
+| [`app/services/metrics.py`](app/services/metrics.py) | Metric contracts + coverage + health + priority |
+| 3 tools + [`app/replenishment.py`](app/replenishment.py) | Inventory / sales / params; qty in Python |
+| LLM roles | Intent, SKU explainer, insight (Explore), commit (Build PO) |
+| REST | search, replenishment, `/chat`, `/slice`, `/analyze`, dashboard, CSV |
+| Streamlit | Chat + **Explore** / **Build PO** + AI Analyst |
+
+### Replenishment policy (honest)
 
 **Order-up-to / periodic review**
 
@@ -38,107 +67,107 @@ stock_target   = demand_horizon + demand_lead + safety_stock
 recommended    = max(0, ceil(stock_target - current_stock))
 ```
 
-- **Punto de reorden** es una alarma de salud (pinta “Riesgo de quiebre”). No entra en la cantidad a pedir.
-- **Cobertura** = stock / demanda diaria 30d. Aproximación, no un forecast.
-- **Riesgo de quiebre** = regla (`qty > 0` y stock ≤ ROP). No es una probabilidad.
-- **Sobrestock** = stock > máximo y qty = 0. No es dead stock.
-- Las ventas diarias del historial se **expanden de forma uniforme** a partir del total 30d. No hay serie temporal real: no infieras tendencia ni estacionalidad.
+- **Reorder point** is a health alarm (“stockout risk”). It does not enter the order quantity.
+- **Coverage** = stock / 30d daily demand. Approximation, not a forecast.
+- **Stockout risk** = rule (`qty > 0` and stock ≤ ROP). Not a probability.
+- **Overstock** = stock > max and qty = 0. Not dead stock.
+- Daily sales in history are **expanded uniformly** from the 30d total. No real time series: do not infer trend or seasonality.
 
-No es un modelo de demanda ML. El MVP demuestra reposición determinística + analítica conversacional.
+This is not an ML demand model. The MVP demonstrates deterministic replenishment + conversational analytics.
 
-## Para quién es
+Details: [`docs/architecture.md`](docs/architecture.md)
 
-- **Applied AI engineers** que quieren un caso de *tool-calling + lógica determinística + insights validados*
-- **Operaciones / supply** que necesitan una OC exportable sobre el mismo recorte que ven
-- **Entrevistas** — MVP chico, testeable, fácil de narrar
+## What the MVP proves
 
-## ¿Por qué no usar X?
+**Real catalog** — `6033436` → qty **173**; `8141600` → **0**. Purchase list + PO CSV (`barcode,product_id,product_name,supplier,recommended_quantity,operational_priority,estimated_purchase_value`). Purchase value = qty × list price (not retail PVP).
 
-| Alternativa | Por qué no en este MVP |
-|-------------|-------------------------|
-| **RAG / embeddings / vector DB** | CSV estructurado; matching lexical de SKU. Sin modelos de embeddings en runtime. |
-| **LangChain / LangGraph** | Overkill para 3 tools de inventario; OpenAI Agents SDK |
-| **Que el LLM calcule** | Los números críticos no se alucinan; Python calcula y valida la narración |
-| **Multi-agent swarm** | Roles LLM separados (intent / explain / insight / commit), no un enjambre |
-| **Forecasting / ML / EOQ** | Fuera de scope; la política es explícita y simple |
-| **Postgres / dbt / Airflow / Superset** | Overkill; el dashboard vive en el chat |
+## What the clone includes
 
-## Cómo funciona
+| Ready to clone | Optional |
+|----------------|----------|
+| CSVs in [`data/`](data/) | `GROQ_API_KEY` in `.env` |
+| pytest tests | Streamlit |
+| FastAPI + agent + formula | Paid OpenAI |
 
-```text
-User
-  ↓
-/chat  ── regex o clasificador de intención
-  ├── lista / dashboard  → slice Python (0 LLM en cada click)
-  └── un SKU             → 3 tools → calculate_replenishment → explicación (validada)
-/replenishment/slice     → mismos filtros que el CSV
-/replenishment/analyze   → insight o resumen OC, validator, fallback determinístico
-```
-
-| Pieza | Rol |
-|-------|-----|
-| CSVs en [`data/`](data/) | **API simulada** (~13k SKUs) |
-| [`app/services/metrics.py`](app/services/metrics.py) | Contratos de métricas + cobertura + salud + prioridad |
-| 3 tools + [`app/replenishment.py`](app/replenishment.py) | Inventario / ventas / params; qty en Python |
-| Roles LLM | Intent, explainer de SKU, insight (Explorar), commit (Armar OC) |
-| REST | search, replenishment, `/chat`, `/slice`, `/analyze`, dashboard, CSV |
-| Streamlit | Chat + **Explorar** / **Armar OC** + Analista IA |
-
-SDD: [`openspec/changes/mvp-core/`](openspec/changes/mvp-core/) + dual-surface + interactive-drilldown + llm-drilldown-insights + [`semantic-correctness`](openspec/changes/semantic-correctness/).
-
-## Qué demuestra el MVP
-
-**Catálogo real** — `6033436` → qty **173**; `8141600` → **0**. Lista de compras + CSV OC (`barcode,product_id,product_name,supplier,recommended_quantity,operational_priority,estimated_purchase_value`). Valor de compra = qty × precio de lista (no PVP).
-
-## Qué trae el clone
-
-| Listo al clonar | Opcional |
-|-----------------|----------|
-| CSVs en [`data/`](data/) | `GROQ_API_KEY` en `.env` |
-| Tests pytest | Streamlit |
-| FastAPI + agente + fórmula | OpenAI pago |
-
-## Inicio rápido
+## Quickstart
 
 ```bash
-git clone <este-repo>
+git clone https://github.com/javi2481/SupplyMate.git
 cd SupplyMate
 python -m venv .venv
 # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 cp .env.example .env
-# Editar .env y poner GROQ_API_KEY (https://console.groq.com/keys)
+# Edit .env and set GROQ_API_KEY (https://console.groq.com/keys)
 
 pytest -m "not performance and not llm"
 uvicorn app.api:app --reload --host 127.0.0.1 --port 8000
 ```
 
-En otra terminal:
+In another terminal:
 
 ```bash
 streamlit run ui/streamlit_app.py
 ```
 
-Abrí http://localhost:8501.
+Open http://localhost:8501.
 
-Smoke de API (con uvicorn en :8000):
+API smoke (with uvicorn on :8000):
 
 ```powershell
 .\scripts\smoke_api.ps1
 ```
 
-Ejemplos:
+### The flow (under 2 minutes)
 
-- `¿Cuánto debería pedir de 6033436?` → qty + **Cómo se calculó**
-- `¿Qué productos tengo que comprar?` → panel **Explorar** → recorte → **Armar OC** → **Exportar OC**
+1. Ask: **What products should I buy?**
+2. Click **Stockout risk** → click a category → select a SKU
+3. See the calculation (Python, not the LLM) — *Facts calculated by Python*
+4. **Ready — build PO** → export the CSV for that slice
+
+Clicks, filters, and CSV = **0 LLM calls**. The model runs on free-form questions, slice insight, and PO summary.
+
+Demo SKU: `6033436`. Vocabulary: Stockout risk, Out of stock, Overstock, Coverage, Recommended quantity.
+
+Examples:
+
+- `How much should I order of 6033436?` → qty + **How it was calculated**
+- `What products should I buy?` → **Explore** panel → slice → **Build PO** → **Export PO**
 
 ```bash
 curl -s -X POST http://127.0.0.1:8000/replenishment/analyze \
   -H "Content-Type: application/json" \
-  -d "{\"mode\":\"explore\",\"scope\":{},\"events\":[],\"root_question\":\"¿Qué comprar?\"}"
+  -d "{\"mode\":\"explore\",\"scope\":{},\"events\":[],\"root_question\":\"What to buy?\"}"
 ```
 
-## Flujo en terminal
+First verifiable result:
+
+```bash
+curl -s http://127.0.0.1:8000/products/6033436/replenishment
+# → recommended_quantity: 173
+```
+
+## Terminal flow
+
+**SKU path**
+
+```text
+Question: How much should I order of 6033436?
+   ↓
+Intent → 3 tools → calculate_replenishment
+   ↓
+Answer: qty 173 + How it was calculated (validated)
+```
+
+**Slice path**
+
+```text
+Question: What products should I buy?
+   ↓
+Explore panel → clicks (0 LLM) → Build PO → CSV
+   ↓
+If LLM insight fails → deterministic fallback
+```
 
 ```bash
 curl -s http://127.0.0.1:8000/health
@@ -149,62 +178,78 @@ curl -s "http://127.0.0.1:8000/replenishment/slice?category=Cabello&limit=5"
 curl -s "http://127.0.0.1:8000/replenishment/purchase-list.csv?limit=10" -o purchase_order.csv
 curl -s -X POST http://127.0.0.1:8000/chat \
   -H "Content-Type: application/json" \
-  -d "{\"message\": \"¿Cuánto debería pedir de 6033436?\"}"
+  -d "{\"message\": \"How much should I order of 6033436?\"}"
 ```
 
-## Alcance
+## Scope
 
-| Incluido | Excluido |
+| Included | Excluded |
 |----------|----------|
-| 3 tools de inventario + roles LLM acotados | RAG, embeddings, vector DB |
-| Cálculo determinístico order-up-to | Forecasting / ML / EOQ |
-| Catálogo CSV | Postgres app DB / dbt / Airflow / Superset |
-| Streamlit Explorar / Armar OC + Analista IA | Frontend React / BI aparte obligatorio |
-| Export CSV OC (scope congelado en Agent) | Multi-agent swarm / LangChain |
-| `/replenishment/analyze` (LLM interpreta, Python calcula) | LLM calcula qty o filtra filas |
-| Evals de insight + golden intents (CI sin Groq live) | LangSmith / OpenTelemetry |
+| 3 inventory tools + bounded LLM roles | RAG, embeddings, vector DB |
+| Deterministic order-up-to calculation | Forecasting / ML / EOQ |
+| CSV catalog | Postgres app DB / dbt / Airflow / Superset |
+| Streamlit Explore / Build PO + AI Analyst | Mandatory separate React / BI frontend |
+| PO CSV export (scope frozen in Agent) | Multi-agent swarm / LangChain |
+| `/replenishment/analyze` (LLM interprets, Python calculates) | LLM calculates qty or filters rows |
+| Insight evals + golden intents (CI without live Groq) | LangSmith / OpenTelemetry |
 
-## Documentación / SDD
+## Optional Streamlit UI
 
-| Artefacto | Contenido |
-|-----------|-----------|
-| [`openspec/config.yaml`](openspec/config.yaml) | Strict TDD + stack |
-| [`openspec/changes/semantic-correctness/`](openspec/changes/semantic-correctness/) | Política, perímetro, evals, valor de compra |
-| [`openspec/changes/interactive-drilldown/`](openspec/changes/interactive-drilldown/) | Slice API + scope + chips Python |
-| [`openspec/changes/engineering-quality/`](openspec/changes/engineering-quality/) | CI, seguridad OWASP mínima, trazabilidad |
-| [`openspec/changes/dual-surface-analytics/`](openspec/changes/dual-surface-analytics/) | Métricas + dashboard en chat |
-| [`docs/api-simulada.md`](docs/api-simulada.md) | Contrato CSV |
+Chat + **Explore** / **Build PO** at http://localhost:8501. The API on `:8000` is the runtime; Streamlit is the demo surface.
 
-**Estado:** asistente + panel de reposición recortable; qty y filtros en Python; LLM solo en pregunta libre / insight / commit.
-
-## Tests
-
-```bash
-pip install -e ".[dev]"
-pytest -m "not performance and not llm"
-pytest -m performance   # smoke de rendimiento (main CI)
-# Live Groq (no CI): RUN_LLM_EVALS=1 pytest -m llm
-```
-
-CI (GitHub Actions): pytest + cobertura ≥85% en módulos críticos + Docker smoke. Marker `llm` excluido.
-
-## Calidad y mantenimiento
-
-| Doc | Contenido |
-|-----|-----------|
-| [`docs/maintenance-policy.md`](docs/maintenance-policy.md) | Leyes de Lehman, sprint preventivo |
-| [`docs/beta-test-protocol.md`](docs/beta-test-protocol.md) | Escenario beta + checklist UX |
-| [`docs/security-audit-osstmm-lite.md`](docs/security-audit-osstmm-lite.md) | Auditoría web lite |
-| [`docs/compatibility-matrix.md`](docs/compatibility-matrix.md) | Browsers / SO |
-| [`openspec/changes/engineering-quality/traceability-matrix.md`](openspec/changes/engineering-quality/traceability-matrix.md) | MUST → test |
-
-## Docker (API)
+Docker (API only):
 
 ```bash
 docker build -t supplymate .
 docker run --rm -p 8000:8000 -e GROQ_API_KEY=gsk-... -e LLM_PROVIDER=groq supplymate
 ```
 
-## Licencia
+## Documentation
 
-Uso educativo / portfolio salvo que se indique lo contrario en el repo.
+| Doc | Contents |
+|-----|----------|
+| [`docs/architecture.md`](docs/architecture.md) | LLM vs Python boundary, tools, slice/scope, layout |
+| [`docs/evaluation.md`](docs/evaluation.md) | CI, goldens, pytest markers, performance |
+| [`docs/data-contract.md`](docs/data-contract.md) | CSV contract / `product_id` |
+
+Internal SDD: [`openspec/`](openspec/) (per-change specs; not the public entry point).
+
+### Quality and maintenance
+
+| Doc | Contents |
+|-----|-----------|
+| [`docs/maintenance-policy.md`](docs/maintenance-policy.md) | Lehman laws, preventive sprint |
+| [`docs/beta-test-protocol.md`](docs/beta-test-protocol.md) | Beta scenario + UX checklist |
+| [`docs/security-audit-osstmm-lite.md`](docs/security-audit-osstmm-lite.md) | Lite web audit |
+| [`docs/compatibility-matrix.md`](docs/compatibility-matrix.md) | Browsers / OS |
+| [`docs/performance-profile.md`](docs/performance-profile.md) | Performance smoke thresholds |
+| [`openspec/changes/engineering-quality/traceability-matrix.md`](openspec/changes/engineering-quality/traceability-matrix.md) | MUST → test |
+
+**Status:** v0.1 — assistant + sliceable replenishment panel; qty and filters in Python; LLM only on free-form question / insight / commit.
+
+### Next milestones
+
+1. **Second catalog source** — validate the CSV contract with another dataset
+2. **API auth** — endpoints ready for controlled deployment
+3. **Query interpretation** — harden multiturn goldens and reference resolution
+4. **Richer export** — PO formats beyond base CSV
+
+## Contributing
+
+Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Repository health
+
+[![CI](https://github.com/javi2481/SupplyMate/actions/workflows/ci.yml/badge.svg)](https://github.com/javi2481/SupplyMate/actions/workflows/ci.yml)
+
+CI runs `pytest -m "not performance and not llm"`, coverage ≥85% on critical modules, and Docker smoke. Marker `llm` excluded from main CI.
+
+```bash
+pytest -m "not performance and not llm"
+pytest -m performance   # performance smoke (main CI only)
+# Live Groq (not CI): RUN_LLM_EVALS=1 pytest -m llm
+```
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
