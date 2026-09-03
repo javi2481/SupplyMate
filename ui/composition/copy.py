@@ -1,0 +1,33 @@
+"""Copy for UI v2 — operator language, not architecture jargon."""
+
+APP_NAME = "SupplyMate"
+APP_TAGLINE = "Reposición inteligente"
+MODE_EXPLORE = "Explorando"
+MODE_COMMIT = "Revisando compra"
+NEXT_STEP_TITLE = "Siguiente paso"
+NEXT_STEP_FALLBACK = "¿Cómo querés afinar este recorte?"
+CHART_REFINE_HINT = "Click en una categoría o un rango de cobertura para afinar."
+OTHER_ANALYSES = "Otros análisis"
+REVIEW_PURCHASE = "Revisar compra"
+ENTER_COMMIT = "Revisar compra de este recorte"
+BACK_TO_EXPLORE = "Volver a explorar"
+ANALYST_TITLE = "Lectura del recorte"
+ANALYST_CAPTION = "Generado por IA"
+CHAT_PLACEHOLDER = "¿Qué productos tengo que comprar?"
+DEFAULT_STARTUP_QUERY = CHAT_PLACEHOLDER
+BOILERPLATE_USER_QUESTIONS = (DEFAULT_STARTUP_QUERY,)
+HOME_HINT = "Preguntale a SupplyMate qué tenés que reponer."
+UNFREEZE_WARNING = (
+    "Esa pregunta cambiaría el recorte congelado. Confirmá para volver a explorar, "
+    "o seguí con la OC."
+)
+CONFIRM_UNFREEZE = "Volver a explorar"
+KEEP_COMMIT = "Seguir con la OC"
+CLEAR_SCOPE = "Limpiar"
+EXPORT_PREFIX = "Exportar OC"
+NEW_CHAT = "Nuevo chat"
+PINNED_SECTION = "Fijados"
+HISTORY_SECTION = "Historial de chats"
+PINNED_EMPTY = "Nada fijado"
+PIN_THREAD = "Fijar"
+UNPIN_THREAD = "Quitar"

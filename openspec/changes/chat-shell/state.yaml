@@ -1,0 +1,12 @@
+change: chat-shell
+status: specified
+strict_tdd: true
+depends_on:
+  - ui-v2
+phases:
+  proposal: done
+  specs: done
+  design: done
+  tasks: done
+  apply: done
+  verify: pending

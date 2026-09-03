@@ -1,0 +1,10 @@
+change: ui-v2
+status: verifying
+strict_tdd: true
+phases:
+  proposal: done
+  specs: done
+  design: done
+  tasks: done
+  apply: in_progress
+  verify: pending

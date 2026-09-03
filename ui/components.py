@@ -9,6 +9,8 @@ import streamlit as st
 
 from app.services import metrics
 from ui import theme
+from ui.composition.kpi_policy import KpiCard
+from ui.composition.table_policy import EXPLORE_COLUMNS, build_explore_rows
 
 
 def inject_theme() -> None:
@@ -23,6 +25,13 @@ def _kpi_card(label: str, value: str, accent: str, hint: str) -> str:
   <div class="sm-kpi-hint">{hint}</div>
 </div>
 """
+
+
+def render_kpi_cards(cards: list[KpiCard]) -> None:
+    html = "".join(
+        _kpi_card(card.label, card.value, card.accent, card.hint) for card in cards
+    )
+    st.markdown(f'<div class="sm-kpi-row">{html}</div>', unsafe_allow_html=True)
 
 
 def render_kpi_strip(dash: dict | None, *, purchase_lines: int | None = None) -> None:
@@ -141,14 +150,13 @@ def build_purchase_dataframe(purchase_list: list[dict]) -> pd.DataFrame:
         coverage_val = float(dos) if dos is not None else 0.0
         rows.append(
             {
-                "Señal": theme.HEALTH_ICONS.get(bucket, "⚪"),
                 "SKU": item.get("product_id", ""),
                 "Producto": item.get("product_name", ""),
                 "Proveedor": item.get("supplier", ""),
                 "Stock": int(item.get("current_stock") or 0),
                 "Cobertura (días)": min(coverage_val, 30.0),
                 "Ritmo/día": round(float(item.get("average_daily_demand") or 0), 1),
-                "Tendencia": theme.TREND_LABELS.get(bucket, "—"),
+                "Señal": theme.TREND_LABELS.get(bucket, "—"),
                 "Pedir": int(item.get("recommended_quantity") or 0),
                 "Prioridad": metrics.PRIORITY_LABELS.get(
                     str(item.get("operational_priority") or ""),
@@ -169,7 +177,11 @@ def render_purchase_table(
 ) -> Any:
     df = build_purchase_dataframe(purchase_list)
     column_config = {
-        "Señal": st.column_config.TextColumn("Señal", width="small"),
+        "Señal": st.column_config.TextColumn(
+            "Señal",
+            width="small",
+            help="Estado de salud del SKU (no es una serie temporal)",
+        ),
         "Cobertura (días)": st.column_config.ProgressColumn(
             "Cobertura (días)",
             help="Días de stock al ritmo de venta actual (máx. barra = 30 días)",
@@ -181,10 +193,6 @@ def render_purchase_table(
             "Ritmo/día",
             help="Unidades vendidas por día (promedio 30 días)",
             format="%.1f u/d",
-        ),
-        "Tendencia": st.column_config.TextColumn(
-            "Tendencia",
-            help="Señal rápida según estado de salud del SKU",
         ),
         "Pedir": st.column_config.NumberColumn(
             "Pedir",
@@ -206,6 +214,39 @@ def render_purchase_table(
         "width": "stretch",
         "hide_index": True,
         "column_config": column_config,
+    }
+    if selectable:
+        kwargs["on_select"] = "rerun"
+        kwargs["selection_mode"] = "single-row"
+        kwargs["key"] = table_key
+    return st.dataframe(df, **kwargs)
+
+
+def render_explore_table(
+    purchase_list: list[dict],
+    *,
+    table_key: str = "purchase_table",
+    selectable: bool = False,
+) -> Any:
+    df = pd.DataFrame(build_explore_rows(purchase_list), columns=EXPLORE_COLUMNS)
+    kwargs: dict[str, Any] = {
+        "width": "stretch",
+        "hide_index": True,
+        "column_config": {
+            "Cobertura (días)": st.column_config.ProgressColumn(
+                "Cobertura (días)",
+                help="Días de stock al ritmo de venta actual (máx. barra = 30 días)",
+                min_value=0,
+                max_value=30,
+                format="%.1f d",
+            ),
+            "Pedir": st.column_config.NumberColumn("Pedir", format="%d u"),
+            "Señal": st.column_config.TextColumn(
+                "Señal",
+                help="Estado de salud del SKU (no es una serie temporal)",
+            ),
+        },
+        "column_order": EXPLORE_COLUMNS,
     }
     if selectable:
         kwargs["on_select"] = "rerun"

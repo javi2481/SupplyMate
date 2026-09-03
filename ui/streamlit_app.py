@@ -21,23 +21,52 @@ from app.services import dashboard as dash_svc
 from app.services import metrics, suggested_filters
 from app.services import panel_modes
 from app.services import scope as scope_svc
-from ui import analyst
+from ui import analyst as analyst_mod
 from ui import charts
+from ui import chrome
 from ui import components
+from ui import layout_commit
+from ui import layout_explore
+from ui.composition import chat_policy as chat_policy_mod
+from ui.composition import copy as ui_copy
+from ui.composition import kpi_policy as kpi_policy_mod
+from ui.composition import next_step as next_step_mod
+from ui.composition import scope_label as scope_label_mod
+from ui.composition import table_policy as table_policy_mod
+from ui import threads as threads_mod
+from ui.threads import rail as threads_rail_mod
 
+# Streamlit keeps sys.modules across reruns; sibling UI modules go stale.
 metrics = importlib.reload(metrics)
 dash_svc = importlib.reload(dash_svc)
+ui_copy = importlib.reload(ui_copy)
+kpi_policy_mod = importlib.reload(kpi_policy_mod)
+table_policy_mod = importlib.reload(table_policy_mod)
+scope_label_mod = importlib.reload(scope_label_mod)
+next_step_mod = importlib.reload(next_step_mod)
+chat_policy_mod = importlib.reload(chat_policy_mod)
+threads_mod = importlib.reload(threads_mod)
+threads_rail_mod = importlib.reload(threads_rail_mod)
+charts = importlib.reload(charts)
+components = importlib.reload(components)
+chrome = importlib.reload(chrome)
+analyst_mod = importlib.reload(analyst_mod)
+layout_explore = importlib.reload(layout_explore)
+layout_commit = importlib.reload(layout_commit)
+ThreadStore = threads_mod.ThreadStore
+apply_snapshot = threads_mod.apply_snapshot
+persist_active = threads_mod.persist_active
+prepare_new_chat = threads_mod.prepare_new_chat
+switch_thread = threads_mod.switch_thread
+compose_next_step = next_step_mod.compose_next_step
+NextStepOption = next_step_mod.NextStepOption
+chat_would_unfreeze = chat_policy_mod.chat_would_unfreeze
 
 API_URL = os.getenv("SUPPLYMATE_API_URL", "http://127.0.0.1:8000").rstrip("/")
 
 st.set_option("client.toolbarMode", "viewer")
 st.set_page_config(page_title="SupplyMate", layout="wide", page_icon="📦")
 components.inject_theme()
-st.markdown("## 📦 SupplyMate · Operación")
-st.caption(
-    "Explorar (Ask) · Recortá con clicks · Armar OC (Agent) · Exportá · "
-    "**Python calcula, el LLM interpreta**"
-)
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -67,6 +96,42 @@ if "last_analyze_key" not in st.session_state:
     st.session_state.last_analyze_key = ""
 if "guidance" not in st.session_state:
     st.session_state.guidance = None
+if "pending_unfreeze" not in st.session_state:
+    st.session_state.pending_unfreeze = None
+if "root_skus" not in st.session_state:
+    st.session_state.root_skus = None
+if "active_thread_id" not in st.session_state:
+    st.session_state.active_thread_id = None
+if "threads_hydrated" not in st.session_state:
+    st.session_state.threads_hydrated = False
+
+
+def _threads_path() -> Path:
+    raw = os.getenv("SUPPLYMATE_THREADS_PATH")
+    return Path(raw) if raw else threads_mod.DEFAULT_STORE_PATH
+
+
+def _thread_store() -> ThreadStore:
+    return ThreadStore(_threads_path())
+
+
+def _autosave() -> None:
+    persist_active(_thread_store(), st.session_state)
+
+
+def _hydrate_threads() -> None:
+    if st.session_state.threads_hydrated:
+        return
+    st.session_state.threads_hydrated = True
+    store = _thread_store()
+    if not store.active_id:
+        return
+    thread = store.get(store.active_id)
+    if thread is None:
+        return
+    apply_snapshot(st.session_state, thread.snapshot)
+    st.session_state.active_thread_id = thread.id
+    st.session_state["_use_snapshot_slice"] = True
 
 
 def _append_event(
@@ -104,6 +169,7 @@ def _enter_commit_mode() -> None:
         label_human="Listo — armar OC de este recorte",
     )
     st.session_state.last_analyze_key = ""
+    _autosave()
 
 
 def _exit_commit_mode() -> None:
@@ -115,6 +181,7 @@ def _exit_commit_mode() -> None:
         label_human="Volver a explorar",
     )
     st.session_state.last_analyze_key = ""
+    _autosave()
 
 
 def fetch_analyze(scope: AnalyticalScope, *, mode: str) -> dict | None:
@@ -236,6 +303,7 @@ def apply_guidance_chip_action(chip_data: dict) -> None:
     if slice_data:
         st.session_state.slice_data = slice_data
         st.session_state.guidance = slice_data.get("guidance")
+    _autosave()
 
 
 def apply_filter_action(action: str, args: dict[str, str], *, source: str = "chip") -> None:
@@ -304,11 +372,13 @@ def apply_filter_action(action: str, args: dict[str, str], *, source: str = "chi
         )
         _set_scope(scope)
         st.session_state.last_analyze_key = ""
+        _autosave()
         return
     scope = scope_svc.clear_highlight(scope)
     st.session_state.highlight_calc = None
     _set_scope(scope)
     st.session_state.last_analyze_key = ""
+    _autosave()
 
 
 def _breadcrumb_labels(scope: AnalyticalScope) -> list[tuple[str, str, str]]:
@@ -349,6 +419,7 @@ def render_breadcrumb(scope: AnalyticalScope, *, readonly: bool = False) -> None
             st.session_state.interaction_events = []
             _append_event(source="reset", action="reset", label_human="Limpiar filtros")
             st.session_state.last_analyze_key = ""
+            _autosave()
             st.rerun()
 
     if readonly:
@@ -382,6 +453,7 @@ def render_breadcrumb(scope: AnalyticalScope, *, readonly: bool = False) -> None
                 )
             _set_scope(current)
             st.session_state.last_analyze_key = ""
+            _autosave()
             st.rerun()
         idx += 1
 
@@ -434,49 +506,22 @@ def render_live_panel() -> None:
     scope = _effective_panel_scope()
     mutable_scope = _scope_model()
 
-    analyst.render_mode_badge(panel_mode)
-
-    slice_data = fetch_slice(scope, limit=25)
+    slice_data = None
+    if st.session_state.pop("_use_snapshot_slice", False) and st.session_state.slice_data:
+        slice_data = st.session_state.slice_data
+    else:
+        slice_data = fetch_slice(scope, limit=25)
     if slice_data is None:
         st.error(f"No pude conectar con la API en `{API_URL}`. Arrancá uvicorn primero.")
         st.markdown("</div>", unsafe_allow_html=True)
         return
     st.session_state.slice_data = slice_data
     st.session_state.guidance = slice_data.get("guidance")
-
-    render_breadcrumb(scope, readonly=not explore_mode)
-    guidance = st.session_state.guidance or {}
-    if explore_mode and guidance.get("action") in ("ask_clarification", "draft_oc"):
-        options = guidance.get("options") or []
-        chips = guidance.get("chips") or []
-        if options:
-            if guidance.get("progress_label"):
-                step = guidance.get("progress_step") or 0
-                total = guidance.get("progress_total") or 0
-                st.caption(
-                    f"Paso {step} de {total} · {guidance.get('progress_label')}"
-                )
-            st.markdown(guidance.get("question") or "¿Cómo querés afinar este recorte?")
-            guide_cols = st.columns(min(len(options), 4))
-            for i, opt in enumerate(options[:6]):
-                chip_payload = chips[i] if i < len(chips) else None
-                with guide_cols[i % len(guide_cols)]:
-                    if st.button(
-                        opt,
-                        key=f"guide-{scope_svc.cache_key(scope)}-{opt}",
-                        type="secondary",
-                    ):
-                        if chip_payload:
-                            apply_guidance_chip_action(chip_payload)
-                        else:
-                            st.session_state.pending_prompt = opt
-                        st.rerun()
-                    if chip_payload and chip_payload.get("caption"):
-                        st.caption(chip_payload["caption"])
     dash = slice_data.get("dashboard") or {}
-    purchase_list = slice_data.get("purchase_list") or []
-    evidence = slice_data.get("evidence") or ""
-    suggested = slice_data.get("suggested_filters") or []
+    if st.session_state.root_skus is None:
+        skus = dash.get("skus")
+        if isinstance(skus, int):
+            st.session_state.root_skus = skus
 
     analyze_key = _analyze_cache_key(scope, panel_mode)
     if st.session_state.analyst_enabled and analyze_key != st.session_state.last_analyze_key:
@@ -484,194 +529,97 @@ def render_live_panel() -> None:
         if analyze_body:
             st.session_state.analyze_data = analyze_body
             st.session_state.last_analyze_key = analyze_key
-
     analyze_data = st.session_state.analyze_data or {}
-    insight = analyze_data.get("insight")
-    commit_summary = analyze_data.get("commit_summary")
-    insight_source = analyze_data.get("insight_source", "fallback")
-
-    components.render_kpi_strip(dash, purchase_lines=len(purchase_list))
-    components.render_health_legend()
-    components.render_coverage_strip(dash.get("coverage") or [])
-
-    analyst.render_analyst_card(
-        panel_mode=panel_mode,
-        evidence=evidence,
-        insight=insight,
-        commit_summary=commit_summary,
-        insight_source=insight_source,
-        analyst_enabled=st.session_state.analyst_enabled,
+    insight = analyze_data.get("insight") or {}
+    next_step = compose_next_step(
+        slice_data.get("guidance"),
+        slice_data.get("suggested_filters"),
+        insight.get("suggested_questions") or [],
     )
-    analyst.render_exploration_timeline(st.session_state.interaction_events)
 
-    if explore_mode and insight and insight.get("suggested_questions"):
-        analyst.render_suggested_questions(
-            insight["suggested_questions"],
-            key_prefix=f"live-{scope_svc.cache_key(scope)}",
+    def _on_option(opt: NextStepOption) -> None:
+        if opt.kind == "guidance" and opt.guidance_chip:
+            apply_guidance_chip_action(opt.guidance_chip)
+        elif opt.kind == "filter" and opt.filter_action:
+            apply_filter_action(opt.filter_action, opt.filter_args or {}, source="chip")
+        elif opt.kind == "prompt":
+            st.session_state.pending_prompt = opt.label
+
+    def _on_prompt(text: str) -> None:
+        st.session_state.pending_prompt = text
+
+    def _on_reset() -> None:
+        _set_scope(scope_svc.reset())
+        st.session_state.highlight_calc = None
+        st.session_state.interaction_events = []
+        st.session_state.root_skus = None
+        _append_event(source="reset", action="reset", label_human="Limpiar")
+        st.session_state.last_analyze_key = ""
+        _autosave()
+
+    def _on_category(cat: str) -> None:
+        _set_scope(scope_svc.add(mutable_scope, "category", cat))
+        _append_event(
+            source="chart_category",
+            action="add_filter",
+            dimension="category",
+            value=cat,
+            label_human=cat,
+        )
+        st.session_state.last_analyze_key = ""
+        _autosave()
+
+    def _on_coverage(bucket: str) -> None:
+        _set_scope(scope_svc.add(mutable_scope, "coverage_bucket", bucket))
+        _append_event(
+            source="chart_coverage",
+            action="add_filter",
+            dimension="coverage_bucket",
+            value=bucket,
+            label_human=bucket,
+        )
+        st.session_state.last_analyze_key = ""
+        _autosave()
+
+    def _on_sku(sku: str) -> None:
+        apply_filter_action(
+            suggested_filters.ACTION_OPEN_SKU,
+            {"product_id": sku},
+            source="table_row",
         )
 
-    if explore_mode and suggested:
-        st.markdown("**Refinar recorte** — sugerencias determinísticas:")
-        chip_cols = st.columns(min(len(suggested), 3))
-        for i, chip in enumerate(suggested[:3]):
-            if chip_cols[i].button(
-                f"➕ {chip['label']}",
-                key=f"chip-{scope_svc.cache_key(scope)}-{i}",
-                help="Agrega este filtro al breadcrumb",
-            ):
-                apply_filter_action(chip["action"], chip.get("args") or {}, source="chip")
-                st.rerun()
-
-    category_rows = dash.get("by_category") or []
-    coverage_rows = dash.get("coverage") or []
-    left, right = st.columns(2)
-    with left:
-        st.markdown(f"**{metrics.LABEL_RECOMMENDED_QTY} por categoría**")
-        st.caption("👆 Click en una categoría para recortar" if explore_mode else "Recorte congelado")
-        if category_rows:
-            cat_chart = charts.lollipop(
-                category_rows,
-                "category",
-                "Categoría",
-                extra_tooltips=[alt.Tooltip("sku_count:Q", title="Productos")],
-                selectable_field="category" if explore_mode else None,
-                selection_name="category_select",
-            )
-            if explore_mode:
-                cat_event = st.altair_chart(
-                    cat_chart,
-                    on_select="rerun",
-                    key="live_category_chart",
-                    width="stretch",
-                )
-                cat_value = charts.selection_value(
-                    cat_event, "category", selection_name="category_select"
-                )
-                if cat_value and cat_value not in mutable_scope.categories:
-                    _set_scope(scope_svc.add(mutable_scope, "category", cat_value))
-                    _append_event(
-                        source="chart_category",
-                        action="add_filter",
-                        dimension="category",
-                        value=cat_value,
-                        label_human=cat_value,
-                    )
-                    st.session_state.last_analyze_key = ""
-                    st.rerun()
-            else:
-                st.altair_chart(cat_chart, width="stretch")
-    with right:
-        st.markdown(f"**Distribución de {metrics.LABEL_COVERAGE}**")
-        st.caption("👆 Click en un bucket para filtrar" if explore_mode else "Recorte congelado")
-        if coverage_rows:
-            cov_chart = charts.histogram(
-                coverage_rows,
-                "bucket",
-                metrics.LABEL_COVERAGE,
-                x_sort=list(dash_svc.COVERAGE_ORDER),
-                selectable_field="bucket" if explore_mode else None,
-                selection_name="coverage_select",
-            )
-            if explore_mode:
-                cov_event = st.altair_chart(
-                    cov_chart,
-                    on_select="rerun",
-                    key="live_coverage_chart",
-                    width="stretch",
-                )
-                bucket_value = charts.selection_value(
-                    cov_event, "bucket", selection_name="coverage_select"
-                )
-                if bucket_value and bucket_value not in mutable_scope.coverage_buckets:
-                    _set_scope(scope_svc.add(mutable_scope, "coverage_bucket", bucket_value))
-                    _append_event(
-                        source="chart_coverage",
-                        action="add_filter",
-                        dimension="coverage_bucket",
-                        value=bucket_value,
-                        label_human=bucket_value,
-                    )
-                    st.session_state.last_analyze_key = ""
-                    st.rerun()
-            else:
-                st.altair_chart(cov_chart, width="stretch")
-
-    if not purchase_list:
-        st.warning("Ningún producto en este recorte. Quitá un filtro o usá **Limpiar filtros**.")
-    else:
-        components.render_oc_summary(purchase_list)
-        st.caption(
-            "👆 Click en una fila para ver **Cómo se calculó**"
-            if explore_mode
-            else "OC congelada — volvé a Explorar para cambiar filtros"
-        )
-        table_event = components.render_purchase_table(
-            purchase_list,
-            table_key="live_purchase_table",
-            selectable=explore_mode,
-        )
-        if explore_mode:
-            sku = _table_selection_sku(table_event, purchase_list)
-            if sku and sku != mutable_scope.highlight_product_id:
-                apply_filter_action(
-                    suggested_filters.ACTION_OPEN_SKU,
-                    {"product_id": sku},
-                    source="table_row",
-                )
-                st.rerun()
-
-    calc_payload = st.session_state.highlight_calc
-    if calc_payload and scope.highlight_product_id:
-        st.markdown("---")
-        st.markdown(f"### 🧮 {calc_payload.get('product_name', scope.highlight_product_id)}")
-        cols = st.columns(3)
-        cols[0].metric(
-            metrics.LABEL_RECOMMENDED_QTY,
-            calc_payload.get("recommended_quantity", 0),
-            help="Calculado en Python — no lo inventa el LLM",
-        )
-        ctx = calc_payload.get("context") or {}
-        cols[1].metric("Stock actual", ctx.get("current_stock", "—"))
-        cols[2].metric(
-            metrics.LABEL_REORDER_POINT,
-            ctx.get("reorder_point", "—"),
-            help=metrics.ROP_CAPTION,
-        )
-        render_calculation(calc_payload.get("calculation") or {})
-
-    mode_cols = st.columns([2, 2, 2])
     if explore_mode:
-        with mode_cols[0]:
-            if st.button(
-                "Listo — armar OC de este recorte",
-                type="primary",
-                key="enter_commit",
-            ):
-                _enter_commit_mode()
-                st.rerun()
-        with mode_cols[1]:
-            st.caption("Export disponible después de congelar el recorte.")
+        layout_explore.render_explore_panel(
+            scope=scope,
+            slice_data=slice_data,
+            analyze_data=analyze_data,
+            next_step=next_step,
+            interaction_events=st.session_state.interaction_events,
+            highlight_calc=st.session_state.highlight_calc,
+            analyst_enabled=st.session_state.analyst_enabled,
+            root_skus=st.session_state.root_skus,
+            on_option=_on_option,
+            on_prompt=_on_prompt,
+            on_reset=_on_reset,
+            on_category=_on_category,
+            on_coverage=_on_coverage,
+            on_sku=_on_sku,
+            on_enter_commit=_enter_commit_mode,
+            table_selection_sku=_table_selection_sku,
+            render_calculation=render_calculation,
+        )
     else:
-        with mode_cols[0]:
-            csv_bytes = fetch_purchase_csv(scope, limit=max(len(purchase_list), 1))
-            if csv_bytes and panel_modes.can_export(panel_mode):
-                st.download_button(
-                    f"📥 Exportar OC ({len(purchase_list)} SKUs)",
-                    data=csv_bytes,
-                    file_name="purchase_order.csv",
-                    mime="text/csv",
-                    key=f"dl-slice-{scope_svc.cache_key(scope)}",
-                    type="primary",
-                )
-        with mode_cols[1]:
-            if st.button("Volver a explorar", key="exit_commit"):
-                _exit_commit_mode()
-                st.rerun()
-        with mode_cols[2]:
-            if st.session_state.analyst_enabled and st.button("Reconfirmar con IA", key="reanalyze_commit"):
-                st.session_state.last_analyze_key = ""
-                st.rerun()
-
+        purchase_list = slice_data.get("purchase_list") or []
+        csv_bytes = fetch_purchase_csv(scope, limit=max(len(purchase_list), 1))
+        layout_commit.render_commit_panel(
+            scope=scope,
+            slice_data=slice_data,
+            analyze_data=analyze_data,
+            analyst_enabled=st.session_state.analyst_enabled,
+            csv_bytes=csv_bytes if panel_modes.can_export(panel_mode) else None,
+            on_exit=_exit_commit_mode,
+            on_reanalyze=lambda: st.session_state.__setitem__("last_analyze_key", ""),
+        )
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -772,6 +720,31 @@ def render_history() -> None:
                 st.markdown(msg["content"])
 
 
+def _apply_explore_chat(prompt: str, data: dict, *, is_refine: bool) -> None:
+    st.session_state.live_list_active = True
+    st.session_state.root_question = prompt
+    st.session_state.panel_mode = "explore"
+    st.session_state.frozen_scope = None
+    st.session_state.pending_unfreeze = None
+    if not is_refine:
+        st.session_state.interaction_events = []
+        st.session_state.root_skus = None
+    st.session_state.analyze_data = None
+    st.session_state.last_analyze_key = ""
+    st.session_state.guidance = data.get("guidance")
+    _append_event(
+        source="chat",
+        action="reset" if not is_refine else "add_filter",
+        label_human=prompt,
+    )
+    if data.get("scope"):
+        _set_scope(AnalyticalScope.model_validate(data["scope"]))
+    else:
+        _set_scope(scope_svc.reset())
+    st.session_state.highlight_calc = None
+    _autosave()
+
+
 def ask_api(prompt: str) -> dict:
     payload: dict = {"message": prompt}
     if st.session_state.live_list_active:
@@ -803,48 +776,66 @@ def ask_api(prompt: str) -> dict:
     return response.json()
 
 
+_hydrate_threads()
+
+if (
+    not st.session_state.messages
+    and not st.session_state.live_list_active
+    and not st.session_state.pending_prompt
+):
+    st.session_state.pending_prompt = ui_copy.DEFAULT_STARTUP_QUERY
+
+chrome.render_header(
+    st.session_state.panel_mode,
+    live=st.session_state.live_list_active,
+)
 render_history()
+
+if st.session_state.pending_unfreeze:
+    st.warning(ui_copy.UNFREEZE_WARNING)
+    if st.button(ui_copy.CONFIRM_UNFREEZE, key="confirm_unfreeze"):
+        payload = st.session_state.pending_unfreeze
+        interp = (payload.get("data") or {}).get("interpretation") or {}
+        _apply_explore_chat(
+            payload["prompt"],
+            payload["data"],
+            is_refine=interp.get("relation") == "refinement",
+        )
+        st.rerun()
+    if st.button(ui_copy.KEEP_COMMIT, key="keep_commit"):
+        st.session_state.pending_unfreeze = None
+        _autosave()
+        st.rerun()
 
 if st.session_state.live_list_active:
     with st.container():
-        st.markdown("---")
-        st.markdown("### 🎯 Panel de reposición")
         render_live_panel()
 
 with st.sidebar:
-    st.markdown("### 📦 SupplyMate")
-    st.markdown(
-        "1. Preguntá *¿Qué productos tengo que comprar?*  \n"
-        "2. Click **Riesgo de quiebre** → categoría → SKU  \n"
-        "3. **Armar OC** → exportar CSV  \n"
-        "Python calcula qty · LLM interpreta · clicks = 0 LLM"
+    store = _thread_store()
+    action = chrome.render_thread_rail(
+        store,
+        active_id=st.session_state.get("active_thread_id"),
     )
-    st.session_state.analyst_enabled = st.toggle(
-        "Analista IA",
-        value=st.session_state.analyst_enabled,
-    )
-    st.divider()
-    components.render_health_legend()
-    st.divider()
-    st.markdown("**SKU demo:** `6033436` → qty **173**")
-    if st.button("Limpiar chat", width="stretch"):
-        st.session_state.messages = []
-        st.session_state.pending_prompt = None
-        st.session_state.live_list_active = False
-        st.session_state.analytical_scope = scope_svc.reset().model_dump()
-        st.session_state.slice_data = None
-        st.session_state.highlight_calc = None
-        st.session_state.panel_mode = "explore"
-        st.session_state.frozen_scope = None
-        st.session_state.interaction_events = []
-        st.session_state.analyze_data = None
-        st.session_state.last_analyze_key = ""
-        st.session_state.guidance = None
-        st.rerun()
+    if action is not None:
+        if action.kind == "new_chat":
+            prepare_new_chat(store, st.session_state)
+            st.rerun()
+        elif action.kind == "select" and action.thread_id:
+            switch_thread(store, st.session_state, action.thread_id)
+            st.session_state["_use_snapshot_slice"] = True
+            st.rerun()
+        elif action.kind == "pin" and action.thread_id:
+            persist_active(store, st.session_state)
+            store.set_pinned(action.thread_id, True)
+            st.rerun()
+        elif action.kind == "unpin" and action.thread_id:
+            store.set_pinned(action.thread_id, False)
+            st.rerun()
+    st.caption(ui_copy.APP_TAGLINE)
 
-prompt = st.session_state.pending_prompt or st.chat_input(
-    "¿Cuánto debería pedir de…?"
-)
+with st.bottom:
+    prompt = st.session_state.pending_prompt or st.chat_input(ui_copy.CHAT_PLACEHOLDER)
 if st.session_state.pending_prompt:
     st.session_state.pending_prompt = None
 
@@ -862,24 +853,10 @@ if prompt:
         dash = data.get("dashboard")
         csv_bytes = None
 
+        skip_tail_append = False
         if mode in ("list", "explore"):
             interp = data.get("interpretation") or {}
             is_refine = interp.get("relation") == "refinement"
-            st.session_state.live_list_active = True
-            st.session_state.root_question = prompt
-            st.session_state.panel_mode = "explore"
-            st.session_state.frozen_scope = None
-            if not is_refine:
-                st.session_state.interaction_events = []
-            st.session_state.analyze_data = None
-            st.session_state.last_analyze_key = ""
-            st.session_state.guidance = data.get("guidance")
-            _append_event(source="chat", action="reset" if not is_refine else "add_filter", label_human=prompt)
-            if data.get("scope"):
-                _set_scope(AnalyticalScope.model_validate(data["scope"]))
-            else:
-                _set_scope(scope_svc.reset())
-            st.session_state.highlight_calc = None
             labels = interp.get("understood_labels") or []
             st.session_state.messages.append(
                 {
@@ -892,7 +869,13 @@ if prompt:
                     "guidance_options": interp.get("guidance_options") or [],
                 }
             )
-            st.rerun()
+            skip_tail_append = True
+            if chat_would_unfreeze(st.session_state.panel_mode, mode):
+                st.session_state.pending_unfreeze = {"prompt": prompt, "data": data}
+                st.markdown(data.get("answer", ""))
+            else:
+                _apply_explore_chat(prompt, data, is_refine=is_refine)
+                st.rerun()
         elif mode == "disambiguation":
             st.session_state.live_list_active = False
             interp = data.get("interpretation") or {}
@@ -929,9 +912,11 @@ if prompt:
             if calc:
                 render_calculation(calc)
 
-        st.markdown(data.get("answer", ""))
+        if not skip_tail_append:
+            st.markdown(data.get("answer", ""))
 
-    st.session_state.messages.append(
+    if not skip_tail_append:
+        st.session_state.messages.append(
         {
             "role": "assistant",
             "content": data.get("answer", ""),
@@ -955,3 +940,4 @@ if prompt:
             ),
         }
     )
+    _autosave()

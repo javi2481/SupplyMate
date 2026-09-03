@@ -1,19 +1,21 @@
-"""Analista IA card — explore insight and commit summary."""
+"""Lectura del recorte — explore insight and commit summary."""
 
 from __future__ import annotations
 
 import streamlit as st
 
+from ui.composition import copy as ui_copy
+
 
 def render_mode_badge(panel_mode: str) -> None:
     if panel_mode == "commit":
         st.markdown(
-            '<span class="sm-badge sm-badge-commit">Armar OC</span>',
+            f'<span class="sm-badge sm-badge-commit">{ui_copy.MODE_COMMIT}</span>',
             unsafe_allow_html=True,
         )
     else:
         st.markdown(
-            '<span class="sm-badge sm-badge-explore">Explorar</span>',
+            f'<span class="sm-badge sm-badge-explore">{ui_copy.MODE_EXPLORE}</span>',
             unsafe_allow_html=True,
         )
 
@@ -32,7 +34,8 @@ def render_analyst_card(
         st.markdown(evidence)
         return
 
-    st.markdown("### Analista IA")
+    st.markdown(f"### {ui_copy.ANALYST_TITLE}")
+    st.caption(ui_copy.ANALYST_CAPTION)
     if insight_source == "fallback":
         st.caption("No pudimos generar una explicación con IA; el análisis numérico sigue disponible.")
 
