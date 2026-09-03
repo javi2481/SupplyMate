@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 from collections.abc import Callable
 from typing import Any
 
@@ -29,25 +30,29 @@ def _kpi_icon(icon_key: str | None) -> str:
 
 def _kpi_card(label: str, value: str, accent: str, hint: str, icon_key: str | None = None) -> str:
     icon = _kpi_icon(icon_key)
+    safe_label = html.escape(str(label))
+    safe_value = html.escape(str(value))
+    safe_hint = html.escape(str(hint))
+    safe_accent = html.escape(str(accent), quote=True)
     return f"""
-<div class="sm-kpi" style="--sm-accent: {accent};">
+<div class="sm-kpi" style="--sm-accent: {safe_accent};">
   <div class="sm-kpi-top">
     {icon}
     <div class="sm-kpi-copy">
-      <div class="sm-kpi-label">{label}</div>
-      <div class="sm-kpi-value">{value}</div>
+      <div class="sm-kpi-label">{safe_label}</div>
+      <div class="sm-kpi-value">{safe_value}</div>
     </div>
   </div>
-  <div class="sm-kpi-hint">{hint}</div>
+  <div class="sm-kpi-hint">{safe_hint}</div>
 </div>
 """
 
 
 def render_kpi_cards(cards: list[KpiCard]) -> None:
-    html = "".join(
+    markup = "".join(
         _kpi_card(card.label, card.value, card.accent, card.hint, card.icon_key) for card in cards
     )
-    st.markdown(f'<div class="sm-kpi-row">{html}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="sm-kpi-row">{markup}</div>', unsafe_allow_html=True)
 
 
 def render_chart_card(title: str, *, caption: str | None = None, body: Callable[[], None]) -> None:

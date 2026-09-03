@@ -68,3 +68,10 @@ Evidencia: `.gstack-verify-final.png` (sesión local; no es artefacto de release
 
 - apply: done
 - verify: done (pytest + browser real)
+
+## Post-verify audit follow-up
+
+- Security review ([Review](153ffa56-2809-4736-bb4e-e64de28f12a9)): no medium+/critical findings; XSS surface reduced.
+- Bugbot ([Review](1652f4ba-8905-43d6-b900-c024e48bb100)): fixed misleading static coverage caption (rojo/verde vs brand-blue bars).
+- Hardening: `html.escape` on KPI HTML fields; `streamlit>=1.57.0,<2`; merge of live dashboards requires both `by_category` and `coverage`.
+- R1 risk ([Review](b35c9ed9-3e4c-46ca-919b-83b5625a26d7)): no merge-blocking risks.

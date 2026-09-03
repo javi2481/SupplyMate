@@ -118,8 +118,41 @@ def test_theme_sidebar_primary_is_not_danger():
 def test_streamlit_floor_supports_bottom():
     text = Path(__file__).resolve().parents[3].joinpath("pyproject.toml").read_text(encoding="utf-8")
     assert "streamlit>=" in text
-    # Floor must be at least 1.57 for public st.bottom.
-    assert "streamlit>=1.57.0" in text
+    # Floor must be at least 1.57 for public st.bottom; pin below next major.
+    assert "streamlit>=1.57.0,<2" in text
+
+
+def test_static_coverage_caption_matches_brand_blue_chart():
+    text = Path(__file__).resolve().parents[3].joinpath("ui", "streamlit_app.py").read_text(
+        encoding="utf-8"
+    )
+    assert "Rojo = pocos días de stock" not in text
+    assert "Barras en azul de marca" in text
+
+
+def test_merge_dashboard_requires_both_chart_series():
+    text = Path(__file__).resolve().parents[3].joinpath("ui", "streamlit_app.py").read_text(
+        encoding="utf-8"
+    )
+    assert 'dash.get("by_category") and dash.get("coverage")' in text
+
+
+def test_kpi_card_escapes_html_payload():
+    from ui import components
+
+    markup = components._kpi_card(
+        "<b>Productos</b>",
+        "<script>1</script>",
+        '"><img src=x onerror=alert(1)>',
+        "hint <i>x</i>",
+    )
+    assert "<b>Productos</b>" not in markup
+    assert "<script>" not in markup
+    assert "&lt;b&gt;Productos&lt;/b&gt;" in markup
+    assert "&lt;script&gt;" in markup
+    # Attribute breakout must not leave a raw quote before the attacker payload.
+    assert 'style="--sm-accent: &quot;' in markup
+    assert '"><img' not in markup
 
 
 def _chart_card_harness() -> None:

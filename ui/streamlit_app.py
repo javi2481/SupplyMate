@@ -298,7 +298,7 @@ def _slice_from_last_assistant_message() -> dict | None:
 
 def _dashboard_has_charts(dashboard: dict | None) -> bool:
     dash = dashboard or {}
-    return bool(dash.get("by_category") or dash.get("coverage"))
+    return bool(dash.get("by_category") and dash.get("coverage"))
 
 
 def _merge_dashboard_charts(slice_data: dict, messages: list[dict]) -> dict:
@@ -557,7 +557,7 @@ def render_inventory_dashboard_static(dash: dict | None, purchase_list: list[dic
             )
     with right:
         st.markdown(f"**Distribución de {metrics.LABEL_COVERAGE}**")
-        st.caption("Rojo = pocos días de stock · Verde = holgado")
+        st.caption("Barras en azul de marca · la franja de cobertura arriba conserva la urgencia")
         if coverage_rows:
             st.altair_chart(
                 charts.histogram(
