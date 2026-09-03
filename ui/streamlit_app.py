@@ -575,7 +575,6 @@ def render_inventory_dashboard_static(dash: dict | None, purchase_list: list[dic
 
 
 def render_live_panel() -> None:
-    st.markdown('<div class="sm-panel">', unsafe_allow_html=True)
     panel_mode = st.session_state.panel_mode
     explore_mode = panel_mode == "explore"
     scope = _effective_panel_scope()
@@ -586,7 +585,6 @@ def render_live_panel() -> None:
         slice_data = _resolve_live_slice(scope)
     if slice_data is None:
         st.error(f"No pude conectar con la API en `{API_URL}`. Arrancá uvicorn primero.")
-        st.markdown("</div>", unsafe_allow_html=True)
         return
     st.session_state.slice_data = slice_data
     st.session_state.guidance = slice_data.get("guidance")
@@ -693,7 +691,6 @@ def render_live_panel() -> None:
             on_exit=_exit_commit_mode,
             on_reanalyze=lambda: st.session_state.__setitem__("last_analyze_key", ""),
         )
-    st.markdown("</div>", unsafe_allow_html=True)
     _autosave()
 
 
@@ -967,12 +964,6 @@ if st.session_state.live_list_active:
         render_live_panel()
 
 with st.bottom:
-    st.markdown(
-        "<div class='sm-composer'><div class='sm-composer-shell'>"
-        "<span class='sm-composer-clip' aria-hidden='true'>+</span>"
-        "</div></div>",
-        unsafe_allow_html=True,
-    )
     prompt = st.session_state.pending_prompt or st.chat_input(ui_copy.CHAT_PLACEHOLDER)
 if st.session_state.pending_prompt:
     st.session_state.pending_prompt = None

@@ -115,8 +115,13 @@ def test_visual_shell_chart_card_wrapper_markup():
     at.run(timeout=15)
     assert not at.exception
     markdown = [str(item.value) for item in at.markdown]
-    assert any("sm-chart-card" in item for item in markdown)
+    assert not any(
+        item.strip() in ("<div class='sm-chart-card'>", '<div class="sm-chart-card">')
+        for item in markdown
+    )
+    assert not any(item.strip() == "</div>" for item in markdown)
     assert any("Distribución de cobertura" in item for item in markdown)
+    assert any("Click en un bucket para filtrar" in str(c.value) for c in at.caption)
 
 
 def test_streamlit_app_renders_composer_shell(tmp_path, monkeypatch):
@@ -129,7 +134,19 @@ def test_streamlit_app_renders_composer_shell(tmp_path, monkeypatch):
     at = AppTest.from_file(str(script))
     at.session_state["pending_prompt"] = None
     at.session_state["live_list_active"] = False
+    at.session_state["messages"] = [
+        {"role": "assistant", "content": "Listo para explorar.", "mode": "error"}
+    ]
     at.run(timeout=20)
     assert not at.exception
     markdown = [str(item.value) for item in at.markdown]
-    assert any("sm-composer" in item for item in markdown)
+    assert not any(
+        item.strip().startswith(("<div class='sm-composer", '<div class="sm-composer'))
+        for item in markdown
+    )
+    assert not any(
+        item.strip() in ("<div class='sm-panel'>", '<div class="sm-panel">')
+        for item in markdown
+    )
+    assert len(at.chat_input) >= 1
+    assert at.chat_input[0].placeholder == ui_copy.CHAT_PLACEHOLDER

@@ -51,12 +51,11 @@ def render_kpi_cards(cards: list[KpiCard]) -> None:
 
 
 def render_chart_card(title: str, *, caption: str | None = None, body: Callable[[], None]) -> None:
-    st.markdown("<div class='sm-chart-card'>", unsafe_allow_html=True)
-    st.markdown(f"<div class='sm-chart-card-title'>{title}</div>", unsafe_allow_html=True)
-    if caption:
-        st.caption(caption)
-    body()
-    st.markdown("</div>", unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown(title)
+        if caption:
+            st.caption(caption)
+        body()
 
 
 def render_kpi_strip(dash: dict | None, *, purchase_lines: int | None = None) -> None:

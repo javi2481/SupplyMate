@@ -179,3 +179,18 @@ def test_sidebar_search_shows_no_results_message(tmp_path: Path):
     markdown = [str(item.value) for item in at.markdown]
     assert any(ui_copy.SEARCH_NO_RESULTS in item for item in markdown)
     assert not any(ui_copy.PINNED_SECTION in item for item in markdown)
+
+
+def test_rail_rows_do_not_use_split_html_wrappers(tmp_path: Path):
+    from streamlit.testing.v1 import AppTest
+
+    path = tmp_path / "threads.json"
+    _seed_store(path)
+    at = AppTest.from_function(_rail_harness)
+    at.session_state["thread_store_path"] = str(path)
+    at.run(timeout=15)
+    assert not at.exception
+    markdown = [str(item.value) for item in at.markdown]
+    assert not any("rail-row" in item for item in markdown)
+    assert not any(item.strip() in {"</div>", "<div>"} for item in markdown)
+    assert any(b.key and "hist-open-" in b.key for b in at.button)

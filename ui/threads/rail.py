@@ -106,19 +106,14 @@ def _render_thread_rows(threads, *, active_id: str | None, prefix: str) -> RailA
     clicked: RailAction | None = None
     for thread in threads:
         is_active = thread.id == active_id
-        row_class = "rail-row rail-row-active" if is_active else "rail-row"
-        st.markdown(f"<div class='{row_class}'>", unsafe_allow_html=True)
-        if st.button(
-            thread.title,
-            key=f"{prefix}-open-{thread.id}",
-            use_container_width=True,
-            type="secondary",
-        ):
-            clicked = RailAction("select", thread.id)
-        if thread.subtitle:
-            st.markdown(
-                f"<p class='rail-subtitle'>{thread.subtitle}</p>",
-                unsafe_allow_html=True,
-            )
-        st.markdown("</div>", unsafe_allow_html=True)
+        with st.container(border=is_active):
+            if st.button(
+                thread.title,
+                key=f"{prefix}-open-{thread.id}",
+                use_container_width=True,
+                type="secondary",
+            ):
+                clicked = RailAction("select", thread.id)
+            if thread.subtitle:
+                st.caption(thread.subtitle)
     return clicked
