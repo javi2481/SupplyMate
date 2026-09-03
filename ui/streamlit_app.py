@@ -460,16 +460,19 @@ def render_live_panel() -> None:
             guide_cols = st.columns(min(len(options), 4))
             for i, opt in enumerate(options[:6]):
                 chip_payload = chips[i] if i < len(chips) else None
-                if guide_cols[i % len(guide_cols)].button(
-                    opt,
-                    key=f"guide-{scope_svc.cache_key(scope)}-{opt}",
-                    type="secondary",
-                ):
-                    if chip_payload:
-                        apply_guidance_chip_action(chip_payload)
-                    else:
-                        st.session_state.pending_prompt = opt
-                    st.rerun()
+                with guide_cols[i % len(guide_cols)]:
+                    if st.button(
+                        opt,
+                        key=f"guide-{scope_svc.cache_key(scope)}-{opt}",
+                        type="secondary",
+                    ):
+                        if chip_payload:
+                            apply_guidance_chip_action(chip_payload)
+                        else:
+                            st.session_state.pending_prompt = opt
+                        st.rerun()
+                    if chip_payload and chip_payload.get("caption"):
+                        st.caption(chip_payload["caption"])
     dash = slice_data.get("dashboard") or {}
     purchase_list = slice_data.get("purchase_list") or []
     evidence = slice_data.get("evidence") or ""

@@ -22,6 +22,7 @@ class MissionEdge:
     mission: str
     reason: str
     label: str
+    reason_label: str = ""
 
 
 @lru_cache(maxsize=1)
@@ -40,6 +41,7 @@ def load_missions() -> tuple[MissionEdge, ...]:
                     mission=(row.get("mission") or "").strip(),
                     reason=(row.get("reason") or "").strip(),
                     label=(row.get("label") or "").strip(),
+                    reason_label=(row.get("reason_label") or "").strip(),
                 )
             )
     return tuple(edges)

@@ -5,13 +5,12 @@ import re
 from app.intents import is_purchase_list_query, is_top_categories_query
 from app.models import AnalyticalScope, BusinessIntent, QueryInterpretation, QueryRelation, Reference
 from app.products import NUMERIC_CODE_RE, message_looks_like_sku
-from app.reference_resolver import normalize_text, _QUERY_STOPWORDS
+from app.reference_resolver import normalize_text, _QUERY_STOPWORDS, SIZE_TOKEN_RE
 
 _PURCHASE_VERB_RE = re.compile(r"\b(compr\w*|ped\w*|repon\w*)\b")
 _QUANTITY_RE = re.compile(r"\bcuant[oa]s?\b")
 _DISCOURSE_RE = re.compile(r"\bme\s+refer\w*\s+(a\s+)?")
 _TALLE_RE = re.compile(r"\b(de\s+)?(talle|talla)\b")
-_SIZE_TOKEN_RE = re.compile(r"^x{1,3}g$")
 _REFINEMENT_RE = re.compile(
     r"\b(me\s+refer\w*|quise\s+decir|hablo\s+de|los\s+de|las\s+de|"
     r"el\s+de|la\s+de|s[oó]lo|solamente|pero\b|y\s+los|y\s+las)\b"
@@ -35,7 +34,7 @@ def _has_size_or_refinement(message: str, refs: list[Reference]) -> bool:
     if _DISCOURSE_RE.search(msg) or _REFINEMENT_RE.search(msg):
         return True
     for ref in refs:
-        if any(_SIZE_TOKEN_RE.fullmatch(t) for t in normalize_text(ref.text).split()):
+        if any(SIZE_TOKEN_RE.fullmatch(t) for t in normalize_text(ref.text).split()):
             return True
     return False
 
@@ -62,7 +61,7 @@ def classify_relation(message: str, previous_scope: AnalyticalScope | None) -> Q
     if _REFINEMENT_RE.search(msg):
         return "refinement"
     tokens = [t for t in msg.split() if t not in _QUERY_STOPWORDS and len(t) >= 2]
-    if any(_SIZE_TOKEN_RE.fullmatch(t) for t in tokens):
+    if any(SIZE_TOKEN_RE.fullmatch(t) for t in tokens):
         return "refinement"
     if msg in {"todos", "todo", "todas"}:
         return "refinement"
@@ -127,7 +126,7 @@ def _split_reference_phrases(message: str) -> list[str]:
         part_tokens = [
             t
             for t in part.split()
-            if t not in _QUERY_STOPWORDS and (len(t) >= 3 or _SIZE_TOKEN_RE.fullmatch(t))
+            if t not in _QUERY_STOPWORDS and (len(t) >= 3 or SIZE_TOKEN_RE.fullmatch(t))
         ]
         if part_tokens:
             refs.append(" ".join(part_tokens))

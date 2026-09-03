@@ -5,19 +5,79 @@ import pytest
 from app.guidance import pick_next_question
 from app.guidance_chips import apply_guidance_chip, chip_for_subcategory
 from app.models import AnalyticalScope, GuidanceChip
-from app.missions import is_complement_target, load_missions
+from app.missions import is_complement_target, load_missions, mission_neighbors
+from app.reference_resolver import SIZE_TOKEN_RE
 from app.scope_builder import promote_new_query_if_needed
 from app.slice_facets import list_slice_facets
 from app.models import QueryInterpretation, ResolvedReference
 from app.services import catalog_service
 from app.agent import run_supplymate, run_apply_chip
+import app.guidance_tokens as guidance_tokens_mod
+import app.query_interpretation as query_interpretation_mod
 
 
 def test_missions_csv_loads():
+    load_missions.cache_clear()
     edges = load_missions()
     assert len(edges) >= 3
     labels = {e.label for e in edges}
     assert "Toallitas húmedas" in labels
+
+
+def test_missions_load_reason_label():
+    load_missions.cache_clear()
+    toallitas = next(e for e in load_missions() if "Toallitas" in e.label)
+    assert toallitas.reason == "higiene"
+    assert "higiene del bebé" in toallitas.reason_label
+
+
+def test_mission_neighbors_requires_from_group_in_scope():
+    load_missions.cache_clear()
+    assert mission_neighbors(AnalyticalScope(categories=["Pañales"])) == []
+    neighbors = mission_neighbors(AnalyticalScope(subcategories=["Pañales P/Bebes"]))
+    assert len(neighbors) >= 1
+    assert any("Toallitas" in e.label for e in neighbors)
+
+
+def test_size_token_re_single_source():
+    assert query_interpretation_mod.SIZE_TOKEN_RE is SIZE_TOKEN_RE
+    assert guidance_tokens_mod.SIZE_TOKEN_RE is SIZE_TOKEN_RE
+
+
+def test_baby_adult_question_does_not_say_panales():
+    scope = AnalyticalScope(categories=["Pañales"])
+    slice_data = catalog_service.replenishment_slice(scope, limit=25)
+    facets = list_slice_facets(scope, slice_data.dashboard, slice_data.purchase_list)
+    guide = pick_next_question(
+        scope,
+        facets,
+        purchase_items=slice_data.purchase_list,
+        dashboard=slice_data.dashboard,
+    )
+    assert guide.action == "ask_clarification"
+    assert " de pañales" not in guide.question.lower()
+    assert "Bebé o adulto" in guide.question
+
+
+def test_complement_guidance_includes_reason_label():
+    load_missions.cache_clear()
+    scope = AnalyticalScope(
+        subcategories=["Pañales P/Bebes"],
+        name_tokens=["xxg"],
+        guidance_dismissed=["stockout", "size"],
+    )
+    slice_data = catalog_service.replenishment_slice(scope, limit=25)
+    facets = list_slice_facets(scope, slice_data.dashboard, slice_data.purchase_list)
+    guide = pick_next_question(
+        scope,
+        facets,
+        purchase_items=slice_data.purchase_list,
+        dashboard=slice_data.dashboard,
+    )
+    assert guide.reason == "mission_complement"
+    assert "higiene del bebé" in guide.question
+    complement_chip = next(c for c in guide.chips if "Toallitas" in c.label)
+    assert complement_chip.caption == "Complemento habitual para higiene del bebé"
 
 
 def test_promote_toallitas_is_not_new_query_on_bebe_scope():

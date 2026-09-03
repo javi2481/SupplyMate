@@ -1,0 +1,4 @@
+previous_message,followup,expected_relation,must_keep_scope_dim,must_keep_scope_value,must_add_name_token
+¿Cuántos pañales tengo que comprar?,me refiero a los XXG,refinement,category,Pañal,xxg
+¿Cuántos pañales tengo que comprar?,solo XXG,refinement,category,Pañal,xxg
+¿Cuántos pañales tengo que comprar?,y Dove?,refinement,category,Pañal,dove

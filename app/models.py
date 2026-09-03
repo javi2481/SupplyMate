@@ -30,6 +30,7 @@ class GuidanceChip(BaseModel):
     label: str
     action: str
     args: dict[str, str] = Field(default_factory=dict)
+    caption: str = ""
     preview_skus: int = 0
     preview_qty: int = 0
     preview_value: float | None = None

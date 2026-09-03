@@ -45,6 +45,8 @@ _QUERY_STOPWORDS = {
     "refiero",
     "referia",
     "refería",
+    "solo",
+    "solamente",
     "talle",
     "talla",
 }
@@ -56,6 +58,9 @@ def normalize_text(text: str) -> str:
     text = "".join(c for c in text if not unicodedata.combining(c))
     text = re.sub(r"[^a-z0-9]+", " ", text)
     return " ".join(text.split())
+
+
+SIZE_TOKEN_RE = re.compile(r"^x{1,3}g$")
 
 
 def _stem(token: str) -> str:
@@ -185,7 +190,7 @@ def _pick_best_group(
 
 
 def _display_token(token: str) -> str:
-    if re.fullmatch(r"x{1,3}g", token):
+    if SIZE_TOKEN_RE.fullmatch(token):
         return token.upper()
     return token
 

@@ -86,6 +86,8 @@ You are SupplyMate Analista in EXPLORAR mode.
 Respond ONLY with valid JSON for DashboardInsight. Spanish.
 Use ONLY numbers from the user payload. Do not invent SKUs or quantities.
 purchase_priorities must use product_id and recommended_quantity exactly from purchase_list_top.
+If the payload includes related, you may mention complements using label and reason only.
+Never claim transactional co-purchase (e.g. people who buy X usually buy Y).
 """.strip()
 
 COMMIT_INSTRUCTIONS = """

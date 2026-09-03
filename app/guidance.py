@@ -112,11 +112,13 @@ def pick_next_question(
             f"Hay **{facets.sku_count} SKUs** en este recorte. "
             "Para no mezclar grupos, ¿cuál querés analizar primero?"
         )
-        if any("bebe" in normalize_text(n) for n, _ in subcats):
-            question = (
-                f"Hay **{facets.sku_count} SKUs** de pañales. "
-                "¿Bebé o adulto?"
-            )
+        names_norm = [normalize_text(n) for n, _ in subcats]
+        if (
+            len(subcats) == 2
+            and any("bebe" in n for n in names_norm)
+            and any("adult" in n for n in names_norm)
+        ):
+            question = f"Hay **{facets.sku_count} SKUs**. ¿Bebé o adulto?"
         return GuidanceDecision(
             action="ask_clarification",
             reason="multiple_subcategories",
@@ -212,8 +214,12 @@ def pick_next_question(
 
 def _chip_for_mission(edge: MissionEdge) -> GuidanceChip:
     if edge.to_dimension == "name_token":
-        return chip_for_name_token(edge.label, edge.to_group, union=True)
-    return chip_for_subcategory(edge.label, edge.to_group, union=True)
+        chip = chip_for_name_token(edge.label, edge.to_group, union=True)
+    else:
+        chip = chip_for_subcategory(edge.label, edge.to_group, union=True)
+    if edge.reason_label:
+        chip = chip.model_copy(update={"caption": edge.reason_label})
+    return chip
 
 
 def preview_union(scope: AnalyticalScope, edge: MissionEdge) -> dict[str, float | int]:
@@ -238,11 +244,14 @@ def preview_union(scope: AnalyticalScope, edge: MissionEdge) -> dict[str, float 
 
 
 def _complement_question(edge: MissionEdge, preview: dict | None) -> str:
+    reason_suffix = f" {edge.reason_label}." if edge.reason_label else ""
     if preview and preview.get("qty"):
         return (
-            f"¿Sumamos también **{edge.label}**? "
+            f"¿Sumamos también **{edge.label}**?{reason_suffix} "
             f"Serían ~**{int(preview['qty'])}** u. en ese grupo."
         )
+    if edge.reason_label:
+        return f"¿Querés sumar **{edge.label}** a este recorte? {edge.reason_label}"
     return f"¿Querés sumar **{edge.label}** a este recorte?"
 
 

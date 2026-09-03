@@ -58,7 +58,7 @@ def list_slice_facets(
         and stockout < sku_count
     )
 
-    neighbors = mission_neighbors(scope) if _mission_anchor_ready(scope) else []
+    neighbors = mission_neighbors(scope)
 
     return SliceFacets(
         sku_count=sku_count,
@@ -69,9 +69,3 @@ def list_slice_facets(
         stockout_subset=stockout_subset,
         mission_neighbors=neighbors,
     )
-
-
-def _mission_anchor_ready(scope: AnalyticalScope) -> bool:
-    if "Pañales P/Bebes" in scope.subcategories:
-        return True
-    return False

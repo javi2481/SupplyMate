@@ -5,3 +5,6 @@ message,intent,references,confidence,expected_mode
 ¿Cuánto pedir de 6033436?,single_sku,6033436,high,single
 ¿Qué jabones tienen riesgo?,inventory_risk,jabones,high,explore
 ¿Cuánto cuidado debo comprar?,replenishment,cuidado,low,disambiguation
+cuantos jabones debo pedir,replenishment,jabones,high,explore
+que jabones debo comprar,replenishment,jabones,high,explore
+cuanto debo comprar de jabones y shampoo,replenishment,jabones|shampoo,high,explore

@@ -50,3 +50,23 @@ def test_prompt_hash_stable():
     b = prompt_compiler.prompt_hash("same")
     assert a == b
     assert a != prompt_compiler.prompt_hash("other")
+
+
+def test_compile_explore_prompt_includes_related_for_mission_scope():
+    from app.missions import load_missions
+
+    load_missions.cache_clear()
+    scope = AnalyticalScope(subcategories=["Pañales P/Bebes"], name_tokens=["xxg"])
+    slice_data = catalog_service.replenishment_slice(scope, limit=5)
+    root_dash, _ = catalog_service.chat_dashboard(limit=1, scope=AnalyticalScope())
+    prompt = prompt_compiler.compile_analyze_prompt(
+        mode="explore",
+        root_question="¿Cuántos pañales?",
+        events=[],
+        slice_data=slice_data,
+        root_dashboard=root_dash,
+    )
+    assert '"related"' in prompt
+    assert "Toallitas húmedas" in prompt
+    assert "higiene" in prompt
+    assert "co-ocurrencia transaccional" in prompt

@@ -13,6 +13,7 @@ from app.models import (
     PurchaseListItem,
     ReplenishmentSlice,
 )
+from app.missions import mission_neighbors
 from app.services import metrics
 
 
@@ -60,6 +61,13 @@ def _delta_vs_root(slice_dash: InventoryDashboard, root_dash: InventoryDashboard
     }
 
 
+def _related_complements(scope: AnalyticalScope) -> list[dict[str, str]]:
+    return [
+        {"label": edge.label, "reason": edge.reason}
+        for edge in mission_neighbors(scope)
+    ]
+
+
 def compile_analyze_prompt(
     *,
     mode: PanelMode,
@@ -76,6 +84,9 @@ def compile_analyze_prompt(
         "evidence": slice_data.evidence,
         "scope": slice_data.scope.model_dump(),
     }
+    related = _related_complements(slice_data.scope)
+    if related:
+        payload["related"] = related
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
 
     if mode == "commit":
@@ -89,6 +100,8 @@ def compile_analyze_prompt(
         task = (
             "Modo EXPLORAR (Ask). Explicá por qué este recorte importa vs inventario total. "
             "Priorizá qué comprar primero usando solo SKUs del purchase_list_top. "
+            "Si el payload incluye related, podés mencionar esos complementos usando label y reason. "
+            "NO afirmes co-ocurrencia transaccional (ej. 'quienes compran X suelen comprar Y'). "
             "Sugerí preguntas siguientes y hints de navegación. "
             "Respondé SOLO con JSON válido matching DashboardInsight: "
             "panel_title, summary, bullets, purchase_priorities, navigation_hints, "

@@ -1,37 +1,37 @@
 # Graph Report - SupplyMate  (2026-09-02)
 
 ## Corpus Check
-- 145 files · ~56,294 words
+- 152 files · ~57,970 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1164 nodes · 2546 edges · 99 communities (85 shown, 9 thin omitted)
-- Extraction: 93% EXTRACTED · 7% INFERRED · 0% AMBIGUOUS · INFERRED: 186 edges (avg confidence: 0.95)
+- 1215 nodes · 2747 edges · 101 communities (87 shown, 9 thin omitted)
+- Extraction: 93% EXTRACTED · 7% INFERRED · 0% AMBIGUOUS · INFERRED: 193 edges (avg confidence: 0.95)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `d051a53b`
+- Built from commit: `127729f5`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- products.py
-- dashboard.py
+- catalog_service.py
 - run_supplymate
-- api.py
-- models.py
-- config.py
+- agent.py
+- AnalyticalScope
+- ProductNotFoundError
+- test_security.py
 - bug_report.md
 - test_api.py
 - is_purchase_list_query
-- AnalyticalScope
+- streamlit_app.py
 - export_catalog_csvs.py
 - app/__init__.py
 - supplymate
 - graphify
 - Traceability matrix — active changes
 - SupplyMate
-- agent.py
+- insight_validator.py
 - components.py
 - charts.py
 - Requirements
@@ -60,13 +60,13 @@
 - llm-drilldown-insights/tasks.md
 - llm-drilldown-insights/verify-report.md
 - smoke_api.sh script
-- guidance.py
+- test_guidance_plan.py
 - store.py
 - reference_resolver.py
-- catalog_service.py
+- api.py
 - ADDED Requirements
 - ADDED Requirements
-- test_tools.py
+- resolve_product_id
 - Requirements
 - ADDED Requirements
 - Proposal: dual-surface-analytics
@@ -96,31 +96,33 @@
 - Skill Registry
 - Catalog integration — extends mvp-core with unified master + REST
 - classify_intent
-- calculate_replenishment
+- models.py
 - Tasks: natural-query-interpretation
-- get_replenishment_recommendation
-- test_security.py
+- config.py
+- ChatResponse
 - Proposal: natural-query-interpretation
-- BaseModel
+- safe_errors.py
+- products.py
 - test_analyze_api.py
-- _run_explore
 - SecurityHeadersMiddleware
 - Verify report — interactive-drilldown
 - Verify: natural-query-interpretation
-- ProductNotFoundError
-- safe_errors.py
+- AnalyzeResponse
+- test_api_contract.py
+- get_inventory
+- test_golden_intents.py
 
 ## God Nodes (most connected - your core abstractions)
-1. `AnalyticalScope` - 126 edges
-2. `run_supplymate()` - 53 edges
-3. `get_store()` - 34 edges
-4. `ProductNotFoundError` - 29 edges
-5. `run_analyze()` - 28 edges
-6. `ProductMaster` - 28 edges
-7. `PurchaseListItem` - 27 edges
-8. `interpret_query_rules()` - 26 edges
-9. `InventoryDashboard` - 25 edges
-10. `normalize_text()` - 24 edges
+1. `AnalyticalScope` - 148 edges
+2. `run_supplymate()` - 55 edges
+3. `interpret_query_rules()` - 39 edges
+4. `get_store()` - 36 edges
+5. `ProductNotFoundError` - 29 edges
+6. `run_analyze()` - 28 edges
+7. `ProductMaster` - 28 edges
+8. `replenishment_slice()` - 28 edges
+9. `PurchaseListItem` - 27 edges
+10. `calculate_replenishment()` - 27 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `apply_guidance_chip_action()` --uses--> `GuidanceChip`  [INFERRED]
@@ -131,37 +133,37 @@
   tests/test_analyze_api.py → app/models.py
 - `test_analyze_invalid_llm_json_fallback()` --calls--> `AnalyticalScope`  [EXTRACTED]
   tests/test_analyze_api.py → app/models.py
-- `test_mamaderas_union_is_small_group()` --uses--> `AnalyticalScope`  [INFERRED]
-  tests/test_guidance_plan.py → app/models.py
+- `test_contract_analyze_response_schema()` --calls--> `AnalyticalScope`  [EXTRACTED]
+  tests/test_api_contract.py → app/models.py
 
 ## Import Cycles
 - None detected.
 
-## Communities (99 total, 9 thin omitted)
+## Communities (101 total, 9 thin omitted)
 
-### Community 0 - "products.py"
-Cohesion: 0.24
-Nodes (12): clear_product_caches(), _lexical_resolve(), load_products(), _normalize(), Path, Extract a product reference from a natural-language message., Resolve free-text to product_id: catalog code, barcode, or name., resolve_from_message() (+4 more)
+### Community 0 - "catalog_service.py"
+Cohesion: 0.06
+Nodes (67): _run_top_categories(), CategoryBar, CoverageBar, InteractionEvent, InventoryDashboard, PurchaseListItem, SuggestedFilter, name_has_token() (+59 more)
 
-### Community 1 - "dashboard.py"
-Cohesion: 0.17
-Nodes (23): CategorySalesBar, coverage_bucket(), filter_rows(), from_rows(), purchase_items(), Inventory dashboard for the Streamlit chat — same metrics as Python…, _row_category(), _row_subcategory() (+15 more)
-
-### Community 2 - "run_supplymate"
+### Community 1 - "run_supplymate"
 Cohesion: 0.27
 Nodes (18): Route by interpreted intent + catalog resolution, then deterministic Python., run_supplymate(), asyncio, test_explain_orphan_falls_back_to_deterministic_text(), test_fallback_hydrates_when_agent_skips_tools(), test_llm_classifies_sales_paraphrase(), test_llm_classifies_stockout_paraphrase_as_purchase_list(), test_llm_unknown_does_not_force_a_random_sku() (+10 more)
 
-### Community 3 - "api.py"
-Cohesion: 0.19
-Nodes (17): get_product(), get_replenishment(), health(), inventory_dashboard(), purchase_list(), purchase_list_csv(), Response, replenishment_slice() (+9 more)
+### Community 2 - "agent.py"
+Cohesion: 0.20
+Nodes (20): build_commit_agent(), build_explain_agent(), build_insight_agent(), build_supply_agent(), _fallback_analyze_response(), get_model(), _hydrate_context(), _parse_json_output() (+12 more)
 
-### Community 4 - "models.py"
-Cohesion: 0.09
-Nodes (51): _run_purchase_list(), CategoryBar, CommitSummary, CoverageBar, DashboardInsight, InteractionEvent, InventoryDashboard, PurchaseListItem (+43 more)
+### Community 3 - "AnalyticalScope"
+Cohesion: 0.07
+Nodes (71): AnalyticalScope, QueryInterpretation, ResolutionResult, ResolvedReference, message_looks_like_sku(), True when the text contains a catalog-style numeric code (5+ digits)., classify_relation(), _extract_entity_tokens() (+63 more)
 
-### Community 5 - "config.py"
+### Community 4 - "ProductNotFoundError"
+Cohesion: 0.12
+Nodes (22): get_replenishment(), ProductNotFoundError, ReplenishmentRecommendation, format_purchase_list_answer(), get_replenishment_by_query(), get_replenishment_recommendation(), safe_resolve(), Exception (+14 more)
+
+### Community 5 - "test_security.py"
 Cohesion: 0.23
-Nodes (10): effective_analyze_rate_limit(), effective_chat_rate_limit(), is_test_env(), ChatRateLimitMiddleware, BaseHTTPMiddleware, Request, Response, Rate limit POST /chat and POST /replenishment/analyze by client IP. (+2 more)
+Nodes (7): In-memory rate limiter for POST /chat., reset_rate_limits(), _clean_rate_limits(), _minimal_chat(), fixture, test_chat_rate_limit_returns_429(), test_health_not_rate_limited()
 
 ### Community 6 - "bug_report.md"
 Cohesion: 0.11
@@ -169,15 +171,15 @@ Nodes (16): Auditoría OSSTMM lite — Sección C (Internet), C — Seguridad en
 
 ### Community 7 - "test_api.py"
 Cohesion: 0.09
-Nodes (3): ChatResponse, _sample_chat_response(), test_chat_success()
+Nodes (3): Catalog IDs used across tests (must exist in data/)., _sample_chat_response(), test_chat_success()
 
 ### Community 8 - "is_purchase_list_query"
-Cohesion: 0.16
-Nodes (22): is_purchase_list_query(), is_top_categories_query(), match_rule_intent(), _normalize(), parse_intent_label(), Intent, True when the user asks for a replenishment list or inventory dashboard., Cheap regex router. None means the concept was not recognized. (+14 more)
+Cohesion: 0.24
+Nodes (16): _extract_product_id(), is_purchase_list_query(), is_top_categories_query(), match_rule_intent(), _normalize(), parse_intent_label(), Intent, True when the user asks for a replenishment list or inventory dashboard. (+8 more)
 
-### Community 9 - "AnalyticalScope"
-Cohesion: 0.08
-Nodes (60): AnalyticalScope, can_export(), effective_scope(), PanelMode, Ask/Agent panel modes — pure helpers for explore vs commit., Filter dimensions (excluding highlight) must match when entering commit., scopes_match_filters(), validate_commit_request() (+52 more)
+### Community 9 - "streamlit_app.py"
+Cohesion: 0.09
+Nodes (52): add(), cache_key(), clear_highlight(), dismiss_guidance(), empty_scope(), Analytical scope: deterministic drill-down filters., remove(), reset() (+44 more)
 
 ### Community 10 - "export_catalog_csvs.py"
 Cohesion: 0.48
@@ -191,9 +193,9 @@ Nodes (15): dual-surface / metrics, dual-surface / purchase-export, dual-surface
 Cohesion: 0.12
 Nodes (17): Alcance, Calidad y mantenimiento, Cómo funciona, Docker (API), Documentación / SDD, El flujo (menos de 2 minutos), Flujo en terminal, Inicio rápido (+9 more)
 
-### Community 18 - "agent.py"
-Cohesion: 0.17
-Nodes (24): build_commit_agent(), build_explain_agent(), build_insight_agent(), build_supply_agent(), _extract_product_id(), _fallback_analyze_response(), get_model(), _parse_json_output() (+16 more)
+### Community 18 - "insight_validator.py"
+Cohesion: 0.20
+Nodes (24): CommitSummary, DashboardInsight, PurchasePriority, ReplenishmentSlice, _add_number(), _allowed_numbers(), allowed_numbers_from_mapping(), _items_by_id() (+16 more)
 
 ### Community 19 - "components.py"
 Cohesion: 0.20
@@ -283,21 +285,21 @@ Nodes (3): Deployment spec, Docker, Smoke script
 Cohesion: 0.50
 Nodes (3): Ask / Agent, Design: llm-drilldown-insights, Flow
 
-### Community 48 - "guidance.py"
-Cohesion: 0.09
-Nodes (53): _labels_from_scope(), run_apply_chip(), _chip_for_mission(), apply_guidance_chip(), chip_for_draft_oc(), chip_for_name_token(), chip_for_stockout(), chip_for_subcategory() (+45 more)
+### Community 48 - "test_guidance_plan.py"
+Cohesion: 0.08
+Nodes (57): _labels_from_scope(), run_apply_chip(), _chip_for_mission(), apply_guidance_chip(), chip_for_draft_oc(), chip_for_name_token(), chip_for_stockout(), chip_for_subcategory() (+49 more)
 
 ### Community 50 - "store.py"
 Cohesion: 0.08
 Nodes (47): ProductMaster, ReplenishmentResult, analytics_rows(), days_of_supply(), estimated_purchase_value(), health_bucket(), metric_prompt_block(), MetricContract (+39 more)
 
 ### Community 51 - "reference_resolver.py"
-Cohesion: 0.08
-Nodes (64): QueryInterpretation, Reference, ResolutionResult, ResolvedReference, message_looks_like_sku(), True when the text contains a catalog-style numeric code (5+ digits)., classify_relation(), _extract_entity_tokens() (+56 more)
+Cohesion: 0.10
+Nodes (41): Reference, _display_token(), _group_from_name_hits(), _label_for_group(), _match_score(), _pick_best_group(), _product_matches_tokens(), _qty_for_skus() (+33 more)
 
-### Community 52 - "catalog_service.py"
-Cohesion: 0.13
-Nodes (23): _run_top_categories(), ProductContext, ReplenishmentRecommendation, chat_dashboard(), format_purchase_list_answer(), format_sales_answer(), format_single_product_answer(), format_slice_evidence() (+15 more)
+### Community 52 - "api.py"
+Cohesion: 0.20
+Nodes (16): get_product(), health(), inventory_dashboard(), purchase_list(), purchase_list_csv(), Response, replenishment_slice(), _scope_dependency() (+8 more)
 
 ### Community 54 - "ADDED Requirements"
 Cohesion: 0.18
@@ -307,9 +309,9 @@ Nodes (10): ADDED Requirements, Requirement: Get inventory by product, Requireme
 Cohesion: 0.20
 Nodes (9): ADDED Requirements, Replenishment Spec, Requirement: Average daily demand, Requirement: Demand components and stock target, Requirement: Recommended order quantity, Scenario: Happy path average, Scenario: Positive order quantity, Scenario: Stock exceeds target (+1 more)
 
-### Community 56 - "test_tools.py"
-Cohesion: 0.12
-Nodes (27): _hydrate_context(), SupplyContext, resolve_product(), get_inventory(), get_replenishment_params(), get_sales_history(), load_inventory(), load_replenishment_params() (+19 more)
+### Community 56 - "resolve_product_id"
+Cohesion: 0.16
+Nodes (19): Resolve free-text to product_id: catalog code, barcode, or name., resolve_product_id(), get_sales_history(), date, resolve_product(), load_inventory(), load_replenishment_params(), load_sales_history() (+11 more)
 
 ### Community 57 - "Requirements"
 Cohesion: 0.22
@@ -427,37 +429,37 @@ Nodes (3): Catalog integration — extends mvp-core with unified master + REST, 
 Cohesion: 0.20
 Nodes (12): build_classifier_agent(), classify_intent(), Agent, Intent, LLM concept router. None = classifier unavailable; caller should fall back., emit(), Any, Minimal JSON logs for LLM runner calls. No prompt bodies. (+4 more)
 
-### Community 86 - "calculate_replenishment"
-Cohesion: 0.19
-Nodes (12): calculate_replenishment(), Catalog IDs used across tests (must exist in data/)., test_average_daily_demand_from_30_day_total(), test_ceil_rounds_fractional_gap_up(), test_different_lead_time_triangulation(), test_policy_does_not_use_reorder_point(), test_recommended_quantity_zero_when_stock_exceeds_target(), test_stock_target_components() (+4 more)
+### Community 86 - "models.py"
+Cohesion: 0.30
+Nodes (11): CategorySalesBar, ChatRequest, Inventory, ProductContext, ReplenishmentParams, SaleRecord, SalesHistory, SupplyContext (+3 more)
 
 ### Community 87 - "Tasks: natural-query-interpretation"
 Cohesion: 0.25
 Nodes (7): Phase 0 — SDD, Phase 1 — Un grupo + scope en chat (MVP), Phase 2 — Multi-grupo comparativo, Phase 3 — inventory_risk sobre grupos, Phase 4 — Desambiguación, Tasks: natural-query-interpretation, Verify
 
-### Community 88 - "get_replenishment_recommendation"
-Cohesion: 0.24
-Nodes (12): get_master(), get_replenishment_by_query(), get_replenishment_recommendation(), test_formula_parity(), test_get_master(), test_get_replenishment_by_query(), test_recommendation_context_prices(), test_replenishment_recommendation_high_qty() (+4 more)
+### Community 88 - "config.py"
+Cohesion: 0.27
+Nodes (9): effective_analyze_rate_limit(), effective_chat_rate_limit(), is_test_env(), ChatRateLimitMiddleware, BaseHTTPMiddleware, Request, Response, Rate limit POST /chat and POST /replenishment/analyze by client IP. (+1 more)
 
-### Community 89 - "test_security.py"
-Cohesion: 0.24
-Nodes (7): reset_rate_limits(), test_analyze_rate_limit_429(), _clean_rate_limits(), _minimal_chat(), fixture, test_chat_rate_limit_returns_429(), test_health_not_rate_limited()
+### Community 89 - "ChatResponse"
+Cohesion: 0.29
+Nodes (10): _run_disambiguation(), _run_explore(), _run_purchase_list(), chat(), format_disambiguation_answer(), format_explore_answer(), group_summaries_from_resolved(), ChatInterpretation (+2 more)
 
 ### Community 90 - "Proposal: natural-query-interpretation"
 Cohesion: 0.33
 Nodes (5): Non-Goals, Proposal: natural-query-interpretation, Success Criteria, What Changes, Why
 
-### Community 91 - "BaseModel"
-Cohesion: 0.39
-Nodes (8): ChatRequest, Inventory, ReplenishmentParams, SaleRecord, SalesHistory, BaseModel, _seed_context_for_high_qty(), test_run_supplymate_zero_quantity_triangulation()
+### Community 91 - "safe_errors.py"
+Cohesion: 0.29
+Nodes (6): is_production(), BaseHTTPMiddleware, Request, Response, Catch unhandled errors; hide details in production., SafeErrorMiddleware
 
-### Community 92 - "test_analyze_api.py"
-Cohesion: 0.31
-Nodes (8): _clean(), _commit_payload(), _insight_payload(), fixture, test_analyze_commit_requires_frozen_scope(), test_analyze_commit_with_frozen_scope(), test_analyze_explore_returns_200(), test_analyze_invalid_llm_json_fallback()
+### Community 92 - "products.py"
+Cohesion: 0.29
+Nodes (9): clear_product_caches(), _lexical_resolve(), load_products(), _normalize(), Path, Extract a product reference from a natural-language message., resolve_from_message(), reset_store_cache() (+1 more)
 
-### Community 93 - "_run_explore"
-Cohesion: 0.43
-Nodes (7): _run_disambiguation(), _run_explore(), format_disambiguation_answer(), format_explore_answer(), group_summaries_from_resolved(), ChatInterpretation, GroupSummary
+### Community 93 - "test_analyze_api.py"
+Cohesion: 0.24
+Nodes (10): reset(), _clean(), _commit_payload(), _insight_payload(), fixture, test_analyze_commit_requires_frozen_scope(), test_analyze_commit_with_frozen_scope(), test_analyze_explore_returns_200() (+2 more)
 
 ### Community 94 - "SecurityHeadersMiddleware"
 Cohesion: 0.29
@@ -471,33 +473,41 @@ Nodes (6): Spec coverage, TDD cycle evidence, Traceability, UX checklist (5 min 
 Cohesion: 0.33
 Nodes (5): API checks, Manual smoke (recommended), Non-goals confirmed, pytest, Verify: natural-query-interpretation
 
-### Community 97 - "ProductNotFoundError"
-Cohesion: 0.25
-Nodes (7): chat(), ProductNotFoundError, safe_resolve(), Exception, post, test_chat_not_found(), test_safe_resolve_unknown()
+### Community 97 - "AnalyzeResponse"
+Cohesion: 0.36
+Nodes (7): AnalyzeResponse, cache_key(), events_hash(), In-memory TTL cache for analyze responses., set(), catalog_service_dashboard(), test_insight_cache_hit_miss_and_reset()
 
-### Community 98 - "safe_errors.py"
-Cohesion: 0.29
-Nodes (6): is_production(), BaseHTTPMiddleware, Request, Response, Catch unhandled errors; hide details in production., SafeErrorMiddleware
+### Community 98 - "test_api_contract.py"
+Cohesion: 0.40
+Nodes (3): _minimal_chat_explore(), test_contract_analyze_response_schema(), test_contract_chat_response_schema()
+
+### Community 99 - "get_inventory"
+Cohesion: 0.33
+Nodes (9): get_inventory(), get_replenishment_params(), get_sales_history(), Any, Return current stock. product_id may be a code, barcode, or name fragment., Return recent sales. product_id may be a code, barcode, or product name., Return lead_time_days and safety_stock. Accepts code, barcode, or name., function_tool (+1 more)
+
+### Community 100 - "test_golden_intents.py"
+Cohesion: 0.39
+Nodes (7): llm, asyncio, _rows(), test_golden_hard_rows_are_not_covered_by_regex(), test_golden_intents_csv_parses(), test_golden_obvious_rows_match_regex(), test_groq_classifies_hard_intents()
 
 ## Knowledge Gaps
 - **316 isolated node(s):** `C:\Users\Equipo\.local\bin\graphify.exe`, `MetricContract`, `supplymate`, `smoke_api.sh script`, `Project conventions` (+311 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 504 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 510 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **9 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `AnalyticalScope` connect `AnalyticalScope` to `dashboard.py`, `run_supplymate`, `api.py`, `models.py`, `guidance.py`, `agent.py`, `reference_resolver.py`, `catalog_service.py`, `get_replenishment_recommendation`, `test_security.py`, `BaseModel`, `test_analyze_api.py`, `_run_explore`?**
-  _High betweenness centrality (0.072) - this node is a cross-community bridge._
-- **Why does `ProductMaster` connect `store.py` to `dashboard.py`, `api.py`, `models.py`, `catalog_service.py`, `get_replenishment_recommendation`, `BaseModel`?**
-  _High betweenness centrality (0.022) - this node is a cross-community bridge._
-- **Why does `run_supplymate()` connect `run_supplymate` to `ProductNotFoundError`, `api.py`, `models.py`, `test_api.py`, `is_purchase_list_query`, `AnalyticalScope`, `guidance.py`, `agent.py`, `reference_resolver.py`, `catalog_service.py`, `classify_intent`, `BaseModel`, `_run_explore`?**
-  _High betweenness centrality (0.017) - this node is a cross-community bridge._
-- **Are the 52 inferred relationships involving `AnalyticalScope` (e.g. with `_labels_from_scope()` and `run_apply_chip()`) actually correct?**
-  _`AnalyticalScope` has 52 INFERRED edges - model-reasoned connections that need verification._
+- **Why does `AnalyticalScope` connect `AnalyticalScope` to `catalog_service.py`, `run_supplymate`, `agent.py`, `test_api_contract.py`, `ProductNotFoundError`, `AnalyzeResponse`, `streamlit_app.py`, `test_guidance_plan.py`, `api.py`, `models.py`, `ChatResponse`, `test_analyze_api.py`?**
+  _High betweenness centrality (0.093) - this node is a cross-community bridge._
+- **Why does `run_supplymate()` connect `run_supplymate` to `catalog_service.py`, `agent.py`, `AnalyticalScope`, `ProductNotFoundError`, `is_purchase_list_query`, `test_guidance_plan.py`, `reference_resolver.py`, `api.py`, `classify_intent`, `models.py`, `ChatResponse`?**
+  _High betweenness centrality (0.019) - this node is a cross-community bridge._
+- **Why does `classify_intent()` connect `classify_intent` to `is_purchase_list_query`, `run_supplymate`, `agent.py`, `test_golden_intents.py`?**
+  _High betweenness centrality (0.018) - this node is a cross-community bridge._
+- **Are the 58 inferred relationships involving `AnalyticalScope` (e.g. with `_labels_from_scope()` and `run_apply_chip()`) actually correct?**
+  _`AnalyticalScope` has 58 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 2 inferred relationships involving `run_supplymate()` (e.g. with `ChatResponse` and `GuidanceChip`) actually correct?**
   _`run_supplymate()` has 2 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 12 inferred relationships involving `ProductNotFoundError` (e.g. with `chat()` and `get_product()`) actually correct?**
-  _`ProductNotFoundError` has 12 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `C:\Users\Equipo\.local\bin\graphify.exe`, `MetricContract`, `supplymate` to the rest of the system?**
   _316 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `catalog_service.py` be split into smaller, more focused modules?**
+  _Cohesion score 0.06330988522769344 - nodes in this community are weakly interconnected._

@@ -27,6 +27,9 @@ jobs:
             --cov=app.services.scope \
             --cov=app.services.catalog_service \
             --cov=app.services.dashboard \
+            --cov=app.query_interpretation \
+            --cov=app.reference_resolver \
+            --cov=app.guidance \
             --cov-report=term-missing \
             --cov-fail-under=85 \
             -m "not performance and not llm"

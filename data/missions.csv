@@ -1,4 +1,4 @@
-from_group,from_dimension,to_group,to_dimension,mission,reason,label
-Pañales P/Bebes,subcategory,Toallas Humedecidas- Bombachitas,subcategory,bebe,higiene,Toallitas húmedas
-Pañales P/Bebes,subcategory,Oleo - Aceite,subcategory,bebe,higiene,Óleo calcáreo
-Pañales P/Bebes,subcategory,mamaderas,name_token,bebe,alimentacion,Mamaderas
+from_group,from_dimension,to_group,to_dimension,mission,reason,label,reason_label
+Pañales P/Bebes,subcategory,Toallas Humedecidas- Bombachitas,subcategory,bebe,higiene,Toallitas húmedas,Complemento habitual para higiene del bebé
+Pañales P/Bebes,subcategory,Oleo - Aceite,subcategory,bebe,higiene,Óleo calcáreo,Complemento habitual para higiene del bebé
+Pañales P/Bebes,subcategory,mamaderas,name_token,bebe,alimentacion,Mamaderas,Complemento habitual para alimentación del bebé
