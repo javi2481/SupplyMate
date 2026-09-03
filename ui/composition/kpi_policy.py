@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.services.analytics import metrics
-from ui.theme import HEALTH_COLORS
+from ui.theme import HEALTH_COLORS, SHELL_TOKENS
 
 
 @dataclass(frozen=True)
@@ -31,11 +31,12 @@ def explore_kpi_cards(
 ) -> list[KpiCard]:
     del purchase_lines
     dash = dash or {}
+    brand = SHELL_TOKENS["primary_accent"]
     return [
         KpiCard(
             metrics.LABEL_SKUS,
             str(dash.get("skus", "—")),
-            "#90CAF9",
+            brand,
             "SKUs en el recorte actual",
             icon_key="products",
         ),
@@ -56,7 +57,7 @@ def explore_kpi_cards(
         KpiCard(
             f"{metrics.LABEL_COVERAGE} prom.",
             _fmt_coverage(dash.get("avg_coverage")),
-            "#AED581",
+            brand,
             metrics.METRIC_CONTRACTS["coverage"].caveat,
             icon_key="coverage",
         ),
