@@ -801,6 +801,12 @@ def _live_summary_source() -> tuple[dict, list[dict]]:
     return dash, purchase
 
 
+_CHAT_AVATARS = {
+    "user": ":material/person:",
+    "assistant": ":material/analytics:",
+}
+
+
 def render_history() -> None:
     messages = st.session_state.messages
     live = st.session_state.live_list_active
@@ -815,7 +821,10 @@ def render_history() -> None:
             and msg.get("role") == "assistant"
             and msg.get("mode") in ("list", "explore")
         )
-        with st.chat_message(msg["role"]):
+        role = msg["role"]
+        with st.chat_message(role, avatar=_CHAT_AVATARS.get(role)):
+            if role == "user":
+                st.markdown('<span class="sm-role-user" aria-hidden="true"></span>', unsafe_allow_html=True)
             if msg.get("mode") in ("list", "explore"):
                 if live_dashboard_turn:
                     summary = _explore_summary_line(
@@ -976,10 +985,11 @@ if prompt:
         st.rerun()
 
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
+    with st.chat_message("user", avatar=_CHAT_AVATARS["user"]):
+        st.markdown('<span class="sm-role-user" aria-hidden="true"></span>', unsafe_allow_html=True)
         st.markdown(prompt)
 
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar=_CHAT_AVATARS["assistant"]):
         with st.spinner("Calculando recomendaciones..."):
             data = ask_api(prompt)
 
