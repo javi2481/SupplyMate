@@ -1,14 +1,20 @@
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(_ROOT / ".env")
+
 # Ensure agent model construction works in unit tests without a real key.
 os.environ.setdefault("LLM_PROVIDER", "groq")
-os.environ.setdefault("GROQ_API_KEY", "test-groq-key")
+if os.getenv("RUN_LLM_EVALS") != "1":
+    os.environ.setdefault("GROQ_API_KEY", "test-groq-key")
 os.environ.setdefault("OPENAI_AGENTS_DISABLE_TRACING", "1")
 os.environ.setdefault("SUPPLYMATE_ENV", "test")
 
 # Tests use the same catalog as runtime: data/ (~13k SKUs).
-_DATA = Path(__file__).resolve().parent.parent / "data"
+_DATA = _ROOT / "data"
 os.environ["SUPPLYMATE_CATALOG_XLSX"] = ""
 os.environ["SUPPLYMATE_DATA_DIR"] = str(_DATA)
 
