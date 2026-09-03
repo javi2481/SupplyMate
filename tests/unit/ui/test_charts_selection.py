@@ -89,3 +89,41 @@ def test_histogram_exposes_named_point_selection():
     ).to_dict()
     names = [p.get("name") for p in spec.get("params") or []]
     assert "coverage_select" in names
+
+
+def test_explore_charts_use_single_brand_blue():
+    from ui.theme import COVERAGE_COLORS, SHELL_TOKENS
+
+    brand = SHELL_TOKENS["primary_accent"]
+    lolli = lollipop(_ROWS, "category", "Categoría").to_dict()
+    layers = lolli.get("layer") or [lolli]
+    for layer in layers:
+        encoding = layer.get("encoding") or {}
+        color = encoding.get("color") or {}
+        scale = color.get("scale") or {}
+        assert scale.get("scheme") != "orangered"
+        if "range" in scale:
+            assert all(c == brand for c in scale["range"])
+        elif color.get("value"):
+            assert color["value"] == brand
+
+    hist = histogram(
+        [{"bucket": "0–3 días", "sku_count": 4}, {"bucket": "3–7 días", "sku_count": 2}],
+        "bucket",
+        "Cobertura",
+        x_sort=["0–3 días", "3–7 días"],
+    ).to_dict()
+    color = (hist.get("encoding") or {}).get("color") or {}
+    scale = color.get("scale") or {}
+    range_ = scale.get("range") or []
+    if range_:
+        assert all(c == brand for c in range_)
+    else:
+        assert color.get("value") == brand
+    assert "orangered" not in str(hist)
+    # Must not paint Explore coverage with the health/coverage traffic-light palette.
+    for cov_color in COVERAGE_COLORS.values():
+        assert cov_color not in range_
+        assert color.get("value") != cov_color or cov_color == brand
+    assert range_ != [COVERAGE_COLORS.get(b, "#546E7A") for b in ["0–3 días", "3–7 días"]]
+    assert COVERAGE_COLORS["0–3 días"] == "#E53935"

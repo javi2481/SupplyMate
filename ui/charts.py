@@ -7,18 +7,23 @@ from typing import Any
 import altair as alt
 import pandas as pd
 
-from ui.theme import COVERAGE_COLORS
+from ui.theme import SHELL_TOKENS
 
 
-def _qty_color_scale() -> alt.Scale:
-    return alt.Scale(scheme="orangered")
+def _brand_blue() -> str:
+    return SHELL_TOKENS["primary_accent"]
 
 
-def _point_param(selection_name: str, field: str) -> alt.Parameter:
+def _point_param(
+    selection_name: str,
+    field: str,
+    *,
+    nearest: bool = True,
+) -> alt.Parameter:
     return alt.selection_point(
         name=selection_name,
         fields=[field],
-        nearest=True,
+        nearest=nearest,
         toggle=False,
     )
 
@@ -42,12 +47,13 @@ def lollipop(
     ]
     x = alt.X(f"{x_field}:Q", title=x_title)
     y = alt.Y(f"{y_field}:N", sort="-x", title=None)
-    color = alt.Color(
-        f"{x_field}:Q",
-        scale=_qty_color_scale(),
-        legend=alt.Legend(title="Urgencia (u.)"),
+    brand = _brand_blue()
+    encoded = alt.Chart(df).encode(
+        x=x,
+        y=y,
+        color=alt.value(brand),
+        tooltip=tooltips,
     )
-    encoded = alt.Chart(df).encode(x=x, y=y, color=color, tooltip=tooltips)
     rules = encoded.mark_rule(strokeWidth=3)
     circles = encoded.mark_circle(size=180, opacity=0.95)
     if selectable_field:
@@ -82,8 +88,7 @@ def histogram(
     selection_name: str = "chart_select",
 ) -> alt.Chart:
     df = pd.DataFrame(rows)
-    domain = x_sort or [str(r.get(x_field, "")) for r in rows]
-    range_ = [COVERAGE_COLORS.get(str(b), "#546E7A") for b in domain]
+    brand = _brand_blue()
     chart = (
         alt.Chart(df)
         .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
@@ -95,11 +100,7 @@ def histogram(
                 axis=alt.Axis(labelAngle=0),
             ),
             y=alt.Y(f"{y_field}:Q", title=y_title),
-            color=alt.Color(
-                f"{x_field}:N",
-                scale=alt.Scale(domain=domain, range=range_),
-                legend=None,
-            ),
+            color=alt.value(brand),
             tooltip=[
                 alt.Tooltip(f"{x_field}:N", title=x_title),
                 alt.Tooltip(f"{y_field}:Q", title=y_title),
@@ -108,7 +109,10 @@ def histogram(
         .properties(height=280)
     )
     if selectable_field:
-        chart = chart.add_params(_point_param(selection_name, selectable_field))
+        # nearest=True on bars can leave an empty Vega embed in Streamlit columns.
+        chart = chart.add_params(
+            _point_param(selection_name, selectable_field, nearest=False)
+        )
     return chart
 
 
