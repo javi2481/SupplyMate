@@ -9,7 +9,7 @@
 | Domain | Status |
 |--------|--------|
 | ci | `.github/workflows/ci.yml`, pytest-cov ≥85% critical modules |
-| security | `tests/test_security.py`, middleware in `app/middleware/` |
+| security | `tests/security/test_security.py`, middleware in `app/middleware/` |
 | traceability | `traceability-matrix.md` |
 | deployment | `scripts/smoke_api.sh`, `scripts/smoke_api.ps1`, Docker job in CI |
 
@@ -25,16 +25,16 @@
 ## Coverage (critical modules)
 
 ```
-app/replenishment.py          100%
-app/services/dashboard.py   100%
-app/services/scope.py          98%
-app/services/catalog_service.py 90%
+app/core/replenishment.py          100%
+app/services/analytics/dashboard.py   100%
+app/services/scope/scope.py          98%
+app/services/analytics/catalog_service.py 90%
 TOTAL                         95%
 ```
 
 ## UX / beta
 
-Manual checklist UX-01 … UX-07: procedure in [`docs/beta-test-protocol.md`](../../../docs/beta-test-protocol.md). Operator run pending in browser.
+Manual checklist UX-01 … UX-07: procedure in [`docs/operations/beta-test-protocol.md`](../../../docs/operations/beta-test-protocol.md). Operator run pending in browser.
 
 ## Verdict
 

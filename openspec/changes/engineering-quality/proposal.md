@@ -10,7 +10,7 @@ The textbook *Ingeniería del Software II: Implementación, Pruebas y Mantenimie
 - GitHub Actions: pytest + coverage on critical modules + Docker smoke
 - `traceability-matrix.md` linking MUSTs from active changes to pytest tests
 - OWASP-minimal hardening: input limits, prod error handler, rate limit on `/chat`, security headers
-- `scripts/smoke_api.sh` / `.ps1` and `tests/test_performance.py`
+- `scripts/smoke_api.sh` / `.ps1` and `tests/performance/test_performance.py`
 - Maintenance docs: policy, bug template, change-request template, beta protocol, compatibility matrix, OSSTMM-lite checklist
 
 ## Non-Goals

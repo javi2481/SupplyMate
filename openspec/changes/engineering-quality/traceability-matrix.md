@@ -115,11 +115,11 @@ Maps each MUST to automated test or manual checklist id.
 
 | MUST | Verification |
 |------|----------------|
-| message max_length | `tests/test_security.py::test_chat_message_too_long_returns_422` |
-| prod no stack trace | `tests/test_security.py::test_production_error_hides_traceback` |
-| chat rate limit 429 | `tests/test_security.py::test_chat_rate_limit_returns_429` |
-| security headers | `tests/test_security.py::test_security_headers_present` |
-| scope param sanitization | `tests/test_security.py::test_oversized_scope_param_rejected` |
+| message max_length | `tests/security/test_security.py::test_chat_message_too_long_returns_422` |
+| prod no stack trace | `tests/security/test_security.py::test_production_error_hides_traceback` |
+| chat rate limit 429 | `tests/security/test_security.py::test_chat_rate_limit_returns_429` |
+| security headers | `tests/security/test_security.py::test_security_headers_present` |
+| scope param sanitization | `tests/security/test_security.py::test_oversized_scope_param_rejected` |
 
 ## engineering-quality / deployment
 

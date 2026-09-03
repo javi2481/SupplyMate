@@ -6,7 +6,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from app.config import effective_analyze_rate_limit, effective_chat_rate_limit
+from app.core.config import effective_analyze_rate_limit, effective_chat_rate_limit
 from app.middleware.rate_limit import allow_request
 
 

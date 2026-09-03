@@ -3,11 +3,11 @@ from __future__ import annotations
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 
 from app.agent import run_analyze, run_supplymate
-from app.config import MAX_SCOPE_VALUE_LENGTH
+from app.core.config import MAX_SCOPE_VALUE_LENGTH
 from app.middleware.chat_rate_limit import ChatRateLimitMiddleware
 from app.middleware.safe_errors import SafeErrorMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
-from app.models import (
+from app.core.models import (
     AnalyzeRequest,
     AnalyzeResponse,
     AnalyticalScope,
@@ -24,7 +24,7 @@ from app.models import (
 from app.services import catalog_service
 from app.services import panel_modes
 from app.services import scope as scope_svc
-from app.services.scope_sanitize import sanitize_value, sanitize_values
+from app.services.scoping.scope_sanitize import sanitize_value, sanitize_values
 
 app = FastAPI(title="SupplyMate", version="0.5.0")
 app.add_middleware(ChatRateLimitMiddleware)

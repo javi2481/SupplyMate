@@ -23,13 +23,13 @@ jobs:
           OPENAI_AGENTS_DISABLE_TRACING: "1"
         run: |
           pytest \
-            --cov=app.replenishment \
-            --cov=app.services.scope \
-            --cov=app.services.catalog_service \
-            --cov=app.services.dashboard \
-            --cov=app.query_interpretation \
-            --cov=app.reference_resolver \
-            --cov=app.guidance \
+            --cov=app.core.replenishment \
+            --cov=app.services.scoping.mutations \
+            --cov=app.services.analytics.catalog_service \
+            --cov=app.services.analytics.dashboard \
+            --cov=app.pipeline.query_interpretation \
+            --cov=app.pipeline.reference_resolver \
+            --cov=app.guidance.engine \
             --cov-report=term-missing \
             --cov-fail-under=85 \
             -m "not performance and not llm"

@@ -54,7 +54,7 @@ Referencia: `docs/03 PLN - Conceptos y técnicas de procesamiento.pdf`.
 
 ## Estado actual vs objetivo
 
-### Hoy (`app/agent.py`)
+### Hoy (`app/agent/runner.py`)
 
 ```text
 match_rule_intent (4 etiquetas)
@@ -271,8 +271,8 @@ POST /chat { message }
 
 | Módulo | Responsabilidad |
 |--------|-----------------|
-| `app/query_interpretation.py` | Modelos Pydantic, `interpret_query()` |
-| `app/reference_resolver.py` | `resolve_references()`, matching catálogo |
+| `app/pipeline/query_interpretation.py` | Modelos Pydantic, `interpret_query()` |
+| `app/pipeline/reference_resolver.py` | `resolve_references()`, matching catálogo |
 | `app/scope_builder.py` | `build_scope()`, hints → `health_buckets` |
 | `app/explore_answer.py` | Texto determinístico + `GroupSummary` |
 
@@ -591,7 +591,7 @@ Usuario: ¿Cuántos jabones y shampoo debo comprar?
 | `openspec/changes/interactive-drilldown/design.md` | `AnalyticalScope`, slice, panel |
 | `openspec/changes/llm-drilldown-insights/design.md` | LLM solo narrativa en analyze |
 | `openspec/changes/semantic-correctness/` | Python calcula qty; sin embeddings |
-| `app/agent.py` | Router actual a reemplazar/extend |
+| `app/agent/runner.py` | Router actual a reemplazar/extend |
 | `app/products.py` | Resolución SKU a acotar a `exact_sku` |
 | `docs/03 PLN - Conceptos y técnicas de procesamiento.pdf` | Marco PLN |
 

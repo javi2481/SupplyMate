@@ -1,7 +1,7 @@
 # Spec: analytics-db
 
 > **Superseded:** `scripts/build_analytics_db.py` and DuckDB are gone.
-> Dashboard aggregates run in Python (`app/services/dashboard.py`) on the catalog store.
+> Dashboard aggregates run in Python (`app/services/analytics/dashboard.py`) on the catalog store.
 
 ## Purpose
 

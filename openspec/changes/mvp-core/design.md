@@ -24,10 +24,10 @@ Principle: **LLM orchestrates, deterministic code decides.**
 
 ## Components
 
-- `app/models.py` — ChatRequest/Response, DTOs, SupplyContext
-- `app/tools.py` — CSV loaders + @function_tool wrappers
-- `app/replenishment.py` — formula with HORIZON_DAYS=7, HISTORY_DAYS=30
-- `app/agent.py` — two-phase Runner flow
+- `app/core/models.py` — ChatRequest/Response, DTOs, SupplyContext
+- `app/agent/tools.py` — CSV loaders + @function_tool wrappers
+- `app/core/replenishment.py` — formula with HORIZON_DAYS=7, HISTORY_DAYS=30
+- `app/agent/runner.py` — two-phase Runner flow
 - `app/api.py` — /chat, /health
 - `app/config.py` — DATA_DIR, OPENAI_API_KEY, model
 

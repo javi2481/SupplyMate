@@ -7,7 +7,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from app.config import is_production
+from app.core.config import is_production
 
 
 class SafeErrorMiddleware(BaseHTTPMiddleware):

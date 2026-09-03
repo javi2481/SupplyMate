@@ -18,8 +18,8 @@ _DATA = _ROOT / "data"
 os.environ["SUPPLYMATE_CATALOG_XLSX"] = ""
 os.environ["SUPPLYMATE_DATA_DIR"] = str(_DATA)
 
-from app import config  # noqa: E402
-from app.products import clear_product_caches  # noqa: E402
+from app.core import config  # noqa: E402
+from app.catalog.products import clear_product_caches  # noqa: E402
 
 config.CATALOG_XLSX = None
 config.DATA_DIR = _DATA

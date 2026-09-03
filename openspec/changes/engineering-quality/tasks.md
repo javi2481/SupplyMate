@@ -13,7 +13,7 @@
 
 - [x] 2.1 RED/GREEN input limits + scope sanitization
 - [x] 2.2 RED/GREEN prod error handler + security headers
-- [x] 2.3 RED/GREEN chat rate limit + tests/test_security.py
+- [x] 2.3 RED/GREEN chat rate limit + tests/security/test_security.py
 
 ## Phase 3 — CI
 
@@ -23,7 +23,7 @@
 ## Phase 4 — Smoke + performance
 
 - [x] 4.1 scripts/smoke_api.sh + smoke_api.ps1
-- [x] 4.2 tests/test_performance.py + docs/performance-profile.md
+- [x] 4.2 tests/performance/test_performance.py + docs/operations/performance-profile.md
 
 ## Phase 5 — Maintenance + audit docs
 

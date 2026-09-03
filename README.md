@@ -50,7 +50,7 @@ User
 |-------|------|
 | CSVs in [`data/`](data/) | Simulated catalog (~13k SKUs) |
 | [`app/services/metrics.py`](app/services/metrics.py) | Metric contracts + coverage + health + priority |
-| 3 tools + [`app/replenishment.py`](app/replenishment.py) | Inventory / sales / params; qty in Python |
+| 3 tools + [`app/core/replenishment.py`](app/core/replenishment.py) | Inventory / sales / params; qty in Python |
 | LLM roles | Intent, SKU explainer, insight (Explore), commit (Build PO) |
 | REST | search, replenishment, `/chat`, `/slice`, `/analyze`, dashboard, CSV |
 | Streamlit | Chat + **Explore** / **Build PO** + AI Analyst |
@@ -75,7 +75,7 @@ recommended    = max(0, ceil(stock_target - current_stock))
 
 This is not an ML demand model. The MVP demonstrates deterministic replenishment + conversational analytics.
 
-Details: [`docs/architecture.md`](docs/architecture.md)
+Details: [`docs/contract/architecture.md`](docs/contract/architecture.md)
 
 ## What the MVP proves
 
@@ -208,9 +208,12 @@ docker run --rm -p 8000:8000 -e GROQ_API_KEY=gsk-... -e LLM_PROVIDER=groq supply
 
 | Doc | Contents |
 |-----|----------|
-| [`docs/architecture.md`](docs/architecture.md) | LLM vs Python boundary, tools, slice/scope, layout |
-| [`docs/evaluation.md`](docs/evaluation.md) | CI, goldens, pytest markers, performance |
-| [`docs/data-contract.md`](docs/data-contract.md) | CSV contract / `product_id` |
+| [`docs/README.md`](docs/README.md) | Doc index (contract / operations / templates) |
+| [`app/README.md`](app/README.md) | Application code layers |
+| [`tests/README.md`](tests/README.md) | Test suite layers |
+| [`docs/contract/architecture.md`](docs/contract/architecture.md) | LLM vs Python boundary, tools, slice/scope, layout |
+| [`docs/contract/evaluation.md`](docs/contract/evaluation.md) | CI, goldens, pytest markers, performance |
+| [`docs/contract/data-contract.md`](docs/contract/data-contract.md) | CSV contract / `product_id` |
 
 Internal SDD: [`openspec/`](openspec/) (per-change specs; not the public entry point).
 
@@ -218,11 +221,11 @@ Internal SDD: [`openspec/`](openspec/) (per-change specs; not the public entry p
 
 | Doc | Contents |
 |-----|-----------|
-| [`docs/maintenance-policy.md`](docs/maintenance-policy.md) | Lehman laws, preventive sprint |
-| [`docs/beta-test-protocol.md`](docs/beta-test-protocol.md) | Beta scenario + UX checklist |
-| [`docs/security-audit-osstmm-lite.md`](docs/security-audit-osstmm-lite.md) | Lite web audit |
-| [`docs/compatibility-matrix.md`](docs/compatibility-matrix.md) | Browsers / OS |
-| [`docs/performance-profile.md`](docs/performance-profile.md) | Performance smoke thresholds |
+| [`docs/operations/maintenance-policy.md`](docs/operations/maintenance-policy.md) | Lehman laws, preventive sprint |
+| [`docs/operations/beta-test-protocol.md`](docs/operations/beta-test-protocol.md) | Beta scenario + UX checklist |
+| [`docs/operations/security-audit-osstmm-lite.md`](docs/operations/security-audit-osstmm-lite.md) | Lite web audit |
+| [`docs/operations/compatibility-matrix.md`](docs/operations/compatibility-matrix.md) | Browsers / OS |
+| [`docs/operations/performance-profile.md`](docs/operations/performance-profile.md) | Performance smoke thresholds |
 | [`openspec/changes/engineering-quality/traceability-matrix.md`](openspec/changes/engineering-quality/traceability-matrix.md) | MUST → test |
 
 **Status:** v0.1 — assistant + sliceable replenishment panel; qty and filters in Python; LLM only on free-form question / insight / commit.

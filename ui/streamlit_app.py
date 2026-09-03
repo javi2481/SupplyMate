@@ -16,7 +16,7 @@ import altair as alt
 import httpx
 import streamlit as st
 
-from app.models import AnalyticalScope, GuidanceChip, InteractionEvent
+from app.core.models import AnalyticalScope, GuidanceChip, InteractionEvent
 from app.services import dashboard as dash_svc
 from app.services import metrics, suggested_filters
 from app.services import panel_modes
@@ -218,7 +218,7 @@ def fetch_replenishment(product_id: str) -> dict | None:
 
 def apply_guidance_chip_action(chip_data: dict) -> None:
     """Apply a validated guidance chip without re-interpreting through the LLM."""
-    from app.guidance_chips import apply_guidance_chip
+    from app.guidance.guidance_chips import apply_guidance_chip
 
     chip = GuidanceChip.model_validate(chip_data)
     scope = _scope_model()

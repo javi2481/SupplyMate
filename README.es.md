@@ -52,7 +52,7 @@ User
 |-------|-----|
 | CSVs en [`data/`](data/) | Catálogo simulado (~13k SKUs) |
 | [`app/services/metrics.py`](app/services/metrics.py) | Contratos de métricas + cobertura + salud + prioridad |
-| 3 tools + [`app/replenishment.py`](app/replenishment.py) | Inventario / ventas / params; qty en Python |
+| 3 tools + [`app/core/replenishment.py`](app/core/replenishment.py) | Inventario / ventas / params; qty en Python |
 | Roles LLM | Intent, explainer de SKU, insight (Explorar), commit (Armar OC) |
 | REST | search, replenishment, `/chat`, `/slice`, `/analyze`, dashboard, CSV |
 | Streamlit | Chat + **Explorar** / **Armar OC** + Analista IA |
@@ -77,7 +77,7 @@ recommended    = max(0, ceil(stock_target - current_stock))
 
 No es un modelo de demanda ML. El MVP demuestra reposición determinística + analítica conversacional.
 
-Detalle: [`docs/architecture.es.md`](docs/architecture.es.md)
+Detalle: [`docs/contract/architecture.es.md`](docs/contract/architecture.es.md)
 
 ## Qué demuestra el MVP
 
@@ -210,9 +210,12 @@ docker run --rm -p 8000:8000 -e GROQ_API_KEY=gsk-... -e LLM_PROVIDER=groq supply
 
 | Doc | Contenido |
 |-----|-----------|
-| [`docs/architecture.es.md`](docs/architecture.es.md) | Frontera LLM vs Python, tools, slice/scope, layout |
-| [`docs/evaluation.es.md`](docs/evaluation.es.md) | CI, goldens, markers pytest, rendimiento |
-| [`docs/data-contract.es.md`](docs/data-contract.es.md) | Contrato CSV / `product_id` |
+| [`docs/README.md`](docs/README.md) | Índice de docs (contrato / operaciones / plantillas) |
+| [`app/README.md`](app/README.md) | Capas del código de aplicación |
+| [`tests/README.md`](tests/README.md) | Capas de la suite de tests |
+| [`docs/contract/architecture.es.md`](docs/contract/architecture.es.md) | Frontera LLM vs Python, tools, slice/scope, layout |
+| [`docs/contract/evaluation.es.md`](docs/contract/evaluation.es.md) | CI, goldens, markers pytest, rendimiento |
+| [`docs/contract/data-contract.es.md`](docs/contract/data-contract.es.md) | Contrato CSV / `product_id` |
 
 SDD interno: [`openspec/`](openspec/) (specs por change; no es la puerta de entrada).
 
@@ -220,11 +223,11 @@ SDD interno: [`openspec/`](openspec/) (specs por change; no es la puerta de entr
 
 | Doc | Contenido |
 |-----|-----------|
-| [`docs/maintenance-policy.md`](docs/maintenance-policy.md) | Leyes de Lehman, sprint preventivo |
-| [`docs/beta-test-protocol.md`](docs/beta-test-protocol.md) | Escenario beta + checklist UX |
-| [`docs/security-audit-osstmm-lite.md`](docs/security-audit-osstmm-lite.md) | Auditoría web lite |
-| [`docs/compatibility-matrix.md`](docs/compatibility-matrix.md) | Browsers / SO |
-| [`docs/performance-profile.md`](docs/performance-profile.md) | Umbrales smoke de rendimiento |
+| [`docs/operations/maintenance-policy.md`](docs/operations/maintenance-policy.md) | Leyes de Lehman, sprint preventivo |
+| [`docs/operations/beta-test-protocol.md`](docs/operations/beta-test-protocol.md) | Escenario beta + checklist UX |
+| [`docs/operations/security-audit-osstmm-lite.md`](docs/operations/security-audit-osstmm-lite.md) | Auditoría web lite |
+| [`docs/operations/compatibility-matrix.md`](docs/operations/compatibility-matrix.md) | Browsers / SO |
+| [`docs/operations/performance-profile.md`](docs/operations/performance-profile.md) | Umbrales smoke de rendimiento |
 | [`openspec/changes/engineering-quality/traceability-matrix.md`](openspec/changes/engineering-quality/traceability-matrix.md) | MUST → test |
 
 **Estado:** v0.1 — asistente + panel de reposición recortable; qty y filtros en Python; LLM solo en pregunta libre / insight / commit.

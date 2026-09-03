@@ -21,5 +21,5 @@
 
 ## Dependencies (A06)
 
-- Project MUST document dependency audit procedure in `docs/security-deps.md`
+- Project MUST document dependency audit procedure in `docs/operations/security-deps.md`
 - CI MAY run `pip-audit` as non-blocking advisory

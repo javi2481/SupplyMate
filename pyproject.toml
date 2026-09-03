@@ -46,11 +46,11 @@ omit = ["tests/*", "ui/*"]
 [tool.coverage.report]
 fail_under = 85
 include = [
-  "app/replenishment.py",
-  "app/services/scope.py",
-  "app/services/catalog_service.py",
-  "app/services/dashboard.py",
-  "app/query_interpretation.py",
-  "app/reference_resolver.py",
-  "app/guidance.py",
+  "app/core/replenishment.py",
+  "app/services/scoping/mutations.py",
+  "app/services/analytics/catalog_service.py",
+  "app/services/analytics/dashboard.py",
+  "app/pipeline/query_interpretation.py",
+  "app/pipeline/reference_resolver.py",
+  "app/guidance/engine.py",
 ]

@@ -24,7 +24,7 @@
 
 ## UX checklist (5 min manual)
 
-Ver procedimiento completo en [`docs/beta-test-protocol.md`](../../docs/beta-test-protocol.md) (UX-01 … UX-07).
+Ver procedimiento completo en [`docs/operations/beta-test-protocol.md`](../../docs/operations/beta-test-protocol.md) (UX-01 … UX-07).
 
 - [ ] UX-01 Pregunta: «¿Qué productos tengo que comprar?» → panel de reposición
 - [ ] UX-02 Historial de chat sin selección en gráficos

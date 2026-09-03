@@ -12,7 +12,7 @@ In `test` env: rate limit disabled (high ceiling) so pytest stays deterministic.
 ## CI layout
 
 ```text
-job test     → pytest + cov on app/replenishment.py, app/services/{scope,catalog_service,dashboard}.py
+job test     → pytest + cov on app/core/replenishment.py, app/services/{scope,catalog_service,dashboard}.py
 job docker   → docker build + run + scripts/smoke_api.sh
 job perf     → main branch only; pytest -m performance
 job audit    → pip-audit continue-on-error
@@ -34,4 +34,4 @@ Each MUST in `mvp-core`, `dual-surface-analytics`, `interactive-drilldown` maps 
 ## Performance thresholds
 
 - `replenishment_slice(empty, limit=100)` < 3s (CI), < 1.5s local guidance
-- Profile: 90% slice reads, 10% chat (documented in `docs/performance-profile.md`)
+- Profile: 90% slice reads, 10% chat (documented in `docs/operations/performance-profile.md`)
