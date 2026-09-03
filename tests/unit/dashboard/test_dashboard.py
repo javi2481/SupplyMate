@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from app.core.models import AnalyticalScope
+import pytest
+from pydantic import ValidationError
+
+from app.core.models import AnalyticalScope, PurchaseListItem
 from app.services import dashboard
 
 
@@ -25,6 +28,23 @@ def _row(**kwargs) -> dict:
     }
     item.update(kwargs)
     return item
+
+
+def test_purchase_list_item_requires_product_id():
+    with pytest.raises(ValidationError):
+        PurchaseListItem(product_name="x", recommended_quantity=1)
+    with pytest.raises(ValidationError):
+        PurchaseListItem(product_id="", product_name="x", recommended_quantity=1)
+
+
+def test_purchase_items_skips_rows_without_product_id():
+    rows = [
+        _row(product_id="", recommended_quantity=10, product_name="Ghost"),
+        _row(product_id="ok-1", recommended_quantity=5, product_name="Real"),
+    ]
+    items = dashboard.purchase_items(rows, limit=25)
+    assert len(items) == 1
+    assert items[0].product_id == "ok-1"
 
 
 def test_coverage_bucket_edges():

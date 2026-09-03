@@ -112,19 +112,34 @@ def _qty_for_skus(sku_ids: list[str]) -> int:
     return total
 
 
+# Match-score ladder used by _match_score / _pick_best_group (higher = tighter).
+SCORE_EXACT = 100
+SCORE_STEM = 95
+SCORE_PREFIX_OR_TOKEN = 80
+SCORE_NAME_MATCH = 60
+
+# Tie-break policy for group resolution (prefer None/ambiguity over a weak guess).
+MIN_GROUP_SCORE = SCORE_NAME_MATCH
+CATEGORY_TIE_SCORE_DELTA = 5
+CLOSE_SECOND_SCORE_GAP = 15
+MIN_CLOSE_SECOND_SCORE = SCORE_PREFIX_OR_TOKEN
+SKU_COUNT_NEAR_TIE = 5
+SUBCATEGORY_OVER_CATEGORY_MARGIN = 10
+
+
 def _match_score(token: str, label: str) -> int:
     label_norm = normalize_text(label)
     if not label_norm:
         return 0
     if token == label_norm:
-        return 100
+        return SCORE_EXACT
     stem = _stem(token)
     if stem and stem == label_norm:
-        return 95
+        return SCORE_STEM
     if label_norm.startswith(stem) or stem in label_norm.split():
-        return 80
+        return SCORE_PREFIX_OR_TOKEN
     if _token_matches_name(token, label_norm):
-        return 60
+        return SCORE_NAME_MATCH
     return 0
 
 
@@ -139,18 +154,29 @@ def _pick_best_group(
     categories: dict[str, list[str]],
     subcategories: dict[str, list[str]],
 ) -> tuple[str, str, list[str]] | None:
+    """Choose the best category/subcategory group for a token, or None if ambiguous.
+
+    Policy:
+    - Only consider groups scoring at least MIN_GROUP_SCORE (name-level match).
+    - Prefer category over subcategory when the category is at least as large and
+      scores well; take subcategory only when it is a near-exact stem match and
+      clearly beats the category (SUBCATEGORY_OVER_CATEGORY_MARGIN).
+    - If two categories are within CATEGORY_TIE_SCORE_DELTA, or the runner-up is
+      within CLOSE_SECOND_SCORE_GAP with a high score (>= MIN_CLOSE_SECOND_SCORE),
+      return None instead of guessing.
+    """
     candidates: list[tuple[int, int, str, str, list[str]]] = []
     for cat, pids in categories.items():
         if len(pids) < 2:
             continue
         score = _match_score(token, cat)
-        if score >= 60:
+        if score >= MIN_GROUP_SCORE:
             candidates.append((score, len(pids), "category", cat, pids))
     for sub, pids in subcategories.items():
         if len(pids) < 2:
             continue
         score = _match_score(token, sub)
-        if score >= 60:
+        if score >= MIN_GROUP_SCORE:
             candidates.append((score, len(pids), "subcategory", sub, pids))
 
     if not candidates:
@@ -162,25 +188,33 @@ def _pick_best_group(
     sub_candidates = [c for c in candidates if c[2] == "subcategory"]
     if len(cat_candidates) > 1:
         top_score = cat_candidates[0][0]
-        tied_cats = [c for c in cat_candidates if c[0] >= top_score - 5]
+        tied_cats = [
+            c for c in cat_candidates if c[0] >= top_score - CATEGORY_TIE_SCORE_DELTA
+        ]
         if len(tied_cats) > 1:
             return None
     if cat_candidates and sub_candidates:
         best_cat = cat_candidates[0]
         best_sub = sub_candidates[0]
-        if best_cat[0] >= 60 and best_cat[1] >= best_sub[1]:
+        if best_cat[0] >= MIN_GROUP_SCORE and best_cat[1] >= best_sub[1]:
             return best_cat[2], best_cat[3], best_cat[4]
-        if best_sub[0] >= 95 and best_sub[0] > best_cat[0] + 10:
+        if (
+            best_sub[0] >= SCORE_STEM
+            and best_sub[0] > best_cat[0] + SUBCATEGORY_OVER_CATEGORY_MARGIN
+        ):
             return best_sub[2], best_sub[3], best_sub[4]
 
     if len(candidates) > 1:
         second = candidates[1]
-        if best[0] == second[0] and abs(best[1] - second[1]) < 5:
+        if best[0] == second[0] and abs(best[1] - second[1]) < SKU_COUNT_NEAR_TIE:
             if cat_candidates and len(cat_candidates) == 1:
                 chosen = cat_candidates[0]
                 return chosen[2], chosen[3], chosen[4]
             return None
-        if best[0] - second[0] < 15 and second[0] >= 80:
+        if (
+            best[0] - second[0] < CLOSE_SECOND_SCORE_GAP
+            and second[0] >= MIN_CLOSE_SECOND_SCORE
+        ):
             if cat_candidates and len(cat_candidates) == 1 and best[2] != "category":
                 chosen = cat_candidates[0]
                 if chosen[1] >= second[1]:

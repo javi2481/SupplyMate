@@ -195,11 +195,14 @@ def purchase_items(rows: list[dict], limit: int = 25) -> list[PurchaseListItem]:
     )
     items: list[PurchaseListItem] = []
     for row in needed[:limit]:
+        product_id = str(row.get("product_id") or "").strip()
+        if not product_id:
+            continue
         cost = row.get("purchase_cost")
         value = row.get("estimated_purchase_value")
         items.append(
             PurchaseListItem(
-                product_id=str(row.get("product_id") or ""),
+                product_id=product_id,
                 barcode=str(row.get("barcode") or ""),
                 product_name=str(row.get("product_name") or ""),
                 supplier=str(row.get("supplier") or ""),

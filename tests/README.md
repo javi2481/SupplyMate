@@ -9,13 +9,14 @@ tests/
 │   ├── metrics/
 │   ├── dashboard/           # + suggested filters
 │   ├── scope/
-│   ├── catalog/             # + product tools
+│   ├── catalog/             # product tools + dependency architecture constraints
 │   ├── store/
 │   ├── prompt_compiler/
 │   ├── intent_classifier/
 │   ├── insight_validator/
 │   ├── insight_cache/
 │   ├── purchase_list/
+│   ├── guidance/            # preview_union and related helpers
 │   └── llm_log/
 ├── integration/             # cross-module flows
 │   ├── api/                 # FastAPI + analyze endpoints

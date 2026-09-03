@@ -66,14 +66,3 @@ def test_resolve_from_message_by_code():
     assert resolve_from_message(f"cuanto pedir de {SKU_HIGH_QTY}?") == SKU_HIGH_QTY
     assert resolve_from_message("pedir 8141600") == SKU_ZERO_QTY
 
-
-def test_products_module_has_no_sentence_transformers():
-    import inspect
-
-    import app.catalog.products as products
-
-    source = inspect.getsource(products)
-    assert "sentence_transformers" not in source
-    assert "SEMANTIC_MAX_PRODUCTS" not in source
-    assert "numpy" not in source
-

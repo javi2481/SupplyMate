@@ -223,10 +223,10 @@ def _chip_for_mission(edge: MissionEdge) -> GuidanceChip:
 
 
 def preview_union(scope: AnalyticalScope, edge: MissionEdge) -> dict[str, float | int]:
+    """Preview KPIs for the trial scope after adding a complement (not a delta)."""
     from app.services import catalog_service
     from app.services import scope as scope_svc
 
-    before, _ = catalog_service.chat_dashboard(scope=scope)
     trial = scope.model_copy(deep=True)
     if edge.to_dimension == "subcategory":
         trial = scope_svc.add(trial, "subcategory", edge.to_group)
@@ -239,7 +239,6 @@ def preview_union(scope: AnalyticalScope, edge: MissionEdge) -> dict[str, float 
         "skus": after.skus,
         "qty": qty,
         "value": float(value) if value else 0.0,
-        "added_skus": max(0, after.skus - before.skus),
     }
 
 

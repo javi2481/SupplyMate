@@ -169,7 +169,7 @@ class ProductContext(BaseModel):
 
 
 class PurchaseListItem(BaseModel):
-    product_id: str = ""
+    product_id: str = Field(min_length=1)
     barcode: str = ""
     product_name: str
     supplier: str = ""
