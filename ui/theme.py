@@ -82,8 +82,6 @@ CSS = """
 :root {
   --sm-sidebar-bg: #0b0f17;
   --sm-panel-bg: #12151c;
-  --sm-panel-grad-start: #1a1f2e;
-  --sm-panel-grad-end: #12151c;
   --sm-primary-accent: #1E88E5;
   --sm-danger-accent: #E05252;
   --sm-success-accent: #43A047;
@@ -94,6 +92,10 @@ CSS = """
 html, body, [class*="css"] {
   font-family: 'Inter', sans-serif;
 }
+.block-container {
+  max-width: 1150px !important;
+  padding-top: 1.5rem !important;
+}
 /* ── Sidebar siempre visible (mockup) ── */
 [data-testid="stSidebarCollapseButton"],
 [data-testid="collapsedControl"],
@@ -102,22 +104,15 @@ html, body, [class*="css"] {
 }
 section[data-testid="stSidebar"] {
   background: var(--sm-sidebar-bg) !important;
-  min-width: 280px !important;
-  max-width: 280px !important;
+  min-width: 240px !important;
+  max-width: 260px !important;
   transform: translateX(0) !important;
   visibility: visible !important;
 }
 section[data-testid="stSidebar"][aria-expanded="false"] {
   transform: translateX(0) !important;
   margin-left: 0 !important;
-  min-width: 280px !important;
-}
-.sm-panel {
-  background: linear-gradient(135deg, var(--sm-panel-grad-start) 0%, var(--sm-panel-grad-end) 100%);
-  border: 1px solid var(--sm-border);
-  border-radius: 12px;
-  padding: 1rem 1.25rem;
-  margin-bottom: 1rem;
+  min-width: 240px !important;
 }
 .sm-kpi-row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
 .sm-kpi {
@@ -154,18 +149,6 @@ section[data-testid="stSidebar"][aria-expanded="false"] {
 }
 .sm-kpi-label { font-size: 0.78rem; opacity: 0.85; margin-bottom: 0.15rem; }
 .sm-kpi-value { font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
-.sm-chart-card {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 12px;
-  padding: 0.85rem 1rem 0.65rem 1rem;
-  min-height: 100%;
-}
-.sm-chart-card-title {
-  font-size: 0.95rem;
-  font-weight: 600;
-  margin-bottom: 0.25rem;
-}
 .sm-legend { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.5rem 0 1rem 0; }
 .sm-badge {
   display: inline-flex; align-items: center; gap: 0.35rem;
@@ -203,22 +186,6 @@ section[data-testid="stSidebar"][aria-expanded="false"] {
   opacity: 0.45;
   margin: 0.15rem 0 0.5rem 0;
 }
-[data-testid="stSidebar"] .rail-row {
-  margin-bottom: 0.15rem;
-}
-[data-testid="stSidebar"] .rail-row-active {
-  background: rgba(255, 255, 255, 0.06);
-  border-left: 3px solid #FB8C00;
-  border-radius: 6px;
-  padding: 0.15rem 0 0.15rem 0.35rem;
-  margin-bottom: 0.35rem;
-}
-[data-testid="stSidebar"] .rail-subtitle {
-  font-size: 0.74rem;
-  opacity: 0.52;
-  margin: -0.35rem 0 0.35rem 0.65rem;
-  line-height: 1.3;
-}
 [data-testid="stSidebar"] .rail-footer {
   font-size: 0.85rem;
   font-weight: 600;
@@ -243,38 +210,12 @@ section[data-testid="stSidebar"][aria-expanded="false"] {
 [data-testid="stSidebar"] button[kind="primary"] {
   border-radius: 8px !important;
   font-weight: 600 !important;
-  background: var(--sm-danger-accent) !important;
+  background: var(--sm-primary-accent) !important;
   border: none !important;
 }
 [data-testid="stSidebar"] button.rail-pin-btn {
   font-size: 0.78rem !important;
   opacity: 0.7 !important;
-}
-/* ── Header + chat bitácora ── */
-.sm-app-header {
-  margin-bottom: 1rem;
-}
-.sm-hero-title {
-  font-size: 2.2rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.05;
-  margin-bottom: 0.2rem;
-}
-.sm-hero-subtitle {
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: var(--sm-muted-text);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-}
-.sm-hero-dot {
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 999px;
-  display: inline-block;
-  background: var(--sm-primary-accent);
 }
 .sm-chat-summary {
   display: flex;
@@ -310,8 +251,7 @@ section[data-testid="stSidebar"][aria-expanded="false"] {
   background: transparent !important;
   border: none !important;
 }
-[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]),
-[data-testid="stChatMessage"]:has([data-testid="stChatAvatarIcon-user"]) {
+[data-testid="stChatMessage"]:has(.sm-role-user) {
   flex-direction: row-reverse;
   margin-left: auto;
   max-width: min(36rem, 78%);
@@ -319,30 +259,8 @@ section[data-testid="stSidebar"][aria-expanded="false"] {
   border: 1px solid rgba(30, 136, 229, 0.22) !important;
   border-radius: 16px 16px 4px 16px !important;
 }
-[data-testid="stChatMessage"]:has(.sm-chat-summary) [data-testid="stChatMessageAvatar"],
-[data-testid="stChatMessage"]:has(.sm-chat-summary) [data-testid="chatAvatarIcon-assistant"],
-[data-testid="stChatMessage"]:has(.sm-chat-summary) [data-testid="stChatAvatarIcon-assistant"] {
+[data-testid="stChatMessage"]:has(.sm-chat-summary) [data-testid="stChatMessageAvatar"] {
   display: none !important;
-}
-.sm-composer {
-  border-top: 1px solid rgba(255,255,255,0.08);
-  padding-top: 0.5rem;
-  margin-top: 0.25rem;
-}
-.sm-composer-shell {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.7rem 0.85rem;
-  border-radius: 14px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.08);
-  margin-bottom: 0.35rem;
-}
-.sm-composer-clip {
-  color: var(--sm-muted-text);
-  font-size: 1rem;
-  line-height: 1;
 }
 </style>
 """

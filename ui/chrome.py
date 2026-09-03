@@ -15,15 +15,7 @@ def render_header(panel_mode: str, *, live: bool) -> None:
     mode_label = ui_copy.MODE_COMMIT if panel_mode == "commit" else ui_copy.MODE_EXPLORE
     if not live:
         mode_label = ui_copy.MODE_EXPLORE
-    st.markdown(
-        f"<div class='sm-app-header'>"
-        f"  <div class='sm-hero-title'>{ui_copy.APP_NAME}</div>"
-        f"  <div class='sm-hero-subtitle'>{ui_copy.APP_TAGLINE} · {mode_label}"
-        f"    <span class='sm-hero-dot' aria-hidden='true'></span>"
-        f"  </div>"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
+    st.caption(f"{ui_copy.APP_TAGLINE} · {mode_label}")
 
 
 def render_home(*, on_example: Callable[[str], None] | None = None) -> None:

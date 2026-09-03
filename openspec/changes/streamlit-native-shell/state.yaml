@@ -1,5 +1,5 @@
 change: streamlit-native-shell
-status: ready-for-apply
+status: verified
 strict_tdd: true
 depends_on:
   - ui-v2
@@ -10,5 +10,5 @@ phases:
   specs: done
   design: done
   tasks: done
-  apply: pending
-  verify: pending
+  apply: done
+  verify: done

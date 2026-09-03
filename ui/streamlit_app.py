@@ -298,7 +298,7 @@ def _slice_from_last_assistant_message() -> dict | None:
 
 def _dashboard_has_charts(dashboard: dict | None) -> bool:
     dash = dashboard or {}
-    return bool(dash.get("by_category") or dash.get("coverage"))
+    return bool(dash.get("by_category") and dash.get("coverage"))
 
 
 def _merge_dashboard_charts(slice_data: dict, messages: list[dict]) -> dict:
@@ -557,7 +557,7 @@ def render_inventory_dashboard_static(dash: dict | None, purchase_list: list[dic
             )
     with right:
         st.markdown(f"**Distribución de {metrics.LABEL_COVERAGE}**")
-        st.caption("Rojo = pocos días de stock · Verde = holgado")
+        st.caption("Barras en azul de marca · la franja de cobertura arriba conserva la urgencia")
         if coverage_rows:
             st.altair_chart(
                 charts.histogram(
@@ -801,6 +801,12 @@ def _live_summary_source() -> tuple[dict, list[dict]]:
     return dash, purchase
 
 
+_CHAT_AVATARS = {
+    "user": ":material/person:",
+    "assistant": ":material/analytics:",
+}
+
+
 def render_history() -> None:
     messages = st.session_state.messages
     live = st.session_state.live_list_active
@@ -815,7 +821,10 @@ def render_history() -> None:
             and msg.get("role") == "assistant"
             and msg.get("mode") in ("list", "explore")
         )
-        with st.chat_message(msg["role"]):
+        role = msg["role"]
+        with st.chat_message(role, avatar=_CHAT_AVATARS.get(role)):
+            if role == "user":
+                st.markdown('<span class="sm-role-user" aria-hidden="true"></span>', unsafe_allow_html=True)
             if msg.get("mode") in ("list", "explore"):
                 if live_dashboard_turn:
                     summary = _explore_summary_line(
@@ -976,10 +985,11 @@ if prompt:
         st.rerun()
 
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
+    with st.chat_message("user", avatar=_CHAT_AVATARS["user"]):
+        st.markdown('<span class="sm-role-user" aria-hidden="true"></span>', unsafe_allow_html=True)
         st.markdown(prompt)
 
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar=_CHAT_AVATARS["assistant"]):
         with st.spinner("Calculando recomendaciones..."):
             data = ask_api(prompt)
 
