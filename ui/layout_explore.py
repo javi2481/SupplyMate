@@ -10,7 +10,6 @@ import streamlit as st
 
 from app.core.models import AnalyticalScope
 from app.services import dashboard as dash_svc
-from app.services import metrics
 from ui import charts, components
 from ui.composition import copy as ui_copy
 from ui.composition.kpi_policy import explore_kpi_cards
@@ -38,6 +37,10 @@ def render_explore_panel(
     table_selection_sku: Callable[[Any, list[dict]], str | None] | None = None,
     render_calculation: Callable[[dict], None] | None = None,
 ) -> None:
+    del analyze_data, next_step, interaction_events, highlight_calc
+    del analyst_enabled, on_option, on_prompt, on_sku, on_enter_commit
+    del table_selection_sku, render_calculation
+
     dash = slice_data.get("dashboard") or {}
     category_rows = dash.get("by_category") or []
     coverage_rows = dash.get("coverage") or []
@@ -65,6 +68,7 @@ def render_explore_panel(
                     extra_tooltips=[alt.Tooltip("sku_count:Q", title="Productos")],
                     selectable_field="category",
                     selection_name="category_select",
+                    selected_values=scope.categories,
                 )
                 cat_event = st.altair_chart(
                     cat_chart,
@@ -81,8 +85,8 @@ def render_explore_panel(
                     st.rerun()
 
         components.render_chart_card(
-            f"{metrics.LABEL_RECOMMENDED_QTY} por categoría",
-            caption="Click en una fila del gráfico para recortar",
+            ui_copy.CHART_CATEGORY_TITLE,
+            caption=ui_copy.CHART_CATEGORY_SUBTITLE,
             body=_render_category_chart,
         )
     with right:
@@ -91,10 +95,11 @@ def render_explore_panel(
                 cov_chart = charts.histogram(
                     coverage_rows,
                     "bucket",
-                    metrics.LABEL_COVERAGE,
+                    ui_copy.CHART_COVERAGE_AXIS,
                     x_sort=list(dash_svc.COVERAGE_ORDER),
                     selectable_field="bucket",
                     selection_name="coverage_select",
+                    selected_values=scope.coverage_buckets,
                 )
                 cov_event = st.altair_chart(
                     cov_chart,
@@ -111,7 +116,7 @@ def render_explore_panel(
                     st.rerun()
 
         components.render_chart_card(
-            f"Distribución de {metrics.LABEL_COVERAGE}",
-            caption="Click en un bucket para filtrar",
+            ui_copy.CHART_COVERAGE_TITLE,
+            caption=ui_copy.CHART_COVERAGE_SUBTITLE,
             body=_render_coverage_chart,
         )

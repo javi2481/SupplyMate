@@ -110,7 +110,12 @@ def test_theme_sidebar_primary_is_not_danger():
     assert "button[kind=\"primary\"]" in theme.CSS
     assert "background: var(--sm-primary-accent)" in theme.CSS
     assert ".block-container" in theme.CSS
-    assert "max-width: 1150px" in theme.CSS
+    assert "max-width: 1450px" in theme.CSS
+    assert "max-width: 1150px" not in theme.CSS
+    assert "padding-left: 2rem" in theme.CSS
+    assert "padding-right: 2rem" in theme.CSS
+    assert "1.85rem" in theme.CSS
+    assert "1.45rem" in theme.CSS
     primary_block = theme.CSS.split('button[kind="primary"]')[1].split("}")[0]
     assert "--sm-danger-accent" not in primary_block
 

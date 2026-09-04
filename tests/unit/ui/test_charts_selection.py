@@ -66,6 +66,17 @@ def _bound_mark_types(spec: dict, selection_name: str) -> set[str]:
     return types
 
 
+def _selection_param(spec: dict, selection_name: str) -> dict:
+    for param in spec.get("params") or []:
+        if param.get("name") == selection_name:
+            return param
+    for layer in spec.get("layer") or []:
+        for param in layer.get("params") or []:
+            if param.get("name") == selection_name:
+                return param
+    return {}
+
+
 def test_lollipop_selection_binds_to_clickable_mark_not_only_rule():
     spec = lollipop(
         _ROWS,
@@ -75,8 +86,66 @@ def test_lollipop_selection_binds_to_clickable_mark_not_only_rule():
         selection_name="category_select",
     ).to_dict()
     bound = _bound_mark_types(spec, "category_select")
-    assert bound & {"bar", "circle", "rect"}
+    assert bound & {"rect", "circle"}
+    assert "bar" not in bound
     assert bound != {"rule"}
+
+
+def test_lollipop_selection_uses_nearest_false():
+    spec = lollipop(
+        _ROWS,
+        "category",
+        "Categoría",
+        selectable_field="category",
+        selection_name="category_select",
+    ).to_dict()
+    param = _selection_param(spec, "category_select")
+    select = param.get("select") or {}
+    assert select.get("nearest") is False
+    assert select.get("type") == "point"
+    assert select.get("fields") == ["category"]
+
+
+def test_lollipop_selected_values_dim_non_selected():
+    spec = lollipop(
+        _ROWS,
+        "category",
+        "Categoría",
+        selectable_field="category",
+        selection_name="category_select",
+        selected_values=["Cuidado del Cabello"],
+    ).to_dict()
+    payload = str(spec)
+    assert "_selected" in payload or "opacity" in payload
+    layers = spec.get("layer") or [spec]
+    opacity_layers = [
+        layer
+        for layer in layers
+        if isinstance((layer.get("encoding") or {}).get("opacity"), dict)
+        or (
+            isinstance(layer.get("mark"), dict)
+            and "opacity" in (layer.get("mark") or {})
+            and layer.get("mark", {}).get("type") in ("circle", "rule")
+        )
+    ]
+    assert opacity_layers, "selected scope must encode opacity on visible marks"
+
+
+def test_lollipop_includes_end_value_labels():
+    spec = lollipop(
+        _ROWS,
+        "category",
+        "Categoría",
+        selectable_field="category",
+        selection_name="category_select",
+    ).to_dict()
+    layers = spec.get("layer") or [spec]
+    text_layers = []
+    for layer in layers:
+        mark = layer.get("mark")
+        if mark == "text" or (isinstance(mark, dict) and mark.get("type") == "text"):
+            text_layers.append(layer)
+    assert text_layers, "lollipop must show recommended quantity labels"
 
 
 def test_histogram_exposes_named_point_selection():
@@ -89,6 +158,24 @@ def test_histogram_exposes_named_point_selection():
     ).to_dict()
     names = [p.get("name") for p in spec.get("params") or []]
     assert "coverage_select" in names
+
+
+def test_histogram_selected_values_dim_non_selected():
+    spec = histogram(
+        [
+            {"bucket": "0–3 días", "sku_count": 4},
+            {"bucket": "3–7 días", "sku_count": 2},
+        ],
+        "bucket",
+        "Cobertura",
+        x_sort=["0–3 días", "3–7 días"],
+        selectable_field="bucket",
+        selection_name="coverage_select",
+        selected_values=["0–3 días"],
+    ).to_dict()
+    encoding = spec.get("encoding") or {}
+    opacity = encoding.get("opacity")
+    assert opacity is not None
 
 
 def test_explore_charts_use_single_brand_blue():
