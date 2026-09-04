@@ -1,0 +1,14 @@
+change: sidebar-recortes-nav
+status: verified
+strict_tdd: true
+depends_on:
+  - streamlit-native-shell
+  - chat-shell
+  - ui-mockup-polish
+phases:
+  proposal: done
+  specs: done
+  design: done
+  tasks: done
+  apply: done
+  verify: done

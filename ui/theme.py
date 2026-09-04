@@ -213,6 +213,18 @@ section[data-testid="stSidebar"][aria-expanded="false"] {
   background: var(--sm-primary-accent) !important;
   border: none !important;
 }
+/* Active thread row: soft fill + left accent (not a hard bordered box) */
+[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: none !important;
+  border-left: 3px solid var(--sm-primary-accent) !important;
+  border-radius: 8px !important;
+  padding-left: 0.25rem !important;
+}
+[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] > div {
+  border: none !important;
+  background: transparent !important;
+}
 [data-testid="stSidebar"] button.rail-pin-btn {
   font-size: 0.78rem !important;
   opacity: 0.7 !important;

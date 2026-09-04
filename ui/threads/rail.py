@@ -69,30 +69,15 @@ def render_thread_rail(
             history = [thread for thread in history if thread.id in matches]
         groups = group_history_by_day(history)
         if not groups:
-            st.markdown("<p class='rail-empty'>Sin chats recientes</p>", unsafe_allow_html=True)
+            st.markdown(
+                f"<p class='rail-empty'>{ui_copy.HISTORY_EMPTY}</p>",
+                unsafe_allow_html=True,
+            )
         for day_label, threads in groups:
             st.markdown(f"<p class='rail-day'>{day_label}</p>", unsafe_allow_html=True)
             action = _render_thread_rows(threads, active_id=active_id, prefix="hist")
             if action is not None:
                 clicked = action
-
-    if active_id:
-        active = store.get(active_id)
-        if active is not None:
-            if active.pinned:
-                if st.button(
-                    ui_copy.UNPIN_THREAD,
-                    key="rail-unpin-active",
-                    use_container_width=True,
-                ):
-                    clicked = RailAction("unpin", active_id)
-            else:
-                if st.button(
-                    ui_copy.PIN_THREAD,
-                    key="rail-pin-active",
-                    use_container_width=True,
-                ):
-                    clicked = RailAction("pin", active_id)
 
     st.markdown(
         f"<div class='rail-footer'>{ui_copy.APP_NAME}</div>",
@@ -107,13 +92,42 @@ def _render_thread_rows(threads, *, active_id: str | None, prefix: str) -> RailA
     for thread in threads:
         is_active = thread.id == active_id
         with st.container(border=is_active):
-            if st.button(
-                thread.title,
-                key=f"{prefix}-open-{thread.id}",
-                use_container_width=True,
-                type="secondary",
-            ):
-                clicked = RailAction("select", thread.id)
-            if thread.subtitle:
-                st.caption(thread.subtitle)
+            if is_active:
+                title_col, menu_col = st.columns([5, 1])
+                with title_col:
+                    if st.button(
+                        thread.title,
+                        key=f"{prefix}-open-{thread.id}",
+                        use_container_width=True,
+                        type="secondary",
+                    ):
+                        clicked = RailAction("select", thread.id)
+                    if thread.subtitle:
+                        st.caption(thread.subtitle)
+                with menu_col:
+                    with st.popover(ui_copy.THREAD_MENU):
+                        if thread.pinned:
+                            if st.button(
+                                ui_copy.UNPIN_THREAD,
+                                key="rail-unpin-active",
+                                use_container_width=True,
+                            ):
+                                clicked = RailAction("unpin", thread.id)
+                        else:
+                            if st.button(
+                                ui_copy.PIN_THREAD,
+                                key="rail-pin-active",
+                                use_container_width=True,
+                            ):
+                                clicked = RailAction("pin", thread.id)
+            else:
+                if st.button(
+                    thread.title,
+                    key=f"{prefix}-open-{thread.id}",
+                    use_container_width=True,
+                    type="secondary",
+                ):
+                    clicked = RailAction("select", thread.id)
+                if thread.subtitle:
+                    st.caption(thread.subtitle)
     return clicked

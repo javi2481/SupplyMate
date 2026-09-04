@@ -104,6 +104,17 @@ def _catalog_sku_count(snap: Mapping[str, Any] | None) -> int | None:
     return skus if isinstance(skus, int) else None
 
 
+def _first_non_boilerplate_question(messages: list[Mapping[str, Any]] | None) -> str:
+    for msg in messages or []:
+        if msg.get("role") != "user":
+            continue
+        text = str(msg.get("content") or "").strip()
+        if not text or is_boilerplate_user_question(text):
+            continue
+        return text[:48]
+    return ""
+
+
 def title_for_thread(
     scope: AnalyticalScope | Mapping[str, Any] | None,
     messages: list[Mapping[str, Any]] | None,
@@ -115,14 +126,10 @@ def title_for_thread(
         return line
     catalog_skus = _catalog_sku_count(snap)
     if catalog_skus is not None and catalog_skus > 0:
-        return f"Catálogo · {catalog_skus} SKUs"
-    for msg in messages or []:
-        if msg.get("role") != "user":
-            continue
-        text = str(msg.get("content") or "").strip()
-        if not text or is_boilerplate_user_question(text):
-            continue
-        return text[:48]
+        return "Inventario general"
+    question = _first_non_boilerplate_question(messages)
+    if question:
+        return question
     return DEFAULT_TITLE
 
 
@@ -152,6 +159,8 @@ def group_history_by_day(
 ) -> list[tuple[str, list[Thread]]]:
     today = today or datetime.now(timezone.utc).date()
     yesterday = today - timedelta(days=1)
+    week_start = today - timedelta(days=today.weekday())
+    week_end = week_start + timedelta(days=6)
     buckets: dict[str, list[Thread]] = {}
     order: list[str] = []
     sorted_threads = sorted(threads, key=lambda t: _parse_dt(t.updated_at), reverse=True)
@@ -161,6 +170,8 @@ def group_history_by_day(
             label = "Hoy"
         elif day == yesterday:
             label = "Ayer"
+        elif week_start <= day <= week_end:
+            label = "Esta semana"
         else:
             label = day.isoformat()
         if label not in buckets:
@@ -202,19 +213,17 @@ class Thread:
 
 
 def _subtitle_from_snap(snap: dict[str, Any]) -> str:
-    """Subtítulo del hilo: solo cuando hay recorte (no catálogo completo)."""
+    """Subtítulo de reconocimiento: contexto mínimo, sin SKUs ni totales de catálogo."""
     scope = _as_scope(snap.get("analytical_scope"))
     if compact_scope_line(scope) == "Inventario":
+        catalog_skus = _catalog_sku_count(snap)
+        if catalog_skus is not None and catalog_skus > 0:
+            return "Todos los productos"
         return ""
-    dash = (snap.get("slice_data") or {}).get("dashboard") or {}
-    skus = dash.get("skus")
     purchase_list = (snap.get("slice_data") or {}).get("purchase_list") or []
-    parts: list[str] = []
-    if isinstance(skus, int):
-        parts.append(f"{skus} SKUs")
     if purchase_list:
-        parts.append(f"{len(purchase_list)} para reponer")
-    return " · ".join(parts)
+        return f"{len(purchase_list)} para reponer"
+    return ""
 
 
 def _refresh_thread_labels(thread: Thread) -> None:
@@ -225,6 +234,22 @@ def _refresh_thread_labels(thread: Thread) -> None:
         snap=snap,
     )
     thread.subtitle = _subtitle_from_snap(snap)
+
+
+def _disambiguate_clone_subtitles(threads: list[Thread]) -> None:
+    """Same UTC day + same title/subtitle → use non-boilerplate question as subtitle."""
+    buckets: dict[tuple[date, str, str], list[Thread]] = {}
+    for thread in threads:
+        day = _parse_dt(thread.updated_at).date()
+        key = (day, thread.title, thread.subtitle)
+        buckets.setdefault(key, []).append(thread)
+    for group in buckets.values():
+        if len(group) < 2:
+            continue
+        for thread in group:
+            question = _first_non_boilerplate_question(thread.snapshot.get("messages") or [])
+            if question:
+                thread.subtitle = question
 
 
 class ThreadStore:
@@ -253,12 +278,14 @@ class ThreadStore:
                 thread = Thread.from_dict(item)
                 _refresh_thread_labels(thread)
                 self.threads.append(thread)
+        _disambiguate_clone_subtitles(self.threads)
         active = payload.get("active_id")
         self.active_id = str(active) if active else None
 
     def refresh_all_labels(self) -> None:
         for thread in self.threads:
             _refresh_thread_labels(thread)
+        _disambiguate_clone_subtitles(self.threads)
 
     def search(self, query: str) -> list[Thread]:
         """Filter threads by title/subtitle. Presentation-free; rail owns copy and layout."""
@@ -326,6 +353,7 @@ class ThreadStore:
             self.threads = [t for t in self.threads if t.id != existing.id]
             self.threads.append(existing)
             thread = existing
+        _disambiguate_clone_subtitles(self.threads)
         self.active_id = thread.id
         self._cap_unpinned()
         self.save()

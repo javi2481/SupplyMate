@@ -83,13 +83,57 @@ def test_title_skips_default_startup_question():
     assert title == "Nuevo chat"
 
 
-def test_title_uses_catalog_line_for_full_inventario():
+def test_title_uses_inventario_general_for_full_inventario():
     title = title_for_thread(
         AnalyticalScope(),
         [{"role": "user", "content": "¿Qué productos tengo que comprar?"}],
         snap={"root_skus": 13125, "slice_data": {"dashboard": {"skus": 13125}}},
     )
-    assert title == "Catálogo · 13125 SKUs"
+    assert title == "Inventario general"
+    assert "SKU" not in title
+    assert "Catálogo" not in title
+
+
+def test_subtitle_inventario_general_is_todos_los_productos(tmp_path: Path):
+    store = ThreadStore(tmp_path / "threads.json")
+    thread = store.upsert_session(
+        "inv",
+        _session(
+            analytical_scope=AnalyticalScope().model_dump(),
+            messages=[{"role": "user", "content": "¿Qué productos tengo que comprar?"}],
+            root_skus=13125,
+            slice_data={"dashboard": {"skus": 13125}, "purchase_list": [{}] * 25},
+        ),
+    )
+    assert thread.title == "Inventario general"
+    assert thread.subtitle == "Todos los productos"
+    assert "SKU" not in thread.subtitle
+
+
+def test_subtitle_filtered_uses_para_reponer_without_skus(tmp_path: Path):
+    store = ThreadStore(tmp_path / "threads.json")
+    thread = store.upsert_session(
+        "cabello",
+        _session(
+            analytical_scope=AnalyticalScope(categories=["Cuidado del Cabello"]).model_dump(),
+            slice_data={"dashboard": {"skus": 2430}, "purchase_list": [{}] * 25},
+        ),
+    )
+    assert thread.title == "Cuidado del Cabello"
+    assert thread.subtitle == "25 para reponer"
+    assert "SKU" not in thread.subtitle
+
+
+def test_subtitle_filtered_empty_without_purchase_list(tmp_path: Path):
+    store = ThreadStore(tmp_path / "threads.json")
+    thread = store.upsert_session(
+        "cabello",
+        _session(
+            analytical_scope=AnalyticalScope(categories=["Cuidado del Cabello"]).model_dump(),
+            slice_data={"dashboard": {"skus": 10}},
+        ),
+    )
+    assert thread.subtitle == ""
 
 
 def test_title_uses_first_non_boilerplate_user_question():
@@ -119,7 +163,7 @@ def test_pin_excludes_thread_from_history(tmp_path: Path):
     assert [h.id for h in store.history_threads()] == [t.id]
 
 
-def test_group_history_by_day_labels_hoy_ayer_and_iso():
+def test_group_history_by_day_labels_hoy_ayer_esta_semana_and_iso():
     def _thread(tid: str, day: date, hour: int = 15) -> Thread:
         return Thread(
             id=tid,
@@ -129,10 +173,12 @@ def test_group_history_by_day_labels_hoy_ayer_and_iso():
             snapshot={},
         )
 
+    # Thursday 2026-09-03 → week Mon 2026-08-31 .. Sun 2026-09-06
     today = date(2026, 9, 3)
     groups = group_history_by_day(
         [
             _thread("old", date(2026, 8, 1)),
+            _thread("week", date(2026, 8, 31)),
             _thread("hoy-b", today, hour=10),
             _thread("ayer", date(2026, 9, 2)),
             _thread("hoy-a", today, hour=18),
@@ -140,9 +186,66 @@ def test_group_history_by_day_labels_hoy_ayer_and_iso():
         today=today,
     )
     labels = [label for label, _ in groups]
-    assert labels == ["Hoy", "Ayer", "2026-08-01"]
+    assert labels == ["Hoy", "Ayer", "Esta semana", "2026-08-01"]
     assert [t.id for t in groups[0][1]] == ["hoy-a", "hoy-b"]
+    assert [t.id for t in groups[2][1]] == ["week"]
 
+
+def test_clone_same_day_disambiguates_with_question(tmp_path: Path):
+    store = ThreadStore(tmp_path / "threads.json")
+    day = datetime(2026, 9, 3, 12, 0, tzinfo=timezone.utc).isoformat()
+    a = store.upsert_session(
+        "a",
+        _session(
+            analytical_scope=AnalyticalScope().model_dump(),
+            messages=[{"role": "user", "content": "¿Cuántos pañales tengo que pedir?"}],
+            root_skus=100,
+            slice_data={"dashboard": {"skus": 100}},
+        ),
+    )
+    b = store.upsert_session(
+        "b",
+        _session(
+            analytical_scope=AnalyticalScope().model_dump(),
+            messages=[{"role": "user", "content": "Reposición urgente en cabello"}],
+            root_skus=100,
+            slice_data={"dashboard": {"skus": 100}},
+        ),
+    )
+    a.updated_at = day
+    b.updated_at = day
+    store.refresh_all_labels()
+    assert a.title == "Inventario general"
+    assert b.title == "Inventario general"
+    assert a.subtitle == "¿Cuántos pañales tengo que pedir?"
+    assert b.subtitle == "Reposición urgente en cabello"
+
+
+def test_clone_different_days_keep_todos_los_productos(tmp_path: Path):
+    store = ThreadStore(tmp_path / "threads.json")
+    a = store.upsert_session(
+        "a",
+        _session(
+            analytical_scope=AnalyticalScope().model_dump(),
+            messages=[{"role": "user", "content": "¿Qué productos tengo que comprar?"}],
+            root_skus=100,
+            slice_data={"dashboard": {"skus": 100}},
+        ),
+    )
+    b = store.upsert_session(
+        "b",
+        _session(
+            analytical_scope=AnalyticalScope().model_dump(),
+            messages=[{"role": "user", "content": "¿Qué productos tengo que comprar?"}],
+            root_skus=100,
+            slice_data={"dashboard": {"skus": 100}},
+        ),
+    )
+    a.updated_at = datetime(2026, 9, 3, 12, 0, tzinfo=timezone.utc).isoformat()
+    b.updated_at = datetime(2026, 9, 2, 12, 0, tzinfo=timezone.utc).isoformat()
+    store.refresh_all_labels()
+    assert a.subtitle == "Todos los productos"
+    assert b.subtitle == "Todos los productos"
 
 def test_json_round_trip_and_corrupt_file_is_empty(tmp_path: Path):
     path = tmp_path / "threads.json"
@@ -215,7 +318,8 @@ def test_search_matches_title_and_subtitle_case_insensitively(tmp_path: Path):
         ),
     )
     assert [thread.id for thread in store.search("cabello")] == ["cabello"]
-    assert [thread.id for thread in store.search("2430 skus")] == ["cabello"]
+    assert {thread.id for thread in store.search("para reponer")} == {"cabello", "panales"}
+    assert [thread.id for thread in store.search("2430 skus")] == []
     assert [thread.id for thread in store.search("bebé")] == ["panales"]
     assert {thread.id for thread in store.search("")} == {"cabello", "panales"}
 
