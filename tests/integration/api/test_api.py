@@ -71,6 +71,18 @@ def test_openapi_html_for_browsers():
     assert "GET" in response.text
 
 
+def test_redoc_branded_page():
+    response = client.get("/redoc")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Redoc.init" in response.text
+    assert "#1E88E5" in response.text
+    assert "#f8fafc" in response.text  # light sidebar
+    assert "#0b0f17" not in response.text  # no forced dark shell
+    assert 'id="redoc-container"' in response.text
+    assert "/docs" in response.text
+
+
 def test_search_products():
     response = client.get("/products/search", params={"q": "47 street"})
     assert response.status_code == 200
