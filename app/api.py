@@ -4,9 +4,10 @@ from datetime import datetime, timezone
 from html import escape
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
-from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.agent import run_analyze, run_supplymate
 from app.core.config import MAX_SCOPE_VALUE_LENGTH
@@ -35,15 +36,13 @@ from app.services.scoping.scope_sanitize import sanitize_value, sanitize_values
 APP_TITLE = "SupplyMate API"
 APP_VERSION = "0.5.0"
 APP_DESCRIPTION = """
-API de **reposición inteligente** para operación comercial.
+API de reposición inteligente para operación comercial.
 
-| Área | Qué hace |
-|------|----------|
-| Chat | Interpreta preguntas naturales y arma el recorte (`POST /chat`) |
-| Reposición | Slice, dashboard, lista de compra y análisis |
-| Catálogo | Búsqueda de productos y cálculo por SKU |
+- **Chat** — interpreta preguntas naturales y arma el recorte (`POST /chat`)
+- **Reposición** — slice, dashboard, lista de compra y análisis
+- **Catálogo** — búsqueda de productos y cálculo por SKU
 
-La UI de demo corre con `streamlit run ui/streamlit_app.py`.
+UI de demo: `streamlit run ui/streamlit_app.py`
 """.strip()
 
 OPENAPI_TAGS = [
@@ -52,6 +51,28 @@ OPENAPI_TAGS = [
     {"name": "replenishment", "description": "Recortes, dashboards, OC y análisis"},
     {"name": "chat", "description": "Asistente conversacional de reposición"},
 ]
+
+
+class HealthResponse(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "service": "SupplyMate",
+                    "version": APP_VERSION,
+                    "status": "ok",
+                    "message": "Servicio operativo y listo para recibir requests.",
+                    "time": "2026-09-04T18:00:00+00:00",
+                }
+            ]
+        }
+    )
+
+    service: str = Field(description="Nombre del servicio")
+    version: str = Field(description="Versión publicada de la API")
+    status: str = Field(description="ok si el proceso responde")
+    message: str = Field(description="Texto legible del estado")
+    time: str = Field(description="Timestamp UTC ISO-8601")
 
 app = FastAPI(
     title=APP_TITLE,
@@ -254,15 +275,15 @@ async def root(request: Request) -> Response:
     )
 
 
-@app.get("/health", tags=["system"], summary="Estado del servicio")
-async def health() -> dict[str, str]:
-    return {
-        "service": "SupplyMate",
-        "version": APP_VERSION,
-        "status": "ok",
-        "message": "Servicio operativo y listo para recibir requests.",
-        "time": datetime.now(timezone.utc).isoformat(),
-    }
+@app.get("/health", response_model=HealthResponse, tags=["system"], summary="Estado del servicio")
+async def health() -> HealthResponse:
+    return HealthResponse(
+        service="SupplyMate",
+        version=APP_VERSION,
+        status="ok",
+        message="Servicio operativo y listo para recibir requests.",
+        time=datetime.now(timezone.utc).isoformat(),
+    )
 
 
 @app.get("/openapi.json", include_in_schema=False)
@@ -281,12 +302,131 @@ async def swagger_docs() -> HTMLResponse:
     )
 
 
+def _redoc_html() -> str:
+    # Light ReDoc (readable) + thin brand bar. Avoid dark theme — contrast breaks.
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{escape(APP_TITLE)} · ReDoc</title>
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" />
+  <style>
+    html, body {{
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+    }}
+    .sm-redoc-banner {{
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.65rem 1.25rem;
+      background: #ffffff;
+      border-bottom: 1px solid #e6ebf2;
+      font-family: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    }}
+    .sm-redoc-banner .brand {{
+      display: flex;
+      align-items: baseline;
+      gap: 0.55rem;
+    }}
+    .sm-redoc-banner .brand strong {{
+      color: #1E88E5;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }}
+    .sm-redoc-banner .brand span {{
+      color: #6b7280;
+      font-size: 0.86rem;
+    }}
+    .sm-redoc-banner nav a {{
+      color: #374151;
+      text-decoration: none;
+      margin-left: 1rem;
+      font-size: 0.88rem;
+      font-weight: 600;
+    }}
+    .sm-redoc-banner nav a:hover {{ color: #1E88E5; }}
+    #redoc-container {{ min-height: calc(100vh - 48px); }}
+  </style>
+</head>
+<body>
+  <header class="sm-redoc-banner">
+    <div class="brand">
+      <strong>{escape(APP_TITLE)}</strong>
+      <span>v{escape(APP_VERSION)}</span>
+    </div>
+    <nav>
+      <a href="/">Inicio</a>
+      <a href="/docs">Swagger</a>
+      <a href="/health">Health</a>
+      <a href="/openapi.json">OpenAPI</a>
+    </nav>
+  </header>
+  <div id="redoc-container"></div>
+  <script src="https://cdn.jsdelivr.net/npm/redoc@2/bundles/redoc.standalone.js"></script>
+  <script>
+    Redoc.init(
+      "/openapi.json",
+      {{
+        hideHostname: true,
+        expandResponses: "200,201",
+        pathInMiddlePanel: true,
+        nativeScrollbars: true,
+        theme: {{
+          colors: {{
+            primary: {{ main: "#1E88E5" }},
+            success: {{ main: "#2e7d32" }},
+            error: {{ main: "#c62828" }},
+            http: {{
+              get: "#1E88E5",
+              post: "#2e7d32",
+              put: "#ef6c00",
+              delete: "#c62828",
+              patch: "#6a1b9a"
+            }}
+          }},
+          typography: {{
+            fontSize: "15px",
+            fontFamily: '"Source Sans 3", "Segoe UI", system-ui, sans-serif',
+            headings: {{
+              fontFamily: '"Source Sans 3", "Segoe UI", system-ui, sans-serif',
+              fontWeight: "700"
+            }},
+            code: {{
+              fontSize: "13px",
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+              backgroundColor: "#f3f6fa"
+            }}
+          }},
+          sidebar: {{
+            backgroundColor: "#f8fafc",
+            textColor: "#1f2937",
+            activeTextColor: "#1E88E5",
+            width: "275px"
+          }},
+          rightPanel: {{
+            backgroundColor: "#1e293b",
+            width: "40%"
+          }}
+        }}
+      }},
+      document.getElementById("redoc-container")
+    );
+  </script>
+</body>
+</html>
+"""
+
+
 @app.get("/redoc", include_in_schema=False)
 async def redoc_docs() -> HTMLResponse:
-    return get_redoc_html(
-        openapi_url="/openapi.json",
-        title=f"{APP_TITLE} · ReDoc",
-    )
+    return HTMLResponse(_redoc_html())
 
 
 def _validate_scope_values(raw_values: list[str], param_name: str) -> list[str]:

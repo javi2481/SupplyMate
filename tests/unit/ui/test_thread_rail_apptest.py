@@ -78,7 +78,7 @@ def _rail_harness() -> None:
     st.caption("harness-ok")
 
 
-def test_sidebar_order_nuevo_fijados_historial(tmp_path: Path):
+def test_sidebar_order_nuevo_fijados_recientes(tmp_path: Path):
     from streamlit.testing.v1 import AppTest
 
     path = tmp_path / "threads.json"
@@ -90,9 +90,45 @@ def test_sidebar_order_nuevo_fijados_historial(tmp_path: Path):
     assert at.button[0].label == ui_copy.NEW_CHAT
     markdown = [str(item.value) for item in at.markdown]
     fijados = next(i for i, m in enumerate(markdown) if ui_copy.PINNED_SECTION in m)
-    historial = next(i for i, m in enumerate(markdown) if ui_copy.HISTORY_SECTION in m)
-    assert fijados < historial
+    recientes = next(i for i, m in enumerate(markdown) if ui_copy.HISTORY_SECTION in m)
+    assert fijados < recientes
+    assert ui_copy.HISTORY_SECTION == "Recientes"
+    assert not any("Historial de chats" in m for m in markdown)
     assert not any(b.label == "Limpiar chat" for b in at.button)
+
+
+def test_rail_has_no_permanent_fijar_without_active(tmp_path: Path):
+    from streamlit.testing.v1 import AppTest
+
+    path = tmp_path / "threads.json"
+    _seed_store(path)
+    at = AppTest.from_function(_rail_harness)
+    at.session_state["thread_store_path"] = str(path)
+    at.session_state["active_thread_id"] = None
+    at.run(timeout=15)
+    assert not at.exception
+    labels = [b.label for b in at.button]
+    assert ui_copy.PIN_THREAD not in labels
+    assert ui_copy.UNPIN_THREAD not in labels
+    assert not any(b.key == "rail-pin-active" for b in at.button)
+    assert not any(b.key == "rail-unpin-active" for b in at.button)
+
+
+def test_rail_active_row_exposes_menu_not_foot_fijar(tmp_path: Path):
+    from streamlit.testing.v1 import AppTest
+
+    path = tmp_path / "threads.json"
+    _seed_store(path)
+    at = AppTest.from_function(_rail_harness)
+    at.session_state["thread_store_path"] = str(path)
+    at.session_state["active_thread_id"] = "cabello"
+    at.run(timeout=15)
+    assert not at.exception
+    # AppTest flattens st.popover children as buttons; the popover trigger label
+    # itself is not exposed. Contract: Fijar only exists as rail-pin-active on
+    # the active row (not a permanent foot control when nothing is active).
+    assert any(b.key == "rail-pin-active" and b.label == ui_copy.PIN_THREAD for b in at.button)
+    assert not any(b.key == "rail-unpin-active" for b in at.button)
 
 
 def test_empty_fijados_caption_no_limpiar_chat(tmp_path: Path):
