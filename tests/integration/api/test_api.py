@@ -26,7 +26,49 @@ def _sample_chat_response() -> ChatResponse:
 def test_health():
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["service"] == "SupplyMate"
+    assert body["version"]
+    assert body["message"]
+    assert "time" in body
+
+
+def test_root_json_for_api_clients():
+    response = client.get("/", headers={"Accept": "application/json"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["service"] == "SupplyMate"
+    assert body["status"] == "ok"
+    assert body["links"]["docs"] == "/docs"
+    assert body["links"]["health"] == "/health"
+
+
+def test_root_html_for_browsers():
+    response = client.get("/", headers={"Accept": "text/html"})
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "SupplyMate API" in response.text
+    assert "/docs" in response.text
+
+
+def test_openapi_json_machine_readable():
+    response = client.get("/openapi.json", headers={"Accept": "application/json"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["info"]["title"] == "SupplyMate API"
+    assert "reposición" in body["info"]["description"].lower()
+    assert "/health" in body["paths"]
+    assert "/chat" in body["paths"]
+
+
+def test_openapi_html_for_browsers():
+    response = client.get("/openapi.json", headers={"Accept": "text/html"})
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "OpenAPI" in response.text
+    assert "/docs" in response.text
+    assert "GET" in response.text
 
 
 def test_search_products():
