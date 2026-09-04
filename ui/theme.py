@@ -93,8 +93,11 @@ html, body, [class*="css"] {
   font-family: 'Inter', sans-serif;
 }
 .block-container {
-  max-width: 1150px !important;
+  max-width: 1450px !important;
+  width: 100% !important;
   padding-top: 1.5rem !important;
+  padding-left: 2rem !important;
+  padding-right: 2rem !important;
 }
 /* ── Sidebar siempre visible (mockup) ── */
 [data-testid="stSidebarCollapseButton"],
@@ -129,8 +132,8 @@ section[data-testid="stSidebar"][aria-expanded="false"] {
   gap: 0.65rem;
 }
 .sm-kpi-icon {
-  width: 2.35rem;
-  height: 2.35rem;
+  width: 1.45rem;
+  height: 1.45rem;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
@@ -140,15 +143,15 @@ section[data-testid="stSidebar"][aria-expanded="false"] {
   flex: 0 0 auto;
 }
 .sm-kpi-icon svg {
-  width: 1.2rem;
-  height: 1.2rem;
+  width: 0.85rem;
+  height: 0.85rem;
   fill: currentColor;
 }
 .sm-kpi-copy {
   min-width: 0;
 }
 .sm-kpi-label { font-size: 0.78rem; opacity: 0.85; margin-bottom: 0.15rem; }
-.sm-kpi-value { font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
+.sm-kpi-value { font-size: 1.85rem; font-weight: 700; line-height: 1.1; }
 .sm-legend { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.5rem 0 1rem 0; }
 .sm-badge {
   display: inline-flex; align-items: center; gap: 0.35rem;

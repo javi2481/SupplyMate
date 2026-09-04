@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from typing import Any
 
 import altair as alt
@@ -18,13 +19,35 @@ def _point_param(
     selection_name: str,
     field: str,
     *,
-    nearest: bool = True,
+    nearest: bool = False,
 ) -> alt.Parameter:
     return alt.selection_point(
         name=selection_name,
         fields=[field],
         nearest=nearest,
         toggle=False,
+    )
+
+
+def _with_selected_flag(
+    df: pd.DataFrame,
+    field: str,
+    selected_values: Collection[str] | None,
+) -> pd.DataFrame:
+    out = df.copy()
+    if selected_values:
+        chosen = set(selected_values)
+        out["_selected"] = out[field].isin(chosen)
+    else:
+        out["_selected"] = True
+    return out
+
+
+def _opacity_encoding() -> alt.Opacity:
+    return alt.Opacity(
+        "_selected:N",
+        scale=alt.Scale(domain=[True, False], range=[0.95, 0.35]),
+        legend=None,
     )
 
 
@@ -38,8 +61,9 @@ def lollipop(
     *,
     selectable_field: str | None = None,
     selection_name: str = "chart_select",
+    selected_values: Collection[str] | None = None,
 ) -> alt.Chart:
-    df = pd.DataFrame(rows)
+    df = _with_selected_flag(pd.DataFrame(rows), y_field, selected_values)
     tooltips = [
         alt.Tooltip(f"{y_field}:N", title=y_title),
         *(extra_tooltips or []),
@@ -48,31 +72,40 @@ def lollipop(
     x = alt.X(f"{x_field}:Q", title=x_title)
     y = alt.Y(f"{y_field}:N", sort="-x", title=None)
     brand = _brand_blue()
-    encoded = alt.Chart(df).encode(
+    base = alt.Chart(df).encode(
         x=x,
         y=y,
-        color=alt.value(brand),
+        opacity=_opacity_encoding(),
         tooltip=tooltips,
     )
-    rules = encoded.mark_rule(strokeWidth=3)
-    circles = encoded.mark_circle(size=180, opacity=0.95)
+    rules = base.mark_rule(strokeWidth=3, color=brand)
+    circles = base.mark_circle(size=180, color=brand)
+    labels = base.mark_text(
+        align="left",
+        dx=8,
+        fontSize=11,
+        color=brand,
+    ).encode(text=alt.Text(f"{x_field}:Q", format=",.0f"))
     if selectable_field:
         hit_df = df.copy()
+        hit_df["_hit_zero"] = 0.0
         hit_df["_hit_max"] = float(df[x_field].max()) if not df.empty else 0.0
         hit = (
             alt.Chart(hit_df)
-            .mark_bar(opacity=0.01, size=28)
+            .mark_rect(fillOpacity=0)
             .encode(
-                x=alt.X("_hit_max:Q", title=x_title),
                 y=y,
+                x=alt.X("_hit_zero:Q", title=x_title),
+                x2=alt.X2("_hit_max:Q"),
                 tooltip=tooltips,
             )
-            .add_params(_point_param(selection_name, selectable_field))
+            .add_params(
+                _point_param(selection_name, selectable_field, nearest=False)
+            )
         )
-        # Hit layer last so the full row receives the click, not the thin rule.
-        chart = rules + circles + hit
+        chart = rules + circles + labels + hit
     else:
-        chart = rules + circles
+        chart = rules + circles + labels
     return chart.properties(height=max(260, 32 * max(len(rows), 1)))
 
 
@@ -86,8 +119,9 @@ def histogram(
     *,
     selectable_field: str | None = None,
     selection_name: str = "chart_select",
+    selected_values: Collection[str] | None = None,
 ) -> alt.Chart:
-    df = pd.DataFrame(rows)
+    df = _with_selected_flag(pd.DataFrame(rows), x_field, selected_values)
     brand = _brand_blue()
     chart = (
         alt.Chart(df)
@@ -101,6 +135,7 @@ def histogram(
             ),
             y=alt.Y(f"{y_field}:Q", title=y_title),
             color=alt.value(brand),
+            opacity=_opacity_encoding(),
             tooltip=[
                 alt.Tooltip(f"{x_field}:N", title=x_title),
                 alt.Tooltip(f"{y_field}:Q", title=y_title),

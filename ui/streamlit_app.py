@@ -31,6 +31,7 @@ from ui import theme as theme_mod
 from ui.composition import chat_policy as chat_policy_mod
 from ui.composition import copy as ui_copy
 from ui.composition import kpi_policy as kpi_policy_mod
+from ui.composition import live_slice as live_slice_mod
 from ui.composition import next_step as next_step_mod
 from ui.composition import scope_label as scope_label_mod
 from ui.composition import table_policy as table_policy_mod
@@ -46,6 +47,7 @@ table_policy_mod = importlib.reload(table_policy_mod)
 scope_label_mod = importlib.reload(scope_label_mod)
 next_step_mod = importlib.reload(next_step_mod)
 chat_policy_mod = importlib.reload(chat_policy_mod)
+live_slice_mod = importlib.reload(live_slice_mod)
 threads_mod = importlib.reload(threads_mod)
 threads_rail_mod = importlib.reload(threads_rail_mod)
 theme_mod = importlib.reload(theme_mod)
@@ -62,6 +64,8 @@ prepare_new_chat = threads_mod.prepare_new_chat
 switch_thread = threads_mod.switch_thread
 compose_next_step = next_step_mod.compose_next_step
 NextStepOption = next_step_mod.NextStepOption
+select_live_slice = live_slice_mod.select_live_slice
+scope_cache_key = live_slice_mod.scope_cache_key
 chat_would_unfreeze = chat_policy_mod.chat_would_unfreeze
 is_transport_error_message = chat_policy_mod.is_transport_error_message
 live_dashboard_index = chat_policy_mod.live_dashboard_index
@@ -115,6 +119,8 @@ if "active_thread_id" not in st.session_state:
     st.session_state.active_thread_id = None
 if "threads_hydrated" not in st.session_state:
     st.session_state.threads_hydrated = False
+if "live_slice_key" not in st.session_state:
+    st.session_state.live_slice_key = None
 
 
 def _threads_path() -> Path:
@@ -377,6 +383,7 @@ def apply_guidance_chip_action(chip_data: dict) -> None:
     slice_data = fetch_slice(new_scope)
     if slice_data:
         st.session_state.slice_data = slice_data
+        st.session_state.live_slice_key = scope_cache_key(new_scope)
         st.session_state.guidance = slice_data.get("guidance")
     _autosave()
 
@@ -580,13 +587,18 @@ def render_live_panel() -> None:
     scope = _effective_panel_scope()
     mutable_scope = _scope_model()
 
-    slice_data = st.session_state.slice_data
-    if not slice_data:
-        slice_data = _resolve_live_slice(scope)
+    scope_key = scope_cache_key(scope)
+    slice_data, scope_key = select_live_slice(
+        scope_key=scope_key,
+        cached_key=st.session_state.live_slice_key,
+        cached_slice=st.session_state.slice_data,
+        fetch=lambda: _resolve_live_slice(scope),
+    )
     if slice_data is None:
         st.error(f"No pude conectar con la API en `{API_URL}`. Arrancá uvicorn primero.")
         return
     st.session_state.slice_data = slice_data
+    st.session_state.live_slice_key = scope_key
     st.session_state.guidance = slice_data.get("guidance")
     dash = slice_data.get("dashboard") or {}
     if st.session_state.root_skus is None:
@@ -624,6 +636,7 @@ def render_live_panel() -> None:
         st.session_state.highlight_calc = None
         st.session_state.interaction_events = []
         st.session_state.root_skus = None
+        st.session_state.live_slice_key = None
         _append_event(source="reset", action="reset", label_human="Limpiar")
         st.session_state.last_analyze_key = ""
         _autosave()
@@ -897,6 +910,7 @@ def _apply_explore_chat(prompt: str, data: dict, *, is_refine: bool) -> None:
     chat_slice = _slice_from_chat(data)
     if chat_slice:
         st.session_state.slice_data = chat_slice
+        st.session_state.live_slice_key = scope_cache_key(_scope_model())
     _autosave()
 
 

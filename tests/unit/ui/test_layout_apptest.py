@@ -85,8 +85,8 @@ def test_explore_layout_stops_at_charts_without_next_step():
     assert not any("Lectura del recorte" in m for m in markdown)
     assert not any("Analista IA" in m for m in markdown)
     assert not any("Refinar recorte" in m for m in markdown)
-    assert _first("Cantidad recomendada") >= 0
-    assert _first("Distribución de") >= 0
+    assert _first("Qué conviene reponer") >= 0
+    assert _first("Cómo está el stock") >= 0
     assert len(at.dataframe) == 0
     buttons = [b.label for b in at.button]
     assert "Bebé" not in buttons
@@ -304,4 +304,4 @@ def test_streamlit_app_renders_single_live_dashboard_for_active_thread(tmp_path,
     assert not any("Siguiente paso" in m for m in markdown)
     assert not any("Otros análisis" in m for m in markdown)
     assert len(at.dataframe) == 0
-    assert any("Cantidad recomendada" in m for m in markdown)
+    assert any("Qué conviene reponer" in m for m in markdown)
