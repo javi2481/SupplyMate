@@ -51,6 +51,22 @@ def _opacity_encoding() -> alt.Opacity:
     )
 
 
+def _stroke_width_encoding() -> alt.StrokeWidth:
+    return alt.StrokeWidth(
+        "_selected:N",
+        scale=alt.Scale(domain=[True, False], range=[5, 2]),
+        legend=None,
+    )
+
+
+def _point_size_encoding() -> alt.Size:
+    return alt.Size(
+        "_selected:N",
+        scale=alt.Scale(domain=[True, False], range=[280, 110]),
+        legend=None,
+    )
+
+
 def lollipop(
     rows: list[dict],
     y_field: str,
@@ -78,8 +94,8 @@ def lollipop(
         opacity=_opacity_encoding(),
         tooltip=tooltips,
     )
-    rules = base.mark_rule(strokeWidth=3, color=brand)
-    circles = base.mark_circle(size=180, color=brand)
+    rules = base.mark_rule(color=brand).encode(strokeWidth=_stroke_width_encoding())
+    circles = base.mark_circle(color=brand).encode(size=_point_size_encoding())
     labels = base.mark_text(
         align="left",
         dx=8,
@@ -123,9 +139,8 @@ def histogram(
 ) -> alt.Chart:
     df = _with_selected_flag(pd.DataFrame(rows), x_field, selected_values)
     brand = _brand_blue()
-    chart = (
+    base = (
         alt.Chart(df)
-        .mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4)
         .encode(
             x=alt.X(
                 f"{x_field}:N",
@@ -134,7 +149,6 @@ def histogram(
                 axis=alt.Axis(labelAngle=0),
             ),
             y=alt.Y(f"{y_field}:Q", title=y_title),
-            color=alt.value(brand),
             opacity=_opacity_encoding(),
             tooltip=[
                 alt.Tooltip(f"{x_field}:N", title=x_title),
@@ -143,6 +157,15 @@ def histogram(
         )
         .properties(height=280)
     )
+    bars = base.mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
+        color=alt.value(brand),
+    )
+    labels = base.mark_text(
+        dy=-8,
+        fontSize=11,
+        color=brand,
+    ).encode(text=alt.Text(f"{y_field}:Q", format=",.0f"))
+    chart = bars + labels
     if selectable_field:
         # nearest=True on bars can leave an empty Vega embed in Streamlit columns.
         chart = chart.add_params(

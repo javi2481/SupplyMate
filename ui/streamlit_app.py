@@ -121,6 +121,8 @@ if "threads_hydrated" not in st.session_state:
     st.session_state.threads_hydrated = False
 if "live_slice_key" not in st.session_state:
     st.session_state.live_slice_key = None
+if "scope_history" not in st.session_state:
+    st.session_state.scope_history = []
 
 
 def _threads_path() -> Path:
@@ -237,6 +239,24 @@ def _scope_model() -> AnalyticalScope:
 
 def _set_scope(scope: AnalyticalScope) -> None:
     st.session_state.analytical_scope = scope.model_dump()
+
+
+def _history_stack() -> list[AnalyticalScope]:
+    return scope_svc.loads_history(st.session_state.get("scope_history"))
+
+
+def _set_history(stack: list[AnalyticalScope]) -> None:
+    st.session_state.scope_history = [s.model_dump() for s in stack]
+
+
+def _commit_scope(new_scope: AnalyticalScope, *, push: bool = True) -> None:
+    """Apply scope mutation; optionally push current scope onto history."""
+    current = _scope_model()
+    if push and current.model_dump() != new_scope.model_dump():
+        _set_history(scope_svc.push_history(_history_stack(), current))
+    _set_scope(new_scope)
+    st.session_state.last_analyze_key = ""
+    _autosave()
 
 
 def scope_query_params(scope: AnalyticalScope, *, limit: int = 25) -> list[tuple[str, str]]:
@@ -371,13 +391,12 @@ def apply_guidance_chip_action(chip_data: dict) -> None:
     chip = GuidanceChip.model_validate(chip_data)
     scope = _scope_model()
     new_scope, enter_commit = apply_guidance_chip(scope, chip)
-    _set_scope(new_scope)
+    _commit_scope(new_scope, push=True)
     _append_event(
         source="chip",
         action="add_filter",
         label_human=chip.label,
     )
-    st.session_state.last_analyze_key = ""
     if enter_commit:
         _enter_commit_mode()
     slice_data = fetch_slice(new_scope)
@@ -452,92 +471,11 @@ def apply_filter_action(action: str, args: dict[str, str], *, source: str = "chi
             value=pid,
             label_human=f"SKU {pid}",
         )
-        _set_scope(scope)
-        st.session_state.last_analyze_key = ""
-        _autosave()
+        _commit_scope(scope, push=True)
         return
     scope = scope_svc.clear_highlight(scope)
     st.session_state.highlight_calc = None
-    _set_scope(scope)
-    st.session_state.last_analyze_key = ""
-    _autosave()
-
-
-def _breadcrumb_labels(scope: AnalyticalScope) -> list[tuple[str, str, str]]:
-    crumbs: list[tuple[str, str, str]] = [("root", "Inventario", "")]
-    for cat in scope.categories:
-        crumbs.append(("category", cat, cat))
-    for sub in scope.subcategories:
-        crumbs.append(("subcategory", sub, sub))
-    for bucket in scope.coverage_buckets:
-        crumbs.append(("coverage_bucket", bucket, bucket))
-    for health in scope.health_buckets:
-        label = metrics.BUCKET_LABELS.get(health, health)
-        crumbs.append(("health_bucket", health, label))
-    for supplier in scope.suppliers:
-        crumbs.append(("supplier", supplier, supplier))
-    for token in scope.name_tokens:
-        crumbs.append(("name_token", token, token.upper() if token.islower() else token))
-    if scope.highlight_product_id:
-        crumbs.append(("highlight", scope.highlight_product_id, f"SKU {scope.highlight_product_id}"))
-    return crumbs
-
-
-def render_breadcrumb(scope: AnalyticalScope, *, readonly: bool = False) -> None:
-    st.markdown("**Analizando:**")
-    cols = st.columns([6, 1])
-    with cols[0]:
-        parts = []
-        for kind, value, label in _breadcrumb_labels(scope):
-            if kind == "root":
-                parts.append(label)
-            else:
-                parts.append(label)
-        st.caption(" › ".join(parts) if parts else "Inventario")
-    with cols[1]:
-        if not readonly and st.button("Limpiar filtros", key="reset_scope"):
-            _set_scope(scope_svc.reset())
-            st.session_state.highlight_calc = None
-            st.session_state.interaction_events = []
-            _append_event(source="reset", action="reset", label_human="Limpiar filtros")
-            st.session_state.last_analyze_key = ""
-            _autosave()
-            st.rerun()
-
-    if readonly:
-        return
-
-    remove_cols = st.columns(8)
-    idx = 0
-    for kind, value, label in _breadcrumb_labels(scope):
-        if kind == "root":
-            continue
-        if idx < len(remove_cols) and remove_cols[idx].button(f"{label} ×", key=f"rm-{kind}-{value}"):
-            current = _scope_model()
-            if kind == "highlight":
-                current = scope_svc.clear_highlight(current)
-                st.session_state.highlight_calc = None
-                _append_event(
-                    source="breadcrumb",
-                    action="remove_filter",
-                    dimension="highlight",
-                    value=value,
-                    label_human=label,
-                )
-            else:
-                current = scope_svc.remove(current, kind, value)
-                _append_event(
-                    source="breadcrumb",
-                    action="remove_filter",
-                    dimension=kind,
-                    value=value,
-                    label_human=label,
-                )
-            _set_scope(current)
-            st.session_state.last_analyze_key = ""
-            _autosave()
-            st.rerun()
-        idx += 1
+    _commit_scope(scope, push=True)
 
 
 def render_inventory_dashboard_static(dash: dict | None, purchase_list: list[dict]) -> None:
@@ -632,6 +570,7 @@ def render_live_panel() -> None:
         st.session_state.pending_prompt = text
 
     def _on_reset() -> None:
+        _set_history(scope_svc.clear_history())
         _set_scope(scope_svc.reset())
         st.session_state.highlight_calc = None
         st.session_state.interaction_events = []
@@ -641,8 +580,21 @@ def render_live_panel() -> None:
         st.session_state.last_analyze_key = ""
         _autosave()
 
+    def _on_back() -> None:
+        popped = scope_svc.pop_history(_history_stack())
+        if popped is None:
+            return
+        prior, remaining = popped
+        _set_history(remaining)
+        _set_scope(prior)
+        if not prior.highlight_product_id:
+            st.session_state.highlight_calc = None
+        st.session_state.last_analyze_key = ""
+        _append_event(source="nav", action="back", label_human="Volver")
+        _autosave()
+
     def _on_category(cat: str) -> None:
-        _set_scope(scope_svc.add(mutable_scope, "category", cat))
+        _commit_scope(scope_svc.add(mutable_scope, "category", cat), push=True)
         _append_event(
             source="chart_category",
             action="add_filter",
@@ -650,11 +602,9 @@ def render_live_panel() -> None:
             value=cat,
             label_human=cat,
         )
-        st.session_state.last_analyze_key = ""
-        _autosave()
 
     def _on_coverage(bucket: str) -> None:
-        _set_scope(scope_svc.add(mutable_scope, "coverage_bucket", bucket))
+        _commit_scope(scope_svc.add(mutable_scope, "coverage_bucket", bucket), push=True)
         _append_event(
             source="chart_coverage",
             action="add_filter",
@@ -662,8 +612,6 @@ def render_live_panel() -> None:
             value=bucket,
             label_human=bucket,
         )
-        st.session_state.last_analyze_key = ""
-        _autosave()
 
     def _on_sku(sku: str) -> None:
         apply_filter_action(
@@ -672,6 +620,23 @@ def render_live_panel() -> None:
             source="table_row",
         )
 
+    def _on_kpi(action: str) -> None:
+        from ui.composition import kpi_actions as ka
+
+        new_scope = ka.apply_kpi_action(mutable_scope, action)
+        if new_scope is None:
+            return
+        if action == ka.KPI_PRODUCTS:
+            st.session_state.highlight_calc = None
+        _commit_scope(new_scope, push=True)
+        _append_event(
+            source="kpi",
+            action="add_filter" if action != ka.KPI_PRODUCTS else "strip_filters",
+            dimension=action,
+            label_human=action,
+        )
+
+    history = _history_stack()
     if explore_mode:
         layout_explore.render_explore_panel(
             scope=scope,
@@ -685,9 +650,12 @@ def render_live_panel() -> None:
             on_option=_on_option,
             on_prompt=_on_prompt,
             on_reset=_on_reset,
+            on_back=_on_back,
+            can_go_back=bool(history),
             on_category=_on_category,
             on_coverage=_on_coverage,
             on_sku=_on_sku,
+            on_kpi=_on_kpi,
             on_enter_commit=_enter_commit_mode,
             table_selection_sku=_table_selection_sku,
             render_calculation=render_calculation,
@@ -770,7 +738,7 @@ def render_sales_ranking(dash: dict | None) -> None:
 
 
 def render_calculation(calc: dict) -> None:
-    with st.expander("Cómo se calculó", expanded=True):
+    with st.expander("Cómo se calculó", expanded=False):
         st.markdown(
             f"""
 Política **order-up-to** (horizonte 7 días + lead time + stock de seguridad).
@@ -865,22 +833,26 @@ def render_history() -> None:
             elif msg.get("mode") == "sales":
                 render_sales_ranking(msg.get("dashboard"))
             else:
-                if msg.get("product_name"):
-                    st.markdown(f"**{msg['product_name']}**")
-                if msg.get("quantity") is not None:
-                    st.metric(metrics.LABEL_RECOMMENDED_QTY, msg["quantity"])
-                if msg.get("metrics"):
-                    cols = st.columns(3)
-                    m = msg["metrics"]
-                    cols[0].metric("Stock", m.get("stock", "—"))
-                    cols[1].metric("Demanda diaria", m.get("avg_daily", "—"))
-                    cols[2].metric(
-                        metrics.LABEL_REORDER_POINT,
-                        m.get("rop", "—"),
-                        help=metrics.ROP_CAPTION,
-                    )
-                if msg.get("calculation"):
-                    render_calculation(msg["calculation"])
+                # Live SKU detail lives in the Explore panel; chat keeps a compact line.
+                if live and msg.get("mode") == "single":
+                    pass
+                else:
+                    if msg.get("product_name"):
+                        st.markdown(f"**{msg['product_name']}**")
+                    if msg.get("quantity") is not None:
+                        st.metric(ui_copy.BUY_LABEL, f"{msg['quantity']} unidades")
+                    if msg.get("metrics"):
+                        cols = st.columns(3)
+                        m = msg["metrics"]
+                        cols[0].metric("Stock", m.get("stock", "—"))
+                        cols[1].metric("Demanda diaria", m.get("avg_daily", "—"))
+                        cols[2].metric(
+                            metrics.LABEL_REORDER_POINT,
+                            m.get("rop", "—"),
+                            help=metrics.ROP_CAPTION,
+                        )
+                    if msg.get("calculation"):
+                        render_calculation(msg["calculation"])
             if msg.get("content") and not live_dashboard_turn:
                 st.markdown(msg["content"])
 
@@ -894,6 +866,7 @@ def _apply_explore_chat(prompt: str, data: dict, *, is_refine: bool) -> None:
     if not is_refine:
         st.session_state.interaction_events = []
         st.session_state.root_skus = None
+        _set_history(scope_svc.clear_history())
     st.session_state.analyze_data = None
     st.session_state.last_analyze_key = ""
     st.session_state.guidance = data.get("guidance")
@@ -903,15 +876,57 @@ def _apply_explore_chat(prompt: str, data: dict, *, is_refine: bool) -> None:
         label_human=prompt,
     )
     if data.get("scope"):
-        _set_scope(AnalyticalScope.model_validate(data["scope"]))
+        new_scope = AnalyticalScope.model_validate(data["scope"])
     else:
-        _set_scope(scope_svc.reset())
+        new_scope = scope_svc.reset()
+    if is_refine:
+        _commit_scope(new_scope, push=True)
+    else:
+        _set_scope(new_scope)
     st.session_state.highlight_calc = None
     chat_slice = _slice_from_chat(data)
     if chat_slice:
         st.session_state.slice_data = chat_slice
         st.session_state.live_slice_key = scope_cache_key(_scope_model())
     _autosave()
+
+
+def _apply_single_sku_live(data: dict) -> None:
+    """Keep Explore live and open SKU detail under current (or API) scope."""
+    st.session_state.live_list_active = True
+    st.session_state.panel_mode = "explore"
+    st.session_state.frozen_scope = None
+    st.session_state.pending_unfreeze = None
+    pid = str(data.get("product_id") or "").strip()
+    calc = data.get("calculation") or {}
+    ctx = data.get("context") or {}
+    if isinstance(calc, dict) and not calc.get("recommended_quantity"):
+        calc = {**calc, "recommended_quantity": data.get("recommended_quantity", 0)}
+    payload = {
+        "product_id": pid,
+        "product_name": data.get("product_name") or "",
+        "recommended_quantity": data.get("recommended_quantity", 0),
+        "calculation": calc,
+        "context": ctx,
+    }
+    st.session_state.highlight_calc = payload
+    current = _scope_model()
+    if data.get("scope"):
+        base = AnalyticalScope.model_validate(data["scope"])
+    else:
+        base = current
+    if pid:
+        new_scope = scope_svc.set_highlight(base, pid)
+    else:
+        new_scope = base
+    _commit_scope(new_scope, push=True)
+    _append_event(
+        source="chat",
+        action="highlight_sku",
+        dimension="product_id",
+        value=pid,
+        label_human=data.get("product_name") or pid,
+    )
 
 
 def ask_api(prompt: str) -> dict:
@@ -1052,25 +1067,40 @@ if prompt:
             st.session_state.live_list_active = False
             render_sales_ranking(dash)
         elif mode == "single" and data.get("product_name"):
-            st.session_state.live_list_active = False
-            ctx = data.get("context") or {}
-            calc = data.get("calculation") or {}
-            st.markdown(f"**{data['product_name']}**")
-            st.metric(metrics.LABEL_RECOMMENDED_QTY, data.get("recommended_quantity", 0))
-            cols = st.columns(3)
-            cols[0].metric("Stock", ctx.get("current_stock", "—"))
-            cols[1].metric(
-                "Demanda diaria",
-                round(calc.get("average_daily_demand", 0), 1),
+            qty = data.get("recommended_quantity", 0)
+            compact = (
+                f"**{data['product_name']}** — "
+                f"{ui_copy.BUY_LABEL.lower()} **{qty}** unidades"
             )
-            cols[2].metric(
-                metrics.LABEL_REORDER_POINT,
-                ctx.get("reorder_point", "—"),
-                help=metrics.ROP_CAPTION,
+            _apply_single_sku_live(data)
+            st.markdown(compact)
+            st.session_state.messages.append(
+                {
+                    "role": "assistant",
+                    "content": compact,
+                    "mode": "single",
+                    "product_name": data.get("product_name"),
+                    "product_id": data.get("product_id"),
+                    "quantity": qty,
+                    "purchase_list": [],
+                    "dashboard": None,
+                    "csv_bytes": None,
+                    "calculation": data.get("calculation"),
+                    "metrics": {
+                        "stock": (data.get("context") or {}).get("current_stock"),
+                        "avg_daily": round(
+                            (data.get("calculation") or {}).get(
+                                "average_daily_demand", 0
+                            ),
+                            1,
+                        ),
+                        "rop": (data.get("context") or {}).get("reorder_point"),
+                    },
+                }
             )
-            if calc:
-                render_calculation(calc)
-
+            skip_tail_append = True
+            _autosave()
+            st.rerun()
         keep_error_turn = not (mode == "error" and st.session_state.live_list_active)
         if not skip_tail_append:
             if keep_error_turn:

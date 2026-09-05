@@ -3,9 +3,31 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from typing import Any
 
 from app.core.models import AnalyticalScope
 from app.catalog.store import SALES_AS_OF
+from app.services.scoping import history as _history
+
+
+def push_history(
+    stack: list[AnalyticalScope], scope: AnalyticalScope
+) -> list[AnalyticalScope]:
+    return _history.push(stack, scope)
+
+
+def pop_history(
+    stack: list[AnalyticalScope],
+) -> tuple[AnalyticalScope, list[AnalyticalScope]] | None:
+    return _history.pop(stack)
+
+
+def clear_history() -> list[AnalyticalScope]:
+    return _history.clear()
+
+
+def loads_history(raw: Any) -> list[AnalyticalScope]:
+    return _history.loads(raw)
 
 _LIMITS: dict[str, int] = {
     "categories": 5,

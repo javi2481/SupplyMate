@@ -12,9 +12,69 @@ from app.core.models import AnalyticalScope
 from app.services import dashboard as dash_svc
 from ui import charts, components
 from ui.composition import copy as ui_copy
+from ui.composition import kpi_actions
 from ui.composition.kpi_policy import explore_kpi_cards
 from ui.composition.next_step import NextStep, NextStepOption
 from ui.composition.scope_label import compact_scope_line, scope_has_filters, sku_count_caption
+
+
+def _render_kpi_controls(
+    dash: dict,
+    *,
+    on_kpi: Callable[[str], None] | None,
+) -> None:
+    cards = explore_kpi_cards(dash)
+    actions = [
+        kpi_actions.KPI_PRODUCTS,
+        kpi_actions.KPI_UNDERSTOCK,
+        kpi_actions.KPI_STOCKOUT_RISK,
+        kpi_actions.KPI_COVERAGE,
+    ]
+    cols = st.columns(len(cards))
+    for col, card, action in zip(cols, cards, actions, strict=False):
+        with col:
+            if action == kpi_actions.KPI_COVERAGE or on_kpi is None:
+                components.render_kpi_cards([card])
+            else:
+                label = f"{card.label}\n{card.value}"
+                if st.button(label, key=f"kpi_ctrl_{action}", use_container_width=True):
+                    on_kpi(action)
+                    st.rerun()
+
+
+def _render_context_bar(
+    *,
+    scope: AnalyticalScope,
+    root_skus: int | None,
+    current_skus: int | None,
+    can_go_back: bool,
+    on_back: Callable[[], None] | None,
+    on_reset: Callable[[], None] | None,
+) -> None:
+    show = scope_has_filters(scope) or can_go_back
+    if not show:
+        return
+    cols = st.columns([1, 4, 1])
+    with cols[0]:
+        if st.button(
+            f"← {ui_copy.VOLVER_SCOPE}",
+            key="scope_back",
+            disabled=not can_go_back or on_back is None,
+        ):
+            if on_back:
+                on_back()
+                st.rerun()
+    with cols[1]:
+        st.markdown(compact_scope_line(scope))
+        caption = sku_count_caption(
+            root_skus, current_skus if isinstance(current_skus, int) else None
+        )
+        if caption:
+            st.caption(caption)
+    with cols[2]:
+        if on_reset and st.button(ui_copy.CLEAR_SCOPE, key="reset_scope"):
+            on_reset()
+            st.rerun()
 
 
 def render_explore_panel(
@@ -30,32 +90,42 @@ def render_explore_panel(
     on_option: Callable[[NextStepOption], None] | None = None,
     on_prompt: Callable[[str], None] | None = None,
     on_reset: Callable[[], None] | None = None,
+    on_back: Callable[[], None] | None = None,
+    can_go_back: bool = False,
     on_category: Callable[[str], None] | None = None,
     on_coverage: Callable[[str], None] | None = None,
     on_sku: Callable[[str], None] | None = None,
+    on_kpi: Callable[[str], None] | None = None,
     on_enter_commit: Callable[[], None] | None = None,
     table_selection_sku: Callable[[Any, list[dict]], str | None] | None = None,
     render_calculation: Callable[[dict], None] | None = None,
 ) -> None:
-    del analyze_data, next_step, interaction_events, highlight_calc
-    del analyst_enabled, on_option, on_prompt, on_sku, on_enter_commit
-    del table_selection_sku, render_calculation
+    del analyze_data, next_step, interaction_events
+    del analyst_enabled, on_option, on_prompt, on_enter_commit
+    del table_selection_sku
+    # on_sku / on_kpi / highlight_calc / render_calculation used by later slices
 
     dash = slice_data.get("dashboard") or {}
     category_rows = dash.get("by_category") or []
     coverage_rows = dash.get("coverage") or []
+    current_skus = dash.get("skus")
+    show_sku = bool(scope.highlight_product_id and highlight_calc)
 
-    if scope_has_filters(scope):
-        st.markdown(compact_scope_line(scope))
-        current_skus = dash.get("skus")
-        caption = sku_count_caption(root_skus, current_skus if isinstance(current_skus, int) else None)
-        if caption:
-            st.caption(caption)
-        if on_reset and st.button(ui_copy.CLEAR_SCOPE, key="reset_scope"):
-            on_reset()
-            st.rerun()
+    _render_context_bar(
+        scope=scope,
+        root_skus=root_skus,
+        current_skus=current_skus if isinstance(current_skus, int) else None,
+        can_go_back=can_go_back,
+        on_back=on_back,
+        on_reset=on_reset,
+    )
 
-    components.render_kpi_cards(explore_kpi_cards(dash))
+    if show_sku:
+        _render_sku_slot(highlight_calc or {}, render_calculation=render_calculation)
+        return
+
+    _render_kpi_controls(dash, on_kpi=on_kpi)
+    del on_sku
 
     left, right = st.columns(2)
     with left:
@@ -120,3 +190,42 @@ def render_explore_panel(
             caption=ui_copy.CHART_COVERAGE_SUBTITLE,
             body=_render_coverage_chart,
         )
+
+
+def _render_sku_slot(
+    payload: dict,
+    *,
+    render_calculation: Callable[[dict], None] | None,
+) -> None:
+    """SKU detail card inside live Explore Answer Surface."""
+    calc = payload.get("calculation") if isinstance(payload.get("calculation"), dict) else payload
+    ctx = payload.get("context") if isinstance(payload.get("context"), dict) else {}
+    name = (
+        payload.get("product_name")
+        or payload.get("name")
+        or "Producto"
+    )
+    qty = payload.get("recommended_quantity")
+    if qty is None:
+        qty = calc.get("recommended_quantity", 0) if isinstance(calc, dict) else 0
+    stock = ctx.get("current_stock")
+    if stock is None and isinstance(calc, dict):
+        stock = calc.get("current_stock", "—")
+    demand = None
+    if isinstance(calc, dict):
+        demand = calc.get("average_daily_demand")
+    rop = ctx.get("reorder_point")
+    if rop is None and isinstance(ctx.get("inventory"), dict):
+        rop = ctx["inventory"].get("reorder_point")
+
+    st.markdown(f"**{name}**")
+    st.metric(ui_copy.BUY_LABEL, f"{qty} unidades")
+    cols = st.columns(3)
+    cols[0].metric("Stock", stock if stock is not None else "—")
+    cols[1].metric(
+        "Demanda diaria",
+        round(demand, 1) if isinstance(demand, (int, float)) else "—",
+    )
+    cols[2].metric("Punto de reorden", rop if rop is not None else "—")
+    if render_calculation and isinstance(calc, dict):
+        render_calculation(calc)

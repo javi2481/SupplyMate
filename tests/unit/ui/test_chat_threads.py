@@ -51,12 +51,31 @@ def test_snapshot_round_trip_includes_spec_fields_and_strips_csv():
     assert "csv_bytes" not in snap["messages"][0]
     assert snap["analytical_scope"]["categories"] == ["Pañales"]
     assert snap["live_list_active"] is True
+    assert snap["scope_history"] == []
 
     target: dict = {}
     apply_snapshot(target, snap)
     assert target["messages"][0]["content"] == "¿Qué compro?"
     assert target["panel_mode"] == "explore"
     assert "csv_bytes" not in target["messages"][0]
+    assert target["scope_history"] == []
+
+
+def test_snapshot_persists_scope_history_dumps():
+    prior = AnalyticalScope(categories=["Inventario"]).model_dump()
+    snap = snapshot_from_session(
+        _session(scope_history=[{"categories": ["Cosmética"]}])
+    )
+    assert snap["scope_history"] == [{"categories": ["Cosmética"]}]
+    # default when missing from incomplete session
+    incomplete = {k: v for k, v in _session().items() if k != "guidance"}
+    incomplete.pop("scope_history", None)
+    # force missing key path via apply defaults
+    target: dict = {}
+    apply_snapshot(target, {"messages": []})
+    assert target["scope_history"] == []
+    del prior  # documents dump shape
+
 
 
 def test_title_uses_compact_scope_when_recorte_is_set():

@@ -173,9 +173,60 @@ def test_histogram_selected_values_dim_non_selected():
         selection_name="coverage_select",
         selected_values=["0–3 días"],
     ).to_dict()
-    encoding = spec.get("encoding") or {}
-    opacity = encoding.get("opacity")
-    assert opacity is not None
+    layers = spec.get("layer") or [spec]
+    assert any((layer.get("encoding") or {}).get("opacity") is not None for layer in layers)
+
+
+def test_histogram_shows_sku_count_labels():
+    spec = histogram(
+        [{"bucket": "0–3 días", "sku_count": 184}],
+        "bucket",
+        "Cobertura",
+    ).to_dict()
+    layers = spec.get("layer") or []
+    text_layers = [
+        layer
+        for layer in layers
+        if layer.get("mark") == "text"
+        or (isinstance(layer.get("mark"), dict) and layer["mark"].get("type") == "text")
+    ]
+    assert text_layers
+    text_enc = (text_layers[0].get("encoding") or {}).get("text") or {}
+    assert text_enc.get("field") == "sku_count"
+
+
+def test_lollipop_selected_encodes_stronger_stroke_and_size():
+    spec = lollipop(
+        _ROWS,
+        "category",
+        "Categoría",
+        selected_values=["Cuidado del Cabello"],
+    ).to_dict()
+    layers = spec.get("layer") or []
+    rule = next(
+        (layer for layer in layers if (layer.get("mark") or {}).get("type") == "rule"
+         or layer.get("mark") == "rule"),
+        None,
+    )
+    circle = next(
+        (layer for layer in layers if (layer.get("mark") or {}).get("type") == "circle"
+         or layer.get("mark") == "circle"),
+        None,
+    )
+    assert rule is not None
+    assert circle is not None
+    rule_sw = (rule.get("encoding") or {}).get("strokeWidth") or {}
+    circle_size = (circle.get("encoding") or {}).get("size") or {}
+    assert rule_sw.get("field") == "_selected" or (
+        rule_sw.get("scale") and rule_sw["scale"].get("range")
+    )
+    assert circle_size.get("field") == "_selected" or (
+        circle_size.get("scale") and circle_size["scale"].get("range")
+    )
+    sw_range = (rule_sw.get("scale") or {}).get("range") or []
+    size_range = (circle_size.get("scale") or {}).get("range") or []
+    assert sw_range[0] > sw_range[1]
+    assert size_range[0] > size_range[1]
 
 
 def test_explore_charts_use_single_brand_blue():
@@ -200,7 +251,23 @@ def test_explore_charts_use_single_brand_blue():
         "Cobertura",
         x_sort=["0–3 días", "3–7 días"],
     ).to_dict()
-    color = (hist.get("encoding") or {}).get("color") or {}
+    hist_layers = hist.get("layer") or [hist]
+    bar_layer = next(
+        (
+            layer
+            for layer in hist_layers
+            if layer.get("mark") == "bar"
+            or (isinstance(layer.get("mark"), dict) and layer["mark"].get("type") == "bar")
+        ),
+        hist_layers[0],
+    )
+    color = (bar_layer.get("encoding") or {}).get("color") or {}
+    # mark_bar may put color on mark or encoding
+    if not color and isinstance(bar_layer.get("mark"), dict):
+        color = {"value": bar_layer["mark"].get("color")}
+    if not color.get("value") and not color.get("scale"):
+        # Altair may encode color=alt.value on encoding
+        color = (bar_layer.get("encoding") or {}).get("color") or color
     scale = color.get("scale") or {}
     range_ = scale.get("range") or []
     if range_:

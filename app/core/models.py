@@ -317,6 +317,8 @@ class InteractionEvent(BaseModel):
         "reset",
         "chat",
         "mode_transition",
+        "kpi",
+        "nav",
     ]
     action: Literal[
         "add_filter",
@@ -325,6 +327,8 @@ class InteractionEvent(BaseModel):
         "reset",
         "enter_commit",
         "exit_commit",
+        "back",
+        "strip_filters",
     ]
     dimension: str = ""
     value: str = ""

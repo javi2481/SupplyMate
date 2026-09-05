@@ -27,6 +27,7 @@ SNAPSHOT_KEYS = (
     "root_question",
     "highlight_calc",
     "guidance",
+    "scope_history",
 )
 
 UNPINNED_CAP = 50
@@ -46,6 +47,7 @@ _SNAPSHOT_DEFAULTS: dict[str, Any] = {
     "root_question": "",
     "highlight_calc": None,
     "guidance": None,
+    "scope_history": [],
 }
 
 
