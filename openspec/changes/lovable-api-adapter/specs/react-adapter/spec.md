@@ -68,3 +68,30 @@ for the ops table without inventing replenishment intermediates
 - **WHEN** the UI shows the demo catalog
 - **THEN** product chrome MUST say `Catálogo demo` (or equivalent)
 - **AND** MUST NOT display localhost / API host strings
+
+### Requirement: Coverage chips match COVERAGE_ORDER
+
+Explore coverage chips MUST be the five canonical `COVERAGE_ORDER` labels
+(`0–3 días`, `3–7 días`, `7–14 días`, `14–30 días`, `30+ días`) with Unicode
+en-dash. The UI MUST NOT render a `14+` chip that spans two backend bands.
+
+#### Scenario: Five chips, canonical labels
+
+- **GIVEN** the Explore filter row
+- **WHEN** coverage chips render
+- **THEN** there MUST be exactly five chips whose labels are `COVERAGE_ORDER`
+- **AND** MUST NOT render a `14+` chip
+
+#### Scenario: One chip, one bucket
+
+- **GIVEN** the operator selects `14–30 días`
+- **WHEN** `sliceToScopeQuery` / `fetchSlice` / CSV URL are built
+- **THEN** `coverage_bucket` MUST be exactly `["14–30 días"]`
+- **AND** MUST NOT also include `30+ días`
+
+#### Scenario: Mock fallback uses the same edges
+
+- **GIVEN** API down and Catálogo demo
+- **WHEN** the operator selects `30+ días`
+- **THEN** only mock rows with `coverageBandFromDays(days) === "30+ días"` remain
+- **AND** qty still comes from mock `compute()`, never from a second formula

@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { toSearchParams } from "@/lib/api";
-import { COVERAGE_ORDER, coverageBandFromDays, scopePayloadToUiSlice, sliceToScopeQuery } from "@/lib/scope";
+import * as scope from "@/lib/scope";
+import {
+  COVERAGE_ORDER,
+  coverageBandFromDays,
+  inCoverageBand,
+  scopePayloadToUiSlice,
+  sliceToScopeQuery,
+} from "@/lib/scope";
 
 describe("COVERAGE_ORDER", () => {
   it("matches the five backend bands with an en-dash", () => {
@@ -25,6 +32,20 @@ describe("coverageBandFromDays", () => {
     expect(coverageBandFromDays(14)).toBe("14–30 días");
     expect(coverageBandFromDays(30)).toBe("30+ días");
   });
+
+  it("inCoverageBand matches those edges", () => {
+    expect(inCoverageBand(14, "14–30 días")).toBe(true);
+    expect(inCoverageBand(29.9, "14–30 días")).toBe(true);
+    expect(inCoverageBand(30, "14–30 días")).toBe(false);
+    expect(inCoverageBand(30, "30+ días")).toBe(true);
+  });
+});
+
+describe("no Lovable 14+ bridge", () => {
+  it("does not export a 14+ mapping onto two backend bands", () => {
+    expect(scope).not.toHaveProperty("LOVABLE_COVERAGE_TO_API");
+    expect(scope).not.toHaveProperty("lovableSliceToScopeQuery");
+  });
 });
 
 describe("sliceToScopeQuery", () => {
@@ -39,6 +60,28 @@ describe("sliceToScopeQuery", () => {
     expect(scope.category).toEqual(["Pañales"]);
     expect(scope.coverage_bucket).toEqual(["0–3 días"]);
     expect(scope.health_bucket).toEqual(["stockout_risk"]);
+  });
+
+  it("sends one coverage_bucket for 14–30 días", () => {
+    const query = sliceToScopeQuery({
+      cats: [],
+      health: [],
+      coverage: "14–30 días",
+      buyOnly: false,
+      outOfStockOnly: false,
+    });
+    expect(query.coverage_bucket).toEqual(["14–30 días"]);
+  });
+
+  it("sends one coverage_bucket for 30+ días", () => {
+    const query = sliceToScopeQuery({
+      cats: [],
+      health: [],
+      coverage: "30+ días",
+      buyOnly: false,
+      outOfStockOnly: false,
+    });
+    expect(query.coverage_bucket).toEqual(["30+ días"]);
   });
 
   it("does not send sin_stock as a health_bucket", () => {

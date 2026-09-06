@@ -30,4 +30,4 @@
 
 ## Deferred (do not archive until decided)
 
-- [ ] 5.1 Replace 4 Lovable coverage chips (`0-3|3-7|7-14|14+`) with 5 `COVERAGE_ORDER` bands (`14+` today maps to `14–30 días` + `30+ días`)
+- [x] 5.1 Replace 4 Lovable coverage chips (`0-3|3-7|7-14|14+`) with 5 `COVERAGE_ORDER` bands (`14+` today maps to `14–30 días` + `30+ días`)

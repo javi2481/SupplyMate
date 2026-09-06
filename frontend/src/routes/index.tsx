@@ -37,10 +37,9 @@ import { factsFromRecommendation } from "@/lib/adapter";
 import { categoryColor } from "@/lib/chart-colors";
 import { categoryNamesForUi, chartUnitsByCategory, dataSourceLabel } from "@/lib/data-source";
 import { calcFromApiRow } from "@/lib/ops-row";
-import { lovableSliceToScopeQuery } from "@/lib/scope";
+import { COVERAGE_ORDER, inCoverageBand, sliceToScopeQuery, type CoverageBand } from "@/lib/scope";
 import {
   CATEGORIES,
-  COVERAGE_BANDS,
   HEALTH_FILTERS,
   HEALTH_LABEL,
   HORIZON_DAYS,
@@ -49,11 +48,9 @@ import {
   answerFor,
   csvFor,
   dec,
-  inBand,
   money,
   nf,
   type Calc,
-  type CoverageBand,
   type HealthTag,
 } from "@/lib/supplymate";
 
@@ -83,6 +80,23 @@ type MobileView = "chat" | "explore" | "po";
 type Slice = { cats: string[]; health: HealthTag[]; coverage: CoverageBand | null; buyOnly: boolean };
 
 const EMPTY: Slice = { cats: [], health: [], coverage: null, buyOnly: false };
+
+function toScopeQuery(slice: Slice, limit = 50) {
+  return sliceToScopeQuery(
+    {
+      cats: slice.cats,
+      health: slice.health.filter(
+        (tag): tag is "riesgo_quiebre" | "sin_stock" | "sobrestock" =>
+          tag === "riesgo_quiebre" || tag === "sin_stock" || tag === "sobrestock",
+      ),
+      coverage: slice.coverage,
+      buyOnly: slice.buyOnly,
+      outOfStockOnly: slice.health.includes("sin_stock"),
+    },
+    limit,
+  );
+}
+
 const BUY_QUERY = "¿Qué productos debería comprar?";
 const DEFAULT_CHIPS = ["¿Cuánto pedir de 6033436?", "Riesgo de quiebre en Pañales", "Sobrestock"];
 
@@ -119,7 +133,7 @@ function applySlice(slice: Slice): Calc[] {
       (!slice.buyOnly || row.recommended_quantity > 0) &&
       (slice.health.length === 0 || slice.health.some((tag) => row.health.includes(tag))) &&
       (slice.cats.length === 0 || slice.cats.includes(row.sku.category)) &&
-      (slice.coverage === null || inBand(row.coverage_days, slice.coverage)),
+      (slice.coverage === null || inCoverageBand(row.coverage_days, slice.coverage)),
   );
 }
 
@@ -129,7 +143,7 @@ function sliceLabels(slice: Slice): string[] {
   labels.push(...slice.cats);
   labels.push(...slice.health.map((tag) => HEALTH_LABEL[tag]));
   if (slice.coverage) {
-    labels.push(`Cobertura ${COVERAGE_BANDS.find((band) => band.id === slice.coverage)?.label}`);
+    labels.push(`Cobertura ${slice.coverage}`);
   }
   return labels;
 }
@@ -188,7 +202,7 @@ function Index() {
   const [mobileMenu, setMobileMenu] = useState(false);
   const [chatBusy, setChatBusy] = useState(false);
 
-  const scopeQuery = useMemo(() => lovableSliceToScopeQuery(slice, 50), [slice]);
+  const scopeQuery = useMemo(() => toScopeQuery(slice, 50), [slice]);
   const api = useSlice(scopeQuery, 50);
   const online = api.online;
   const statusLabel = dataSourceLabel(online);
@@ -325,7 +339,7 @@ function Index() {
     if (online) {
       setChatBusy(true);
       try {
-        const res = await postChat(query, scopeQueryToPayload(lovableSliceToScopeQuery(scopeForChat)));
+        const res = await postChat(query, scopeQueryToPayload(toScopeQuery(scopeForChat)));
         setThreads((previous) =>
           previous.map((thread) =>
             thread.id !== activeId
@@ -404,7 +418,7 @@ function Index() {
 
   function exportOrder() {
     if (online) {
-      window.open(purchaseListCsvUrl(lovableSliceToScopeQuery(frozen ?? slice, 100)), "_blank");
+      window.open(purchaseListCsvUrl(toScopeQuery(frozen ?? slice, 100)), "_blank");
       return;
     }
     const blob = new Blob([csvFor(poRows)], { type: "text/csv;charset=utf-8" });
@@ -590,7 +604,7 @@ function Index() {
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       <span className="mr-1 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">Cobertura</span>
-                      {COVERAGE_BANDS.map((band) => <button key={band.id} type="button" onClick={() => pushSlice((previous) => ({ ...previous, coverage: previous.coverage === band.id ? null : band.id }))} className={`rounded-full border px-2.5 py-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ops-focus ${slice.coverage === band.id ? "border-ops-accent bg-ops-accent-soft text-ops-accent" : "border-ops-border text-muted-foreground hover:border-ops-accent"}`}><Timer className="mr-1 inline h-3 w-3" />{band.label}</button>)}
+                      {COVERAGE_ORDER.map((band) => <button key={band} type="button" onClick={() => pushSlice((previous) => ({ ...previous, coverage: previous.coverage === band ? null : band }))} className={`rounded-full border px-2.5 py-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ops-focus ${slice.coverage === band ? "border-ops-accent bg-ops-accent-soft text-ops-accent" : "border-ops-border text-muted-foreground hover:border-ops-accent"}`}><Timer className="mr-1 inline h-3 w-3" />{band}</button>)}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">{categoryNames.map((category) => <button key={category} type="button" onClick={() => pushSlice((previous) => ({ ...previous, cats: toggleList(previous.cats, category) }))} className={`rounded-md border px-2.5 py-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ops-focus ${slice.cats.includes(category) ? "border-ops-accent text-ops-accent" : "border-ops-border text-muted-foreground hover:border-ops-accent"}`}>{category}</button>)}</div>
                   </div>

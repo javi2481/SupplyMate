@@ -76,6 +76,34 @@ def test_contract_slice_coverage_bucket_filters():
         assert dos < 3
 
 
+def test_contract_slice_coverage_bucket_14_to_30():
+    response = client.get(
+        "/replenishment/slice",
+        params=[("coverage_bucket", "14–30 días"), ("limit", "50")],
+    )
+    assert response.status_code == 200
+    items = response.json()["purchase_list"]
+    assert len(items) > 0
+    for item in items:
+        dos = item.get("days_of_supply")
+        assert dos is not None
+        assert 14 <= dos < 30
+
+
+def test_contract_slice_coverage_bucket_30_plus():
+    response = client.get(
+        "/replenishment/slice",
+        params=[("coverage_bucket", "30+ días"), ("limit", "50")],
+    )
+    assert response.status_code == 200
+    items = response.json()["purchase_list"]
+    assert len(items) > 0
+    for item in items:
+        dos = item.get("days_of_supply")
+        assert dos is not None
+        assert dos >= 30
+
+
 def test_contract_purchase_list_csv_headers():
     response = client.get("/replenishment/purchase-list.csv", params={"limit": 3})
     assert response.status_code == 200

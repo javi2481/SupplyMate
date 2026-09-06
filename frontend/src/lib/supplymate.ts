@@ -47,21 +47,6 @@ export const PRIORITY_LABEL: Record<"Alta" | "Media" | "Baja", string> = {
   Baja: "Normal",
 };
 
-export type CoverageBand = "0-3" | "3-7" | "7-14" | "14+";
-
-export const COVERAGE_BANDS: { id: CoverageBand; label: string; min: number; max: number }[] = [
-  { id: "0-3", label: "0–3 días", min: 0, max: 3 },
-  { id: "3-7", label: "3–7 días", min: 3, max: 7 },
-  { id: "7-14", label: "7–14 días", min: 7, max: 14 },
-  { id: "14+", label: "14+ días", min: 14, max: Infinity },
-];
-
-export function inBand(coverage: number, band: CoverageBand): boolean {
-  const found = COVERAGE_BANDS.find((item) => item.id === band);
-  if (!found) return true;
-  return coverage >= found.min && coverage < found.max;
-}
-
 export type Calc = {
   sku: Sku;
   avg_daily: number;

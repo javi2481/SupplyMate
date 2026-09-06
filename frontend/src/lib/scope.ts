@@ -69,33 +69,6 @@ export function inCoverageBand(days: number, band: CoverageBand): boolean {
   return coverageBandFromDays(days) === band;
 }
 
-/** Lovable coverage chips → FastAPI coverage_bucket (14+ spans the last two backend bands). */
-export const LOVABLE_COVERAGE_TO_API: Record<"0-3" | "3-7" | "7-14" | "14+", string[]> = {
-  "0-3": ["0–3 días"],
-  "3-7": ["3–7 días"],
-  "7-14": ["7–14 días"],
-  "14+": ["14–30 días", "30+ días"],
-};
-
-export function lovableSliceToScopeQuery(
-  slice: {
-    cats: string[];
-    health: Array<"riesgo_quiebre" | "sin_stock" | "sobrestock" | "cobertura_baja">;
-    coverage: "0-3" | "3-7" | "7-14" | "14+" | null;
-    buyOnly: boolean;
-  },
-  limit = 50,
-): ScopeQuery {
-  const health_bucket = healthTagsToApi(
-    slice.health.filter((tag): tag is HealthTag => tag !== "cobertura_baja"),
-  );
-  const query: ScopeQuery = { limit };
-  if (slice.cats.length) query.category = slice.cats;
-  if (health_bucket.length) query.health_bucket = health_bucket;
-  if (slice.coverage) query.coverage_bucket = LOVABLE_COVERAGE_TO_API[slice.coverage];
-  return query;
-}
-
 const API_HEALTH_TO_UI: Record<string, HealthTag> = {
   stockout_risk: "riesgo_quiebre",
   overstock: "sobrestock",
