@@ -72,6 +72,11 @@
   --color-ops-ok-soft: var(--ops-ok-soft);
   --color-ops-focus: var(--ops-focus);
   --color-ops-overlay: var(--ops-overlay);
+  --color-ops-chart-diapers: var(--ops-chart-diapers);
+  --color-ops-chart-nutrition: var(--ops-chart-nutrition);
+  --color-ops-chart-bottles: var(--ops-chart-bottles);
+  --color-ops-chart-care: var(--ops-chart-care);
+  --color-ops-chart-pharmacy: var(--ops-chart-pharmacy);
   --font-sans: Figtree, ui-sans-serif, system-ui, sans-serif;
   --font-display: Outfit, Figtree, ui-sans-serif, system-ui, sans-serif;
 }
@@ -123,6 +128,11 @@
   --ops-ok-soft: oklch(0.765 0.177 163.2 / 0.1);
   --ops-focus: oklch(0.623 0.188 259.8 / 0.35);
   --ops-overlay: oklch(0.08 0.01 255 / 0.72);
+  --ops-chart-diapers: oklch(0.68 0.18 250);
+  --ops-chart-nutrition: oklch(0.78 0.16 75);
+  --ops-chart-bottles: oklch(0.7 0.16 160);
+  --ops-chart-care: oklch(0.72 0.17 15);
+  --ops-chart-pharmacy: oklch(0.7 0.16 310);
 }
 
 .dark {

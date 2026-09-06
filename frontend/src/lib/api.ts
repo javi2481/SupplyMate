@@ -94,18 +94,29 @@ export type ChatResponse = {
   scope: AnalyticalScopePayload | null;
 };
 
+/** Query params matching FastAPI `_scope_dependency` (+ limit). */
 export type ScopeQuery = {
   category?: string[] | undefined;
+  subcategory?: string[] | undefined;
+  coverage_bucket?: string[] | undefined;
   health_bucket?: string[] | undefined;
   supplier?: string[] | undefined;
+  name_token?: string[] | undefined;
+  highlight_product_id?: string | undefined;
   limit?: number | undefined;
 };
 
-function toSearchParams(scope: ScopeQuery): URLSearchParams {
+export function toSearchParams(scope: ScopeQuery): URLSearchParams {
   const params = new URLSearchParams();
   for (const cat of scope.category ?? []) params.append("category", cat);
+  for (const sub of scope.subcategory ?? []) params.append("subcategory", sub);
+  for (const cov of scope.coverage_bucket ?? []) params.append("coverage_bucket", cov);
   for (const health of scope.health_bucket ?? []) params.append("health_bucket", health);
   for (const supplier of scope.supplier ?? []) params.append("supplier", supplier);
+  for (const token of scope.name_token ?? []) params.append("name_token", token);
+  if (scope.highlight_product_id) {
+    params.set("highlight_product_id", scope.highlight_product_id);
+  }
   params.set("limit", String(scope.limit ?? 50));
   return params;
 }
@@ -144,4 +155,16 @@ export function postChat(
 export function purchaseListCsvUrl(scope: ScopeQuery = {}): string {
   const qs = toSearchParams({ ...scope, limit: scope.limit ?? 100 }).toString();
   return `${API_URL}/replenishment/purchase-list.csv?${qs}`;
+}
+
+export function scopeQueryToPayload(query: ScopeQuery): AnalyticalScopePayload {
+  const payload: AnalyticalScopePayload = {};
+  if (query.category?.length) payload.categories = query.category;
+  if (query.subcategory?.length) payload.subcategories = query.subcategory;
+  if (query.coverage_bucket?.length) payload.coverage_buckets = query.coverage_bucket;
+  if (query.health_bucket?.length) payload.health_buckets = query.health_bucket;
+  if (query.supplier?.length) payload.suppliers = query.supplier;
+  if (query.name_token?.length) payload.name_tokens = query.name_token;
+  if (query.highlight_product_id) payload.highlight_product_id = query.highlight_product_id;
+  return payload;
 }

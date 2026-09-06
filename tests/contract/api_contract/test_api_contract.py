@@ -60,6 +60,22 @@ def test_contract_replenishment_slice_schema():
     assert isinstance(data["purchase_list"], list)
 
 
+def test_contract_slice_coverage_bucket_filters():
+    """coverage_bucket must use COVERAGE_ORDER labels (en-dash), e.g. '0–3 días'."""
+    response = client.get(
+        "/replenishment/slice",
+        params=[("coverage_bucket", "0–3 días"), ("limit", "50")],
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "purchase_list" in data
+    assert len(data["purchase_list"]) > 0
+    for item in data["purchase_list"]:
+        dos = item.get("days_of_supply")
+        assert dos is not None
+        assert dos < 3
+
+
 def test_contract_purchase_list_csv_headers():
     response = client.get("/replenishment/purchase-list.csv", params={"limit": 3})
     assert response.status_code == 200
@@ -83,6 +99,25 @@ def test_contract_analyze_response_schema():
     data = response.json()
     assert _ANALYZE_KEYS.issubset(data.keys())
     assert data["insight_source"] in {"llm", "fallback"}
+
+
+def test_contract_slice_filters_coverage_bucket():
+    unfiltered = client.get("/replenishment/slice", params={"limit": 100}).json()["purchase_list"]
+    filtered = client.get(
+        "/replenishment/slice",
+        params={"coverage_bucket": "0–3 días", "limit": 100},
+    ).json()["purchase_list"]
+
+    assert all(
+        item["days_of_supply"] is not None and item["days_of_supply"] < 3 for item in filtered
+    )
+    outside_ids = {
+        item["product_id"]
+        for item in unfiltered
+        if item["days_of_supply"] is not None and item["days_of_supply"] >= 3
+    }
+    if outside_ids:
+        assert outside_ids.isdisjoint({item["product_id"] for item in filtered})
 
 
 def test_contract_chat_response_schema():

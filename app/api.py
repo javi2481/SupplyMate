@@ -87,17 +87,22 @@ app = FastAPI(
 app.add_middleware(ChatRateLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(SafeErrorMiddleware)
-# Local React UI (Lovable / Vite) on common dev ports.
+# Local React UI (Lovable / Vite). Vite hops to 5174+ when 5173 is busy.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://127.0.0.1:5173",
         "http://localhost:5173",
+        "http://127.0.0.1:5174",
+        "http://localhost:5174",
+        "http://127.0.0.1:5175",
+        "http://localhost:5175",
         "http://127.0.0.1:3000",
         "http://localhost:3000",
         "http://127.0.0.1:4173",
         "http://localhost:4173",
     ],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
