@@ -23,6 +23,22 @@ def _sample_chat_response() -> ChatResponse:
     )
 
 
+def test_cors_allows_vite_fallback_ports():
+    for origin in (
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://localhost:5175",
+    ):
+        response = client.options(
+            "/health",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+        assert response.headers.get("access-control-allow-origin") == origin
+
+
 def test_health():
     response = client.get("/health")
     assert response.status_code == 200

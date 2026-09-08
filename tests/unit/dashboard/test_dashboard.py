@@ -116,6 +116,34 @@ def test_from_rows_health_and_charts():
     assert buckets["7–14 días"] == 1
     assert buckets["30+ días"] == 1
     assert sum(buckets.values()) == 4
+    assert snap.recommended_units == 25
+    assert snap.purchase_skus == 2
+    listed = dashboard.purchase_items(rows, limit=1)
+    assert listed[0].recommended_quantity == 20
+    assert snap.recommended_units == 25
+    assert snap.purchase_skus == 2
+
+
+def test_from_rows_out_of_stock_count():
+    rows = [
+        _row(product_id="a", current_stock=0, recommended_quantity=3),
+        _row(product_id="b", current_stock=0, recommended_quantity=1),
+        _row(product_id="c", current_stock=5, recommended_quantity=2),
+        _row(product_id="d", current_stock=10, recommended_quantity=0),
+    ]
+    snap = dashboard.from_rows(rows)
+    assert snap.out_of_stock == 2
+
+
+def test_filter_rows_out_of_stock_only():
+    rows = [
+        _row(product_id="a", current_stock=0),
+        _row(product_id="b", current_stock=5),
+        _row(product_id="c", current_stock=0),
+    ]
+    scope = AnalyticalScope(out_of_stock_only=True)
+    out = dashboard.filter_rows(rows, scope)
+    assert {row["product_id"] for row in out} == {"a", "c"}
 
 
 def test_purchase_items_top_limit():
@@ -168,6 +196,9 @@ def test_from_rows_empty():
     assert snap.skus == 0
     assert snap.avg_coverage is None
     assert snap.by_category == []
+    assert snap.recommended_units == 0
+    assert snap.purchase_skus == 0
+    assert snap.out_of_stock == 0
     assert all(b.sku_count == 0 for b in snap.coverage)
 
 

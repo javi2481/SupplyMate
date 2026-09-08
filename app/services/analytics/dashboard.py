@@ -58,6 +58,7 @@ def filter_rows(rows: list[dict], scope: AnalyticalScope | None) -> list[dict]:
             scope.health_buckets,
             scope.suppliers,
             scope.name_tokens,
+            scope.out_of_stock_only,
         )
     ):
         return list(rows)
@@ -107,6 +108,8 @@ def filter_rows(rows: list[dict], scope: AnalyticalScope | None) -> list[dict]:
                 for token in scope.name_tokens
             )
         ]
+    if scope.out_of_stock_only:
+        filtered = [row for row in filtered if int(row.get("current_stock") or 0) == 0]
     return filtered
 
 
@@ -170,6 +173,9 @@ def from_rows(rows: list[dict], *, category_limit: int = 8) -> InventoryDashboar
         healthy=counts[metrics.BUCKET_HEALTHY],
         avg_coverage=avg,
         estimated_purchase_value=sum(value_parts) if value_parts else None,
+        recommended_units=total_recommended_qty(rows),
+        purchase_skus=sum(1 for row in rows if int(row.get("recommended_quantity") or 0) > 0),
+        out_of_stock=sum(1 for row in rows if int(row.get("current_stock") or 0) == 0),
         by_category=[
             CategoryBar(category=name, recommended_quantity=qty, sku_count=n)
             for name, (qty, n) in ranked[:category_limit]

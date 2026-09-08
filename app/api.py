@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from html import escape
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -86,6 +87,26 @@ app = FastAPI(
 app.add_middleware(ChatRateLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(SafeErrorMiddleware)
+# Local React UI (Lovable / Vite). Vite hops to 5174+ when 5173 is busy.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+        "http://127.0.0.1:5174",
+        "http://localhost:5174",
+        "http://127.0.0.1:5175",
+        "http://localhost:5175",
+        "http://127.0.0.1:3000",
+        "http://localhost:3000",
+        "http://127.0.0.1:4173",
+        "http://localhost:4173",
+    ],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 _ROOT_LINKS = {
     "docs": "/docs",
@@ -447,6 +468,7 @@ def _scope_dependency(
     supplier: list[str] = Query(default=[]),
     name_token: list[str] = Query(default=[]),
     highlight_product_id: str = Query(default=""),
+    out_of_stock: bool = Query(default=False),
 ) -> AnalyticalScope:
     highlight = highlight_product_id or ""
     if len(highlight.strip()) > MAX_SCOPE_VALUE_LENGTH:
@@ -462,6 +484,7 @@ def _scope_dependency(
         suppliers=_validate_scope_values(supplier, "supplier"),
         name_tokens=_validate_scope_values(name_token, "name_token"),
         highlight_product_id=sanitize_value(highlight) or "",
+        out_of_stock_only=out_of_stock,
     )
 
 
@@ -534,7 +557,7 @@ async def purchase_list(
 @app.get("/replenishment/purchase-list.csv", tags=["replenishment"], summary="Exportar OC (CSV)")
 async def purchase_list_csv(
     scope: AnalyticalScope = Depends(_scope_dependency),
-    limit: int = Query(default=25, ge=1, le=100),
+    limit: int = Query(default=25, ge=1, le=10000),
 ) -> Response:
     body = catalog_service.purchase_list_csv(limit=limit, scope=scope)
     return Response(
