@@ -212,6 +212,8 @@ class InventoryDashboard(BaseModel):
     healthy: int = 0
     avg_coverage: float | None = None
     estimated_purchase_value: float | None = None
+    recommended_units: int = 0
+    purchase_skus: int = 0
     by_category: list[CategoryBar] = Field(default_factory=list)
     by_sales: list[CategorySalesBar] = Field(default_factory=list)
     coverage: list[CoverageBar] = Field(default_factory=list)

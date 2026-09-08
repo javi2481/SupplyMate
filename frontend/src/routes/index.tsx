@@ -35,7 +35,7 @@ import {
 } from "@/lib/api";
 import { factsFromRecommendation } from "@/lib/adapter";
 import { categoryColor } from "@/lib/chart-colors";
-import { categoryNamesForUi, chartUnitsByCategory, dataSourceLabel } from "@/lib/data-source";
+import { categoryNamesForUi, chartUnitsByCategory, dataSourceLabel, kpisFromDashboard, tableScopeCaption } from "@/lib/data-source";
 import { calcFromApiRow } from "@/lib/ops-row";
 import { COVERAGE_ORDER, inCoverageBand, sliceToScopeQuery, type CoverageBand } from "@/lib/scope";
 import {
@@ -252,6 +252,8 @@ function Index() {
   }
 
   const dash = api.useMock ? null : api.dashboard;
+  const listUnits = rows.reduce((sum, row) => sum + row.recommended_quantity, 0);
+  const kpisDash = kpisFromDashboard(dash, listUnits);
   const kpis = [
     {
       label: "Productos",
@@ -281,7 +283,7 @@ function Index() {
     },
     {
       label: "Unidades a pedir",
-      value: nf.format(rows.reduce((sum, row) => sum + row.recommended_quantity, 0)),
+      value: nf.format(kpisDash.units),
       detail: `para ${HORIZON_DAYS} días`,
       icon: PackageCheck,
       active: slice.buyOnly,
@@ -306,8 +308,9 @@ function Index() {
     }
     return applySlice(scope);
   }, [frozen, slice, api.useMock, api.rows]);
-  const units = poRows.reduce((sum, row) => sum + row.recommended_quantity, 0);
-  const value = poRows.reduce((sum, row) => sum + row.estimated_purchase_value, 0);
+  const units = dash?.recommended_units ?? poRows.reduce((sum, row) => sum + row.recommended_quantity, 0);
+  const value = dash?.estimated_purchase_value ?? poRows.reduce((sum, row) => sum + row.estimated_purchase_value, 0);
+  const poSkuCount = dash?.purchase_skus ?? poRows.length;
 
   async function send(text: string) {
     const query = text.trim();
@@ -547,7 +550,7 @@ function Index() {
               </div>
 
               {mode === "po" ? (
-                <PurchaseOrder rows={poRows} labels={sliceLabels(frozen ?? slice)} units={units} value={value} onExport={exportOrder} onBack={backToExplore} />
+                <PurchaseOrder rows={poRows} labels={sliceLabels(frozen ?? slice)} units={units} value={value} skuCount={poSkuCount} onExport={exportOrder} onBack={backToExplore} />
               ) : (
                 <div className="min-h-0 flex-1 overflow-y-auto">
                   <div className="flex flex-wrap items-center gap-2 border-b border-ops-border bg-ops-panel px-4 py-2.5 lg:px-5">
@@ -609,7 +612,7 @@ function Index() {
                     <div className="mt-2 flex flex-wrap gap-1.5">{categoryNames.map((category) => <button key={category} type="button" onClick={() => pushSlice((previous) => ({ ...previous, cats: toggleList(previous.cats, category) }))} className={`rounded-md border px-2.5 py-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ops-focus ${slice.cats.includes(category) ? "border-ops-accent text-ops-accent" : "border-ops-border text-muted-foreground hover:border-ops-accent"}`}>{category}</button>)}</div>
                   </div>
 
-                  <SkuTable rows={rows} onOpen={(row) => void openDetail(row)} />
+                  <SkuTable rows={rows} recorteToBuy={dash?.purchase_skus ?? rows.length} onOpen={(row) => void openDetail(row)} />
                 </div>
               )}
             </section>
@@ -684,7 +687,7 @@ function SortIcon({ column, active, direction }: { column: SortKey; active: Sort
   return direction === "asc" ? <ArrowUp className="h-3 w-3 text-ops-accent" /> : <ArrowDown className="h-3 w-3 text-ops-accent" />;
 }
 
-function SkuTable({ rows, onOpen }: { rows: Calc[]; onOpen: (row: Calc) => void }) {
+function SkuTable({ rows, recorteToBuy, onOpen }: { rows: Calc[]; recorteToBuy: number; onOpen: (row: Calc) => void }) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({ key: "order", direction: "desc" });
   const normalizedQuery = normalizeSearch(query);
@@ -752,6 +755,13 @@ function SkuTable({ rows, onOpen }: { rows: Calc[]; onOpen: (row: Calc) => void 
     { key: "health", label: "Salud" },
   ];
 
+  const caption = tableScopeCaption({
+    displayed: displayedRows.length,
+    pageRows: rows.length,
+    recorteToBuy,
+    searching: queryTokens.length > 0,
+  });
+
   return (
     <div>
       <div className="border-b border-ops-border bg-background px-4 py-3 lg:px-5">
@@ -762,7 +772,7 @@ function SkuTable({ rows, onOpen }: { rows: Calc[]; onOpen: (row: Calc) => void 
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar producto, SKU, categoría o proveedor" className="h-9 w-full rounded-md border border-ops-border bg-ops-panel pl-9 pr-9 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-ops-accent focus:ring-2 focus:ring-ops-focus" />
             {query && <button type="button" onClick={() => setQuery("")} aria-label="Limpiar búsqueda" className="absolute right-1.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-focus"><X className="h-3.5 w-3.5" /></button>}
           </label>
-          <span className="text-[11px] tabular-nums text-muted-foreground">{nf.format(displayedRows.length)} de {nf.format(rows.length)} productos</span>
+          <span className="text-[11px] tabular-nums text-muted-foreground">{nf.format(caption.shown)} de {nf.format(caption.total)} {caption.noun}</span>
         </div>
         {correction && displayedRows.length > 0 && <p className="mt-2 text-[11px] text-muted-foreground">Mostrando resultados relacionados con <button type="button" onClick={() => setQuery(correction)} className="font-semibold text-ops-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ops-focus">“{correction}”</button>.</p>}
       </div>
@@ -795,7 +805,7 @@ function SkuTable({ rows, onOpen }: { rows: Calc[]; onOpen: (row: Calc) => void 
   );
 }
 
-function PurchaseOrder({ rows, labels, units, value, onExport, onBack }: { rows: Calc[]; labels: string[]; units: number; value: number; onExport: () => void; onBack: () => void }) {
+function PurchaseOrder({ rows, labels, units, value, skuCount, onExport, onBack }: { rows: Calc[]; labels: string[]; units: number; value: number; skuCount: number; onExport: () => void; onBack: () => void }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-5">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
@@ -818,7 +828,7 @@ function PurchaseOrder({ rows, labels, units, value, onExport, onBack }: { rows:
       </div>
 
       <div className="mt-3 grid grid-cols-3 gap-3">
-        {[["Productos", nf.format(rows.length)], ["Unidades", nf.format(units)], ["Valor estimado", money(value)]].map(([label, amount]) => (
+        {[["Productos", nf.format(skuCount)], ["Unidades", nf.format(units)], ["Valor estimado", money(value)]].map(([label, amount]) => (
           <div key={label} className="rounded-lg border border-ops-border bg-ops-panel p-3"><div className="text-[10px] uppercase text-muted-foreground">{label}</div><div className="mt-1 font-display text-lg font-semibold tabular-nums">{amount}</div></div>
         ))}
       </div>

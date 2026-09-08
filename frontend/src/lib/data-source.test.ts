@@ -7,6 +7,7 @@ import {
   dataSourceLabel,
   kpisFromDashboard,
   preferLiveApi,
+  tableScopeCaption,
 } from "@/lib/data-source";
 import { ROWS } from "@/lib/supplymate";
 
@@ -20,13 +21,45 @@ describe("slice data source helpers", () => {
       healthy: 12000,
       avg_coverage: 20,
       estimated_purchase_value: 1,
+      recommended_units: 17753,
+      purchase_skus: 1059,
       by_category: [],
     };
     const kpis = kpisFromDashboard(dash, 5);
     expect(kpis.skus).toBe(13125);
     expect(kpis.stockout).toBe(400);
     expect(kpis.understock).toBe(200);
-    expect(kpis.units).toBe(5);
+    expect(kpis.units).toBe(17753);
+    expect(kpis.purchase_skus).toBe(1059);
+  });
+
+  it("falls back to the list sum when the dashboard has no recorte totals", () => {
+    const dash: InventoryDashboard = {
+      skus: 10,
+      stockout_risk: 1,
+      understock: 1,
+      overstock: 0,
+      healthy: 8,
+      avg_coverage: 20,
+      estimated_purchase_value: 1,
+      by_category: [],
+    };
+    expect(kpisFromDashboard(dash, 42).units).toBe(42);
+    expect(kpisFromDashboard(null, 42).units).toBe(42);
+    expect(kpisFromDashboard(null, 42).purchase_skus).toBe(42);
+  });
+
+  it("table caption uses purchase_skus when the page is truncated", () => {
+    expect(tableScopeCaption({ displayed: 50, pageRows: 50, recorteToBuy: 1059, searching: false })).toEqual({
+      shown: 50,
+      total: 1059,
+      noun: "a reponer",
+    });
+    expect(tableScopeCaption({ displayed: 12, pageRows: 50, recorteToBuy: 1059, searching: true })).toEqual({
+      shown: 12,
+      total: 50,
+      noun: "productos",
+    });
   });
 
   it("offline label never contains localhost", () => {

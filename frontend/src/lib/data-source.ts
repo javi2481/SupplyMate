@@ -32,16 +32,32 @@ export function chartUnitsByCategory(
 export function kpisFromDashboard(
   dashboard: InventoryDashboard | null,
   listUnits: number,
-): { skus: number; stockout: number; understock: number; units: number } {
+): { skus: number; stockout: number; understock: number; units: number; purchase_skus: number } {
   if (dashboard) {
     return {
       skus: dashboard.skus,
       stockout: dashboard.stockout_risk,
       understock: dashboard.understock,
-      units: listUnits,
+      units: dashboard.recommended_units ?? listUnits,
+      purchase_skus: dashboard.purchase_skus ?? listUnits,
     };
   }
-  return { skus: 0, stockout: 0, understock: 0, units: listUnits };
+  return { skus: 0, stockout: 0, understock: 0, units: listUnits, purchase_skus: listUnits };
+}
+
+export function tableScopeCaption(opts: {
+  displayed: number;
+  pageRows: number;
+  recorteToBuy: number | null;
+  searching: boolean;
+}): { shown: number; total: number; noun: "productos" | "a reponer" } {
+  if (opts.searching) {
+    return { shown: opts.displayed, total: opts.pageRows, noun: "productos" };
+  }
+  if (opts.recorteToBuy != null && opts.recorteToBuy > opts.pageRows) {
+    return { shown: opts.pageRows, total: opts.recorteToBuy, noun: "a reponer" };
+  }
+  return { shown: opts.pageRows, total: opts.pageRows, noun: "productos" };
 }
 
 /** Prefer live API when a base URL is configured and mock is not forced. */

@@ -44,6 +44,8 @@ export type InventoryDashboard = {
   healthy: number;
   avg_coverage: number | null;
   estimated_purchase_value: number | null;
+  recommended_units?: number;
+  purchase_skus?: number;
   by_category: { category: string; recommended_quantity: number; sku_count: number }[];
 };
 

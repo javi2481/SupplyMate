@@ -18,6 +18,8 @@ _DASHBOARD_KEYS = {
     "overstock",
     "healthy",
     "by_category",
+    "recommended_units",
+    "purchase_skus",
 }
 _ANALYZE_KEYS = {
     "mode",
@@ -58,6 +60,18 @@ def test_contract_replenishment_slice_schema():
     assert isinstance(dashboard["skus"], int)
     assert isinstance(dashboard["by_category"], list)
     assert isinstance(data["purchase_list"], list)
+    assert isinstance(dashboard["recommended_units"], int)
+    assert isinstance(dashboard["purchase_skus"], int)
+
+
+def test_contract_dashboard_totals_cover_full_recorte_not_list():
+    data = client.get("/replenishment/slice", params={"limit": 50}).json()
+    dashboard = data["dashboard"]
+    listed_qty = sum(int(item["recommended_quantity"] or 0) for item in data["purchase_list"])
+    listed_n = len(data["purchase_list"])
+    assert dashboard["recommended_units"] >= listed_qty
+    assert dashboard["purchase_skus"] >= listed_n
+    assert dashboard["recommended_units"] > listed_qty or dashboard["purchase_skus"] > listed_n
 
 
 def test_contract_slice_coverage_bucket_filters():

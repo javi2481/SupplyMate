@@ -170,6 +170,8 @@ def from_rows(rows: list[dict], *, category_limit: int = 8) -> InventoryDashboar
         healthy=counts[metrics.BUCKET_HEALTHY],
         avg_coverage=avg,
         estimated_purchase_value=sum(value_parts) if value_parts else None,
+        recommended_units=total_recommended_qty(rows),
+        purchase_skus=sum(1 for row in rows if int(row.get("recommended_quantity") or 0) > 0),
         by_category=[
             CategoryBar(category=name, recommended_quantity=qty, sku_count=n)
             for name, (qty, n) in ranked[:category_limit]

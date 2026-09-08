@@ -116,6 +116,12 @@ def test_from_rows_health_and_charts():
     assert buckets["7–14 días"] == 1
     assert buckets["30+ días"] == 1
     assert sum(buckets.values()) == 4
+    assert snap.recommended_units == 25
+    assert snap.purchase_skus == 2
+    listed = dashboard.purchase_items(rows, limit=1)
+    assert listed[0].recommended_quantity == 20
+    assert snap.recommended_units == 25
+    assert snap.purchase_skus == 2
 
 
 def test_purchase_items_top_limit():
@@ -168,6 +174,8 @@ def test_from_rows_empty():
     assert snap.skus == 0
     assert snap.avg_coverage is None
     assert snap.by_category == []
+    assert snap.recommended_units == 0
+    assert snap.purchase_skus == 0
     assert all(b.sku_count == 0 for b in snap.coverage)
 
 
