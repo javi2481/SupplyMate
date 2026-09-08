@@ -1,8 +1,8 @@
 import type { InventoryDashboard } from "@/lib/api";
 
-/** Offline fallback: never leak API host into status copy. */
-export function dataSourceLabel(online: boolean): "Motor listo" | "Catálogo demo" {
-  return online ? "Motor listo" : "Catálogo demo";
+/** Offline fallback: Catálogo demo only when mock is active. Never leak API host. */
+export function dataSourceLabel(useMock: boolean): "Motor listo" | "Catálogo demo" {
+  return useMock ? "Catálogo demo" : "Motor listo";
 }
 
 /** Category chips/chart: live dashboard names, never Lovable demo names while the API is in use. */
@@ -32,17 +32,33 @@ export function chartUnitsByCategory(
 export function kpisFromDashboard(
   dashboard: InventoryDashboard | null,
   listUnits: number,
-): { skus: number; stockout: number; understock: number; units: number; purchase_skus: number } {
+  listOutOfStock = 0,
+): {
+  skus: number;
+  stockout: number;
+  understock: number;
+  out_of_stock: number;
+  units: number;
+  purchase_skus: number;
+} {
   if (dashboard) {
     return {
       skus: dashboard.skus,
       stockout: dashboard.stockout_risk,
       understock: dashboard.understock,
+      out_of_stock: dashboard.out_of_stock ?? listOutOfStock,
       units: dashboard.recommended_units ?? listUnits,
       purchase_skus: dashboard.purchase_skus ?? listUnits,
     };
   }
-  return { skus: 0, stockout: 0, understock: 0, units: listUnits, purchase_skus: listUnits };
+  return {
+    skus: 0,
+    stockout: 0,
+    understock: 0,
+    out_of_stock: listOutOfStock,
+    units: listUnits,
+    purchase_skus: listUnits,
+  };
 }
 
 export function tableScopeCaption(opts: {
@@ -67,4 +83,10 @@ export function preferLiveApi(
   const flag = env["VITE_SUPPLYMATE_USE_MOCK"];
   if (flag === "1" || flag === "true") return false;
   return Boolean(env["VITE_SUPPLYMATE_API_URL"]?.trim());
+}
+
+export const CSV_EXPORT_MAX = 10_000;
+
+export function csvExportLimit(purchaseSkus: number): number {
+  return Math.min(Math.max(purchaseSkus, 1), CSV_EXPORT_MAX);
 }

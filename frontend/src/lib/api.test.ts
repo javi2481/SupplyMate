@@ -146,5 +146,11 @@ describe("api client", () => {
     expect(qs.get("limit")).toBe("10");
     expect(qs.getAll("category")).toEqual([]);
     expect(qs.getAll("coverage_bucket")).toEqual([]);
+    expect(qs.get("out_of_stock")).toBeNull();
+  });
+
+  it("toSearchParams includes out_of_stock when set", () => {
+    const qs = toSearchParams({ out_of_stock: true, limit: 50 });
+    expect(qs.get("out_of_stock")).toBe("true");
   });
 });

@@ -20,6 +20,7 @@ _DASHBOARD_KEYS = {
     "by_category",
     "recommended_units",
     "purchase_skus",
+    "out_of_stock",
 }
 _ANALYZE_KEYS = {
     "mode",
@@ -62,6 +63,7 @@ def test_contract_replenishment_slice_schema():
     assert isinstance(data["purchase_list"], list)
     assert isinstance(dashboard["recommended_units"], int)
     assert isinstance(dashboard["purchase_skus"], int)
+    assert isinstance(dashboard["out_of_stock"], int)
 
 
 def test_contract_dashboard_totals_cover_full_recorte_not_list():
@@ -72,6 +74,18 @@ def test_contract_dashboard_totals_cover_full_recorte_not_list():
     assert dashboard["recommended_units"] >= listed_qty
     assert dashboard["purchase_skus"] >= listed_n
     assert dashboard["recommended_units"] > listed_qty or dashboard["purchase_skus"] > listed_n
+
+
+def test_contract_slice_out_of_stock_filters_zero_stock():
+    response = client.get(
+        "/replenishment/slice",
+        params=[("out_of_stock", "true"), ("limit", "50")],
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["dashboard"]["out_of_stock"] == data["dashboard"]["skus"]
+    for item in data["purchase_list"]:
+        assert item["current_stock"] == 0
 
 
 def test_contract_slice_coverage_bucket_filters():

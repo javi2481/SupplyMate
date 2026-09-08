@@ -116,6 +116,7 @@ def scope_from_query_params(
     suppliers: list[str] | None = None,
     name_tokens: list[str] | None = None,
     highlight_product_id: str = "",
+    out_of_stock_only: bool = False,
 ) -> AnalyticalScope:
     return AnalyticalScope(
         categories=list(categories or []),
@@ -125,6 +126,7 @@ def scope_from_query_params(
         suppliers=list(suppliers or []),
         name_tokens=list(name_tokens or []),
         highlight_product_id=highlight_product_id or "",
+        out_of_stock_only=bool(out_of_stock_only),
     )
 
 
@@ -139,5 +141,6 @@ def cache_key(scope: AnalyticalScope) -> str:
         f"name_tokens={','.join(sorted(scope.name_tokens))}",
         f"guidance_dismissed={','.join(sorted(scope.guidance_dismissed))}",
         f"highlight={scope.highlight_product_id or ''}",
+        f"out_of_stock_only={int(scope.out_of_stock_only)}",
     ]
     return "|".join(parts)

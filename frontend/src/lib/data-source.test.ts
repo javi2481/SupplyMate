@@ -4,6 +4,7 @@ import type { InventoryDashboard, PurchaseListItem } from "@/lib/api";
 import {
   categoryNamesForUi,
   chartUnitsByCategory,
+  csvExportLimit,
   dataSourceLabel,
   kpisFromDashboard,
   preferLiveApi,
@@ -23,12 +24,14 @@ describe("slice data source helpers", () => {
       estimated_purchase_value: 1,
       recommended_units: 17753,
       purchase_skus: 1059,
+      out_of_stock: 88,
       by_category: [],
     };
     const kpis = kpisFromDashboard(dash, 5);
     expect(kpis.skus).toBe(13125);
     expect(kpis.stockout).toBe(400);
     expect(kpis.understock).toBe(200);
+    expect(kpis.out_of_stock).toBe(88);
     expect(kpis.units).toBe(17753);
     expect(kpis.purchase_skus).toBe(1059);
   });
@@ -47,6 +50,7 @@ describe("slice data source helpers", () => {
     expect(kpisFromDashboard(dash, 42).units).toBe(42);
     expect(kpisFromDashboard(null, 42).units).toBe(42);
     expect(kpisFromDashboard(null, 42).purchase_skus).toBe(42);
+    expect(kpisFromDashboard(null, 42, 3).out_of_stock).toBe(3);
   });
 
   it("table caption uses purchase_skus when the page is truncated", () => {
@@ -62,10 +66,16 @@ describe("slice data source helpers", () => {
     });
   });
 
-  it("offline label never contains localhost", () => {
-    expect(dataSourceLabel(false)).toBe("Catálogo demo");
-    expect(dataSourceLabel(false)).not.toMatch(/localhost|127\.0\.0\.1|API/i);
-    expect(dataSourceLabel(true)).toBe("Motor listo");
+  it("shows Catálogo demo only when mock is active", () => {
+    expect(dataSourceLabel(true)).toBe("Catálogo demo");
+    expect(dataSourceLabel(true)).not.toMatch(/localhost|127\.0\.0\.1|API/i);
+    expect(dataSourceLabel(false)).toBe("Motor listo");
+  });
+
+  it("csvExportLimit caps at 10000 and uses purchase_skus", () => {
+    expect(csvExportLimit(5395)).toBe(5395);
+    expect(csvExportLimit(50)).toBe(50);
+    expect(csvExportLimit(50_000)).toBe(10_000);
   });
 
   it("does not show Lovable demo categories when the live dashboard is in use", () => {

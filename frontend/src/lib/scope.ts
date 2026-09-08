@@ -53,6 +53,7 @@ export function sliceToScopeQuery(slice: UiSlice, limit = 50): ScopeQuery {
   if (slice.cats.length) query.category = slice.cats;
   if (health_bucket.length) query.health_bucket = health_bucket;
   if (slice.coverage) query.coverage_bucket = [slice.coverage];
+  if (slice.outOfStockOnly) query.out_of_stock = true;
   return query;
 }
 

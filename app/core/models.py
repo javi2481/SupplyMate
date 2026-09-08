@@ -214,6 +214,7 @@ class InventoryDashboard(BaseModel):
     estimated_purchase_value: float | None = None
     recommended_units: int = 0
     purchase_skus: int = 0
+    out_of_stock: int = 0
     by_category: list[CategoryBar] = Field(default_factory=list)
     by_sales: list[CategorySalesBar] = Field(default_factory=list)
     coverage: list[CoverageBar] = Field(default_factory=list)
@@ -228,6 +229,7 @@ class AnalyticalScope(BaseModel):
     name_tokens: list[str] = Field(default_factory=list)
     guidance_dismissed: list[str] = Field(default_factory=list)
     highlight_product_id: str = ""
+    out_of_stock_only: bool = False
 
 
 class Reference(BaseModel):

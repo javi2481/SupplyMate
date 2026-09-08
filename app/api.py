@@ -468,6 +468,7 @@ def _scope_dependency(
     supplier: list[str] = Query(default=[]),
     name_token: list[str] = Query(default=[]),
     highlight_product_id: str = Query(default=""),
+    out_of_stock: bool = Query(default=False),
 ) -> AnalyticalScope:
     highlight = highlight_product_id or ""
     if len(highlight.strip()) > MAX_SCOPE_VALUE_LENGTH:
@@ -483,6 +484,7 @@ def _scope_dependency(
         suppliers=_validate_scope_values(supplier, "supplier"),
         name_tokens=_validate_scope_values(name_token, "name_token"),
         highlight_product_id=sanitize_value(highlight) or "",
+        out_of_stock_only=out_of_stock,
     )
 
 
@@ -555,7 +557,7 @@ async def purchase_list(
 @app.get("/replenishment/purchase-list.csv", tags=["replenishment"], summary="Exportar OC (CSV)")
 async def purchase_list_csv(
     scope: AnalyticalScope = Depends(_scope_dependency),
-    limit: int = Query(default=25, ge=1, le=100),
+    limit: int = Query(default=25, ge=1, le=10000),
 ) -> Response:
     body = catalog_service.purchase_list_csv(limit=limit, scope=scope)
     return Response(

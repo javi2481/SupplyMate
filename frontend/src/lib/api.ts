@@ -46,6 +46,7 @@ export type InventoryDashboard = {
   estimated_purchase_value: number | null;
   recommended_units?: number;
   purchase_skus?: number;
+  out_of_stock?: number;
   by_category: { category: string; recommended_quantity: number; sku_count: number }[];
 };
 
@@ -105,6 +106,7 @@ export type ScopeQuery = {
   supplier?: string[] | undefined;
   name_token?: string[] | undefined;
   highlight_product_id?: string | undefined;
+  out_of_stock?: boolean | undefined;
   limit?: number | undefined;
 };
 
@@ -118,6 +120,9 @@ export function toSearchParams(scope: ScopeQuery): URLSearchParams {
   for (const token of scope.name_token ?? []) params.append("name_token", token);
   if (scope.highlight_product_id) {
     params.set("highlight_product_id", scope.highlight_product_id);
+  }
+  if (scope.out_of_stock) {
+    params.set("out_of_stock", "true");
   }
   params.set("limit", String(scope.limit ?? 50));
   return params;

@@ -93,7 +93,20 @@ describe("sliceToScopeQuery", () => {
       outOfStockOnly: true,
     });
     expect(scope.health_bucket).toEqual(["overstock"]);
+    expect(scope.out_of_stock).toBe(true);
     expect(scope.coverage_bucket).toBeUndefined();
+  });
+
+  it("sends out_of_stock when the Falta de stock chip is active", () => {
+    const query = sliceToScopeQuery({
+      cats: [],
+      health: ["sin_stock"],
+      coverage: null,
+      buyOnly: false,
+      outOfStockOnly: true,
+    });
+    expect(query.out_of_stock).toBe(true);
+    expect(query.health_bucket).toBeUndefined();
   });
 
   it("maps API scope payload back to UI slice", () => {

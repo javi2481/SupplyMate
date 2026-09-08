@@ -35,7 +35,7 @@ import {
 } from "@/lib/api";
 import { factsFromRecommendation } from "@/lib/adapter";
 import { categoryColor } from "@/lib/chart-colors";
-import { categoryNamesForUi, chartUnitsByCategory, dataSourceLabel, kpisFromDashboard, tableScopeCaption } from "@/lib/data-source";
+import { categoryNamesForUi, chartUnitsByCategory, csvExportLimit, dataSourceLabel, kpisFromDashboard, tableScopeCaption } from "@/lib/data-source";
 import { calcFromApiRow } from "@/lib/ops-row";
 import { COVERAGE_ORDER, inCoverageBand, sliceToScopeQuery, type CoverageBand } from "@/lib/scope";
 import {
@@ -112,8 +112,8 @@ const SEED: Thread[] = [
       },
     ],
   },
-  { id: "t2", title: "Quiebres Pañales Talle M", messages: [] },
-  { id: "t3", title: "Revisión sobrestock Nutrición", messages: [] },
+  { id: "t2", title: "Quiebres de stock", messages: [] },
+  { id: "t3", title: "Revisión de sobrestock", messages: [] },
 ];
 
 const healthIcon: Record<HealthTag, typeof AlertTriangle> = {
@@ -205,7 +205,8 @@ function Index() {
   const scopeQuery = useMemo(() => toScopeQuery(slice, 50), [slice]);
   const api = useSlice(scopeQuery, 50);
   const online = api.online;
-  const statusLabel = dataSourceLabel(online);
+  const statusLabel = dataSourceLabel(api.useMock);
+  const statusLive = !api.useMock;
 
   const categoryNames = useMemo(
     () => categoryNamesForUi(api.useMock, api.dashboard, CATEGORIES),
@@ -253,7 +254,8 @@ function Index() {
 
   const dash = api.useMock ? null : api.dashboard;
   const listUnits = rows.reduce((sum, row) => sum + row.recommended_quantity, 0);
-  const kpisDash = kpisFromDashboard(dash, listUnits);
+  const listOutOfStock = rows.filter((row) => row.sku.stock === 0).length;
+  const kpisDash = kpisFromDashboard(dash, listUnits, listOutOfStock);
   const kpis = [
     {
       label: "Productos",
@@ -275,7 +277,7 @@ function Index() {
     },
     {
       label: "Falta de stock",
-      value: nf.format(dash?.understock ?? rows.filter((row) => row.sku.stock === 0).length),
+      value: nf.format(kpisDash.out_of_stock),
       detail: "reposición urgente",
       icon: CircleAlert,
       active: slice.health.includes("sin_stock"),
@@ -421,7 +423,11 @@ function Index() {
 
   function exportOrder() {
     if (online) {
-      window.open(purchaseListCsvUrl(toScopeQuery(frozen ?? slice, 100)), "_blank");
+      const purchaseSkus = dash?.purchase_skus ?? poRows.length;
+      window.open(
+        purchaseListCsvUrl(toScopeQuery(frozen ?? slice, csvExportLimit(purchaseSkus))),
+        "_blank",
+      );
       return;
     }
     const blob = new Blob([csvFor(poRows)], { type: "text/csv;charset=utf-8" });
@@ -493,7 +499,7 @@ function Index() {
         </div>
       </nav>
       <div className="border-t border-ops-border p-4">
-        <div className="flex items-center gap-2 text-[11px] text-muted-foreground"><CheckCircle2 className={`h-4 w-4 shrink-0 ${online ? "text-ops-ok" : "text-ops-warn"}`} />{!railCollapsed && <span className="hidden xl:inline">{statusLabel}</span>}</div>
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground"><CheckCircle2 className={`h-4 w-4 shrink-0 ${statusLive ? "text-ops-ok" : "text-ops-warn"}`} />{!railCollapsed && <span className="hidden xl:inline">{statusLabel}</span>}</div>
       </div>
     </aside>
   );
@@ -510,7 +516,7 @@ function Index() {
               <button type="button" aria-label="Abrir menú" onClick={() => setMobileMenu(true)} className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted-foreground outline-none hover:bg-ops-row focus-visible:ring-2 focus-visible:ring-ops-accent md:hidden"><Menu className="h-5 w-5" /></button>
               <div className="min-w-0"><h1 className="truncate font-display text-lg font-semibold">SupplyMate · Operación de reposición</h1><p className="truncate text-[11px] text-muted-foreground">Próximos {HORIZON_DAYS} días · este recorte</p></div>
             </div>
-            <div className={`flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase ${online ? "border-ops-ok/30 bg-ops-ok-soft text-ops-ok" : "border-ops-warn/40 bg-ops-warn/10 text-ops-warn"}`}><span className={`h-1.5 w-1.5 rounded-full ${online ? "bg-ops-ok" : "bg-ops-warn"}`} />{statusLabel}</div>
+            <div className={`flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase ${statusLive ? "border-ops-ok/30 bg-ops-ok-soft text-ops-ok" : "border-ops-warn/40 bg-ops-warn/10 text-ops-warn"}`}><span className={`h-1.5 w-1.5 rounded-full ${statusLive ? "bg-ops-ok" : "bg-ops-warn"}`} />{statusLabel}</div>
           </header>
 
           <div className="grid h-12 shrink-0 grid-cols-3 border-b border-ops-border bg-ops-panel md:hidden">
@@ -851,6 +857,11 @@ function PurchaseOrder({ rows, labels, units, value, skuCount, onExport, onBack 
           </tbody>
         </table>
       </div>
+      {skuCount > rows.length && (
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          La tabla muestra una muestra de {nf.format(rows.length)} SKUs. Exportar orden descarga hasta {nf.format(skuCount)} del recorte.
+        </p>
+      )}
     </div>
   );
 }
