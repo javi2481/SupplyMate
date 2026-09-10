@@ -65,6 +65,16 @@ _COVERAGE_N_RE = re.compile(
     r"\bcobertura\s+(?:de\s+)?(\d+)\s*d[ií]as?\b",
     re.IGNORECASE,
 )
+# Horizon phrases («próximos 30 días») must not be read as coverage bands.
+_HORIZON_SPAN_RE = re.compile(
+    r"(?:pr[oó]ximos?|para(?:\s+los)?|a)\s+\d+\s*d[ií]as?",
+    re.IGNORECASE,
+)
+_EXPLICIT_COVERAGE_RE = re.compile(
+    r"\bcobertura\b|(?:menos\s+de|menos\s+que|bajo|menor\s+(?:a|de)|<)\s*\d+\s*d[ií]as?"
+    r"|\b\d+\s*[-–]\s*\d+\s*d[ií]as?|\b30\s*\+\s*d[ií]as?|\bm[aá]s\s+de\s+\d+\s*d[ií]as?",
+    re.IGNORECASE,
+)
 
 
 def coverage_bucket_from_days_threshold(days: int, *, exclusive_lt: bool = True) -> str | None:
@@ -86,23 +96,28 @@ def coverage_bucket_from_days_threshold(days: int, *, exclusive_lt: bool = True)
 def extract_coverage_bucket(message: str) -> str | None:
     """Python-owned coverage band from NL (LLM must not invent the bucket)."""
     raw = message or ""
-    msg = normalize_text(raw)
-    # Explicit en-dash / hyphen bands first
+    # Mask replenishment-horizon spans so «próximos 30 días» ≠ band «30+ días».
+    masked = _HORIZON_SPAN_RE.sub(" ", raw)
+    msg = normalize_text(masked)
+    # Explicit en-dash / hyphen bands first (on masked text)
     for band in COVERAGE_ORDER:
+        if band == "30+ días":
+            # normalize_text strips '+', so require an explicit plus / «más de 30».
+            if not re.search(r"30\s*\+|m[aá]s\s+de\s*30", masked, re.IGNORECASE):
+                continue
         band_norm = normalize_text(band)
         if band_norm and band_norm in msg:
             return band
-        # Allow "0-3 dias" without en-dash
         alt = band_norm.replace(" ", "")
         compact = msg.replace(" ", "")
         if alt and alt in compact:
             return band
 
-    lt = _COVERAGE_LT_RE.search(raw) or _COVERAGE_LT_RE.search(msg)
+    lt = _COVERAGE_LT_RE.search(masked) or _COVERAGE_LT_RE.search(msg)
     if lt:
         return coverage_bucket_from_days_threshold(int(lt.group(1)), exclusive_lt=True)
 
-    rng = _COVERAGE_RANGE_RE.search(raw) or _COVERAGE_RANGE_RE.search(msg)
+    rng = _COVERAGE_RANGE_RE.search(masked) or _COVERAGE_RANGE_RE.search(msg)
     if rng:
         lo, hi = int(rng.group(1)), int(rng.group(2))
         label = f"{lo}–{hi} días"
@@ -111,7 +126,7 @@ def extract_coverage_bucket(message: str) -> str | None:
         # Fall back: use upper bound as exclusive threshold proxy
         return coverage_bucket_from_days_threshold(hi, exclusive_lt=True)
 
-    cov_n = _COVERAGE_N_RE.search(raw) or _COVERAGE_N_RE.search(msg)
+    cov_n = _COVERAGE_N_RE.search(masked) or _COVERAGE_N_RE.search(msg)
     if cov_n:
         return coverage_bucket_from_days_threshold(int(cov_n.group(1)), exclusive_lt=True)
     return None
@@ -345,7 +360,19 @@ def enrich_interpretation_from_message(
 ) -> QueryInterpretation:
     """Merge Python-owned filter hints (coverage, críticos) onto LLM/rules output."""
     py_hints = _extract_filter_hints(message)
-    merged = list(dict.fromkeys([*(interpretation.filter_hints or []), *py_hints]))[:5]
+    llm_hints = list(interpretation.filter_hints or [])
+    # Horizon-only questions: drop LLM coverage bands Python did not confirm.
+    if _HORIZON_SPAN_RE.search(message or "") and not _EXPLICIT_COVERAGE_RE.search(
+        message or ""
+    ):
+        llm_hints = [h for h in llm_hints if h not in COVERAGE_ORDER]
+    py_bucket = extract_coverage_bucket(message)
+    cleaned_llm: list[str] = []
+    for hint in llm_hints:
+        if hint in COVERAGE_ORDER and hint != py_bucket:
+            continue
+        cleaned_llm.append(hint)
+    merged = list(dict.fromkeys([*cleaned_llm, *py_hints]))[:5]
     intent = interpretation.intent
     if _has_risk_intent(message) and intent in ("replenishment", "unknown"):
         intent = "inventory_risk"

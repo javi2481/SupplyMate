@@ -15,6 +15,7 @@ from app.guidance import guidance_after_slice, guidance_for_resolution
 from app.agent.intent_classifier import classify_intent
 from app.agent.intents import is_purchase_list_query, is_top_categories_query, match_rule_intent
 from app.agent.llm_log import emit
+from app.agent.turn_log import attach_trace, build_turn_trace, emit_turn
 from app.agent.model import get_model
 from app.core.models import (
     AnalyticalScope,
@@ -462,145 +463,251 @@ async def run_supplymate(
     chip: GuidanceChip | None = None,
 ) -> ChatResponse:
     """Route by interpreted intent + catalog resolution, then deterministic Python."""
+    started = time.perf_counter()
     if chip is not None:
-        return await run_apply_chip(scope or AnalyticalScope(), chip)
-
-    previous = scope
-    # Free-text → LLM interpret (rules only fallback). Chips/filters skip this path.
-    interpretation = await interpret_query(message, previous_scope=previous)
-    resolved = resolve_references(interpretation)
-    interpretation = promote_new_query_if_needed(interpretation, resolved, previous)
-    resolution = build_resolution_result(interpretation, resolved, previous)
-    horizon = resolve_horizon_days(message, previous)
-    resolution = resolution.model_copy(
-        update={
-            "scope": resolution.scope.model_copy(update={"horizon_days": horizon})
-        }
-    )
-
-    if resolution.blocking:
-        unresolved_all = resolved and all(r.match_kind == "unresolved" for r in resolved)
-        if (
-            unresolved_all
-            and interpretation.relation == "refinement"
-            and not _scope_empty(previous)
-        ):
-            token = next((r.user_text for r in resolved if r.user_text), message)
-            guide = guidance_for_resolution([], previous) if previous else GuidanceDecision()
-            question = (
-                f"No encontré productos relacionados con «{token}» en este recorte. "
-                "Podés elegir una de estas opciones o preguntar por otro rubro."
-            )
-            options = guide.options or []
-            scoped_prev = (previous or AnalyticalScope()).model_copy(
-                update={"horizon_days": horizon}
-            )
-            return await _run_explore(
-                message,
-                scoped_prev,
-                interpretation=ChatInterpretation(
-                    understood_labels=_labels_from_scope(scoped_prev),
-                    relation="refinement",
-                    guidance_question=question,
-                    guidance_options=options,
-                    confidence="low",
-                ),
-                guidance=GuidanceDecision(
-                    action="ask_clarification",
-                    reason="unresolved_refinement",
-                    question=question,
-                    options=options,
-                ),
-            )
-        if interpretation.intent == "single_sku" or any(
-            r.match_kind == "unresolved" and NUMERIC_CODE_RE.fullmatch(r.user_text.strip())
-            for r in resolved
-        ):
-            sku = next(
-                (r.user_text for r in resolved if r.user_text),
-                message,
-            )
-            raise ProductNotFoundError(sku)
-        if unresolved_all:
-            token = next((r.user_text for r in resolved if r.user_text), message)
-            raise ProductNotFoundError(token)
-        return await _run_disambiguation(message, resolution)
-
-    if interpretation.intent == "sales_ranking":
-        return await _run_top_categories()
-
-    exact = next((r for r in resolved if r.match_kind == "exact_sku"), None)
-    has_group = any(r.match_kind == "group" for r in resolved)
-    list_like = (
-        is_purchase_list_query(message)
-        or interpretation.intent in ("replenishment", "inventory_risk")
-    )
-    # List / explore queries must not hijack to single SKU when a group is present.
-    # True single-SKU: explicit single_sku intent, or exact_sku without a group
-    # and without list cues (or a numeric catalog code in the message).
-    if interpretation.intent == "single_sku" or (
-        exact
-        and not has_group
-        and (not list_like or message_looks_like_sku(message))
-    ):
-        sku_message = f"cuanto pedir de {exact.product_id}" if exact else message
-        return await _run_single_product(sku_message, horizon_days=horizon)
-
-    if interpretation.intent in ("replenishment", "inventory_risk"):
-        if not interpretation.references:
-            if interpretation.intent == "inventory_risk":
-                return await _run_explore(
-                    message,
-                    resolution.scope,
-                    interpretation=ChatInterpretation(
-                        understood_labels=["Riesgo de quiebre"],
-                        relation=interpretation.relation,
-                    ),
-                )
-            return await _run_purchase_list(message, resolution.scope)
-
-        summaries = group_summaries_from_resolved(resolved)
-        labels = [s.label for s in summaries] or [
-            r.label or r.user_text for r in resolved if r.match_kind == "group"
-        ]
-        if interpretation.relation == "refinement" and previous:
-            labels = _labels_from_scope(resolution.scope) or labels
-        guide = guidance_for_resolution(resolved, resolution.scope)
-        return await _run_explore(
-            message,
-            resolution.scope,
-            interpretation=ChatInterpretation(
-                understood_labels=labels,
-                confidence=interpretation.confidence,
-                relation=interpretation.relation,
-            ),
-            group_summaries=summaries,
-            guidance=guide,
+        response = await run_apply_chip(scope or AnalyticalScope(), chip)
+        return _finalize_turn(
+            message=message,
+            previous=scope,
+            interpretation=None,
+            resolved=[],
+            response=response,
+            route="chip",
+            started=started,
         )
 
-    rule = match_rule_intent(message)
-    if rule == "sales_categories":
-        return await _run_top_categories()
-    if rule == "purchase_list":
-        return await _run_purchase_list(message, resolution.scope)
+    previous = scope
+    interpretation = None
+    resolved: list = []
+    route = "unknown"
+    try:
+        # Free-text → LLM interpret (rules only fallback). Chips/filters skip this path.
+        interpretation = await interpret_query(message, previous_scope=previous)
+        resolved = resolve_references(interpretation)
+        interpretation = promote_new_query_if_needed(interpretation, resolved, previous)
+        resolution = build_resolution_result(interpretation, resolved, previous)
+        horizon = resolve_horizon_days(message, previous)
+        resolution = resolution.model_copy(
+            update={
+                "scope": resolution.scope.model_copy(update={"horizon_days": horizon})
+            }
+        )
 
-    if message_looks_like_sku(message):
-        return await _run_single_product(message, horizon_days=horizon)
+        if resolution.blocking:
+            unresolved_all = resolved and all(r.match_kind == "unresolved" for r in resolved)
+            if (
+                unresolved_all
+                and interpretation.relation == "refinement"
+                and not _scope_empty(previous)
+            ):
+                token = next((r.user_text for r in resolved if r.user_text), message)
+                guide = guidance_for_resolution([], previous) if previous else GuidanceDecision()
+                question = (
+                    f"No encontré productos relacionados con «{token}» en este recorte. "
+                    "Podés elegir una de estas opciones o preguntar por otro rubro."
+                )
+                options = guide.options or []
+                scoped_prev = (previous or AnalyticalScope()).model_copy(
+                    update={"horizon_days": horizon}
+                )
+                route = "explore_unresolved_refinement"
+                response = await _run_explore(
+                    message,
+                    scoped_prev,
+                    interpretation=ChatInterpretation(
+                        understood_labels=_labels_from_scope(scoped_prev),
+                        relation="refinement",
+                        guidance_question=question,
+                        guidance_options=options,
+                        confidence="low",
+                    ),
+                    guidance=GuidanceDecision(
+                        action="ask_clarification",
+                        reason="unresolved_refinement",
+                        question=question,
+                        options=options,
+                    ),
+                )
+                return _finalize_turn(
+                    message, previous, interpretation, resolved, response, route, started
+                )
+            if interpretation.intent == "single_sku" or any(
+                r.match_kind == "unresolved" and NUMERIC_CODE_RE.fullmatch(r.user_text.strip())
+                for r in resolved
+            ):
+                sku = next(
+                    (r.user_text for r in resolved if r.user_text),
+                    message,
+                )
+                raise ProductNotFoundError(sku)
+            if unresolved_all:
+                token = next((r.user_text for r in resolved if r.user_text), message)
+                raise ProductNotFoundError(token)
+            route = "disambiguation"
+            response = await _run_disambiguation(message, resolution)
+            return _finalize_turn(
+                message, previous, interpretation, resolved, response, route, started
+            )
 
-    intent = await classify_intent(message)
-    if intent == "sales_categories":
-        return await _run_top_categories()
-    if intent == "purchase_list":
-        return await _run_purchase_list(message, resolution.scope)
-    if intent == "single_product":
-        return await _run_single_product(message, horizon_days=horizon)
-    if intent is None:
-        return await _run_single_product(message, horizon_days=horizon)
+        if interpretation.intent == "sales_ranking":
+            route = "top_categories"
+            response = await _run_top_categories()
+            return _finalize_turn(
+                message, previous, interpretation, resolved, response, route, started
+            )
 
-    raise ProductNotFoundError(
-        "No entendí si preguntás por un producto o por la lista de reposición. "
-        "Probá: «qué productos están en falta» o el nombre / código del producto."
+        exact = next((r for r in resolved if r.match_kind == "exact_sku"), None)
+        has_group = any(r.match_kind == "group" for r in resolved)
+        list_like = (
+            is_purchase_list_query(message)
+            or interpretation.intent in ("replenishment", "inventory_risk")
+        )
+        # List / explore queries must not hijack to single SKU when a group is present.
+        if interpretation.intent == "single_sku" or (
+            exact
+            and not has_group
+            and (not list_like or message_looks_like_sku(message))
+        ):
+            sku_message = f"cuanto pedir de {exact.product_id}" if exact else message
+            route = "single_sku"
+            response = await _run_single_product(sku_message, horizon_days=horizon)
+            return _finalize_turn(
+                message, previous, interpretation, resolved, response, route, started
+            )
+
+        if interpretation.intent in ("replenishment", "inventory_risk"):
+            if not interpretation.references:
+                if interpretation.intent == "inventory_risk":
+                    route = "explore_inventory_risk"
+                    response = await _run_explore(
+                        message,
+                        resolution.scope,
+                        interpretation=ChatInterpretation(
+                            understood_labels=["Riesgo de quiebre"],
+                            relation=interpretation.relation,
+                        ),
+                    )
+                    return _finalize_turn(
+                        message, previous, interpretation, resolved, response, route, started
+                    )
+                route = "purchase_list"
+                response = await _run_purchase_list(message, resolution.scope)
+                return _finalize_turn(
+                    message, previous, interpretation, resolved, response, route, started
+                )
+
+            summaries = group_summaries_from_resolved(resolved)
+            labels = [s.label for s in summaries] or [
+                r.label or r.user_text for r in resolved if r.match_kind == "group"
+            ]
+            if interpretation.relation == "refinement" and previous:
+                labels = _labels_from_scope(resolution.scope) or labels
+            guide = guidance_for_resolution(resolved, resolution.scope)
+            route = "explore"
+            response = await _run_explore(
+                message,
+                resolution.scope,
+                interpretation=ChatInterpretation(
+                    understood_labels=labels,
+                    confidence=interpretation.confidence,
+                    relation=interpretation.relation,
+                ),
+                group_summaries=summaries,
+                guidance=guide,
+            )
+            return _finalize_turn(
+                message, previous, interpretation, resolved, response, route, started
+            )
+
+        rule = match_rule_intent(message)
+        if rule == "sales_categories":
+            route = "top_categories_rule"
+            response = await _run_top_categories()
+            return _finalize_turn(
+                message, previous, interpretation, resolved, response, route, started
+            )
+        if rule == "purchase_list":
+            route = "purchase_list_rule"
+            response = await _run_purchase_list(message, resolution.scope)
+            return _finalize_turn(
+                message, previous, interpretation, resolved, response, route, started
+            )
+
+        if message_looks_like_sku(message):
+            route = "single_sku_message"
+            response = await _run_single_product(message, horizon_days=horizon)
+            return _finalize_turn(
+                message, previous, interpretation, resolved, response, route, started
+            )
+
+        intent = await classify_intent(message)
+        if intent == "sales_categories":
+            route = "top_categories_llm"
+            response = await _run_top_categories()
+            return _finalize_turn(
+                message, previous, interpretation, resolved, response, route, started
+            )
+        if intent == "purchase_list":
+            route = "purchase_list_llm"
+            response = await _run_purchase_list(message, resolution.scope)
+            return _finalize_turn(
+                message, previous, interpretation, resolved, response, route, started
+            )
+        if intent == "single_product":
+            route = "single_sku_llm"
+            response = await _run_single_product(message, horizon_days=horizon)
+            return _finalize_turn(
+                message, previous, interpretation, resolved, response, route, started
+            )
+        if intent is None:
+            route = "single_sku_fallback"
+            response = await _run_single_product(message, horizon_days=horizon)
+            return _finalize_turn(
+                message, previous, interpretation, resolved, response, route, started
+            )
+
+        raise ProductNotFoundError(
+            "No entendí si preguntás por un producto o por la lista de reposición. "
+            "Probá: «qué productos están en falta» o el nombre / código del producto."
+        )
+    except ProductNotFoundError as exc:
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        emit_turn(
+            build_turn_trace(
+                message=message,
+                previous=previous,
+                interpretation=interpretation,
+                resolved=resolved,
+                response=None,
+                route=route or "not_found",
+                latency_ms=latency_ms,
+                error=str(exc),
+            )
+        )
+        raise
+
+
+def _finalize_turn(
+    message: str,
+    previous: AnalyticalScope | None,
+    interpretation,
+    resolved: list,
+    response: ChatResponse,
+    route: str,
+    started: float,
+) -> ChatResponse:
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    trace = build_turn_trace(
+        message=message,
+        previous=previous,
+        interpretation=interpretation,
+        resolved=resolved,
+        response=response,
+        route=route,
+        latency_ms=latency_ms,
     )
+    emit_turn(trace)
+    return attach_trace(response, trace)
 
 
 def _labels_from_scope(scope: AnalyticalScope | None) -> list[str]:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, computed_field
 
@@ -402,6 +402,8 @@ class ChatResponse(BaseModel):
     group_summaries: list[GroupSummary] = Field(default_factory=list)
     guidance: GuidanceDecision | None = None
     horizon_days: int = 7
+    """Compact turn trace (routing, scope, dashboard summary, answer preview)."""
+    trace: dict[str, Any] | None = None
 
 
 class ProductNotFoundError(Exception):

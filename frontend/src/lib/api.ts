@@ -105,6 +105,8 @@ export type ChatResponse = {
   dashboard: InventoryDashboard | null;
   scope: AnalyticalScopePayload | null;
   horizon_days?: number;
+  /** Server chat.turn trace (routing, scope, dashboard summary). */
+  trace?: Record<string, unknown> | null;
 };
 
 /** Query params matching FastAPI `_scope_dependency` (+ limit). */

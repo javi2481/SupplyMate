@@ -1,4 +1,5 @@
-import type { InventoryDashboard } from "@/lib/api";
+import type { InventoryDashboard, PurchaseListItem } from "@/lib/api";
+import type { CoverageBand, HealthTag } from "@/lib/scope";
 
 export const COPY_CATEGORIES_LOAD_FAILED =
   "No pude cargar las categorías. Intentá de nuevo en un momento.";
@@ -13,20 +14,81 @@ export function categoryNamesForUi(dashboard: InventoryDashboard | null): string
   return (dashboard?.by_category ?? []).map((bar) => bar.category);
 }
 
-export type ChartBarMode = "category" | "subcategory";
+export type ChartBarMode = "category" | "subcategory" | "sku";
 
-export function chartBarMode(dashboard: InventoryDashboard | null): ChartBarMode {
+export type ChartBar = {
+  category: string;
+  units: number;
+  productId?: string;
+};
+
+/**
+ * Recorte hints for Explore chart granularity.
+ * Policy (general — never special-case a rubro/pregunta):
+ * 1. Several categories with volume → bars by category
+ * 2. One category, no list-shaped filters → bars by subcategory
+ * 3. List-shaped filters (health, coverage, supplier, name token, sin stock)
+ *    or an answer that is “qué comprar” under those filters → top SKUs
+ */
+export type ChartSliceHints = {
+  health?: HealthTag[];
+  coverage?: CoverageBand | null;
+  suppliers?: string[];
+  nameTokens?: string[];
+  outOfStockOnly?: boolean;
+  purchaseList?: PurchaseListItem[];
+  /** Max bars when charting top SKUs. */
+  skuLimit?: number;
+};
+
+/** Filters that shrink the answer to a purchase list, not a taxonomy map. */
+export function isListShapedRecorte(hints?: ChartSliceHints | null): boolean {
+  if (!hints) return false;
+  return (
+    (hints.health?.length ?? 0) > 0 ||
+    Boolean(hints.coverage) ||
+    (hints.suppliers?.length ?? 0) > 0 ||
+    (hints.nameTokens?.length ?? 0) > 0 ||
+    Boolean(hints.outOfStockOnly)
+  );
+}
+
+/** @deprecated Use isListShapedRecorte — same meaning, kept for call-site clarity. */
+export function hasTightOperationalFilters(hints?: ChartSliceHints | null): boolean {
+  return isListShapedRecorte(hints);
+}
+
+export function chartBarMode(
+  dashboard: InventoryDashboard | null,
+  hints?: ChartSliceHints | null,
+): ChartBarMode {
+  const purchase = (hints?.purchaseList ?? []).filter((item) => item.recommended_quantity > 0);
+  if (isListShapedRecorte(hints) && purchase.length > 0) return "sku";
   const cats = (dashboard?.by_category ?? []).filter((b) => b.recommended_quantity > 0);
   const subs = (dashboard?.by_subcategory ?? []).filter((b) => b.recommended_quantity > 0);
   if (cats.length <= 1 && subs.length > 0) return "subcategory";
   return "category";
 }
 
-/** Units chart: subcategory when the recorte collapses to one category. */
+/** Units chart follows recorte shape, not a specific NL question. */
 export function chartUnitsByCategory(
   dashboard: InventoryDashboard | null,
-): { category: string; units: number }[] {
-  const mode = chartBarMode(dashboard);
+  hints?: ChartSliceHints | null,
+): ChartBar[] {
+  const mode = chartBarMode(dashboard, hints);
+  if (mode === "sku") {
+    const limit = hints?.skuLimit ?? 8;
+    return (hints?.purchaseList ?? [])
+      .filter((item) => item.recommended_quantity > 0)
+      .slice()
+      .sort((a, b) => b.recommended_quantity - a.recommended_quantity)
+      .slice(0, limit)
+      .map((item) => ({
+        category: item.product_name,
+        units: item.recommended_quantity,
+        productId: item.product_id,
+      }));
+  }
   const source =
     mode === "subcategory" ? (dashboard?.by_subcategory ?? []) : (dashboard?.by_category ?? []);
   const bars = source.map((item) => ({

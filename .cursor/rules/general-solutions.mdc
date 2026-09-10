@@ -1,0 +1,14 @@
+---
+description: Prefer general recorte/policy fixes over one-off query patches
+alwaysApply: true
+---
+
+# Soluciones generales (no parches por pregunta)
+
+When fixing Explore, chat routing, charts, or scope behavior:
+
+- Implement **policies on the recorte** (scope shape, filters, dashboard), never hardcode a category, SKU, or golden phrase.
+- Example: chart granularity is category → subcategory → top SKUs based on whether the recorte is taxonomy-shaped vs list-shaped (`isListShapedRecorte`: health, coverage, supplier, name token, sin stock) — not “because Cosmetica”.
+- If a bug shows up on one NL question, extract the general rule first; the specific question is only the repro.
+- Prefer shared helpers (`data-source`, `scope_builder`, `filter_rows`) over UI branches that special-case copy or rubros.
+- For regressions (“el panel no cambió”), inspect turn traces: server `logs/chat-turns.jsonl` / `GET /debug/chat-turns`, response field `trace`, and browser `[SupplyMate turn]` / sessionStorage `supplymate.chatTurnLog`.

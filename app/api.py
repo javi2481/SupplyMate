@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from html import escape
 
@@ -600,3 +601,22 @@ async def chat(request: ChatRequest) -> ChatResponse:
         )
     except ProductNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get(
+    "/debug/chat-turns",
+    tags=["system"],
+    summary="Últimos turnos de chat (trazas)",
+)
+def debug_chat_turns(limit: int = 20) -> dict:
+    """Read recent chat.turn JSONL for local debugging. Disabled in production unless SUPPLYMATE_TURN_LOG is set."""
+    from app.agent.turn_log import read_recent_turns, turn_log_path
+    from app.core.config import is_production
+
+    if is_production() and not (os.getenv("SUPPLYMATE_TURN_LOG") or "").strip():
+        raise HTTPException(status_code=404, detail="Not found")
+    capped = max(1, min(int(limit or 20), 100))
+    return {
+        "path": str(turn_log_path()),
+        "turns": read_recent_turns(capped),
+    }

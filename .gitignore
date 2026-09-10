@@ -19,3 +19,4 @@ build/
 .hypothesis/
 graphify-out/
 .gstack/
+logs/

@@ -147,6 +147,120 @@ describe("slice data source helpers", () => {
     ]);
   });
 
+  it("charts top SKUs for any list-shaped recorte (not a specific rubro)", () => {
+    const dash: InventoryDashboard = {
+      skus: 40,
+      stockout_risk: 5,
+      understock: 0,
+      overstock: 0,
+      healthy: 35,
+      avg_coverage: 8,
+      estimated_purchase_value: 1,
+      by_category: [{ category: "Cuidado del Cabello", recommended_quantity: 900, sku_count: 40 }],
+      by_subcategory: [
+        { category: "Shampoo", recommended_quantity: 500, sku_count: 22 },
+        { category: "Acondicionador", recommended_quantity: 400, sku_count: 18 },
+      ],
+    };
+    const purchaseList = [
+      {
+        product_id: "S-1",
+        barcode: "",
+        product_name: "SHAMPOO X",
+        supplier: "Prov A",
+        category: "Cuidado del Cabello",
+        subcategory: "Shampoo",
+        current_stock: 1,
+        reorder_point: null,
+        below_reorder_point: true,
+        average_daily_demand: 1,
+        days_of_supply: 2,
+        health_bucket: "understock",
+        recommended_quantity: 120,
+        operational_priority: "high",
+        purchase_cost: null,
+        estimated_purchase_value: null,
+      },
+    ];
+    expect(
+      chartBarMode(dash, {
+        suppliers: ["Prov A"],
+        purchaseList,
+      }),
+    ).toBe("sku");
+    expect(
+      chartUnitsByCategory(dash, {
+        nameTokens: ["500"],
+        purchaseList,
+      }),
+    ).toEqual([{ category: "SHAMPOO X", units: 120, productId: "S-1" }]);
+  });
+
+  it("charts top SKUs when health or coverage filters are active", () => {
+    const dash: InventoryDashboard = {
+      skus: 182,
+      stockout_risk: 182,
+      understock: 0,
+      overstock: 0,
+      healthy: 0,
+      avg_coverage: 1.2,
+      estimated_purchase_value: 1,
+      by_category: [{ category: "Cosmetica", recommended_quantity: 79904, sku_count: 182 }],
+      by_subcategory: [
+        { category: "Facial", recommended_quantity: 61252, sku_count: 140 },
+        { category: "Manos y Uñas", recommended_quantity: 18652, sku_count: 42 },
+      ],
+    };
+    const purchaseList = [
+      {
+        product_id: "1",
+        barcode: "",
+        product_name: "CHER LIP GLOSS",
+        supplier: "",
+        category: "Cosmetica",
+        subcategory: "Facial",
+        current_stock: 0,
+        reorder_point: null,
+        below_reorder_point: true,
+        average_daily_demand: 1,
+        days_of_supply: 1,
+        health_bucket: "stockout_risk",
+        recommended_quantity: 692,
+        operational_priority: "critical",
+        purchase_cost: null,
+        estimated_purchase_value: null,
+      },
+      {
+        product_id: "2",
+        barcode: "",
+        product_name: "THE MINIMAL SERUM",
+        supplier: "",
+        category: "Cosmetica",
+        subcategory: "Facial",
+        current_stock: 0,
+        reorder_point: null,
+        below_reorder_point: true,
+        average_daily_demand: 1,
+        days_of_supply: 1,
+        health_bucket: "stockout_risk",
+        recommended_quantity: 678,
+        operational_priority: "critical",
+        purchase_cost: null,
+        estimated_purchase_value: null,
+      },
+    ];
+    const hints = {
+      health: ["riesgo_quiebre" as const],
+      coverage: "0–3 días" as const,
+      purchaseList,
+    };
+    expect(chartBarMode(dash, hints)).toBe("sku");
+    expect(chartUnitsByCategory(dash, hints)).toEqual([
+      { category: "CHER LIP GLOSS", units: 692, productId: "1" },
+      { category: "THE MINIMAL SERUM", units: 678, productId: "2" },
+    ]);
+  });
+
   it("keeps full category names when there are few bars", () => {
     expect(chartTickLabel("Desodorantes Corporales", 1)).toBe("Desodorantes Corporales");
     expect(chartTickLabel("Desodorantes Corporales", 2)).toBe("Desodorantes Corporales");

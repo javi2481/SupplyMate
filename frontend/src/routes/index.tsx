@@ -39,6 +39,7 @@ import {
 } from "@/lib/api";
 import { factsFromRecommendation, rowFromPurchaseItem } from "@/lib/adapter";
 import { applyChatScope, chatFailureMessage } from "@/lib/applyChatScope";
+import { buildClientTurnTrace, emitClientTurnTrace } from "@/lib/turnLog";
 import { applySuggestedFilter, type SuggestedChip } from "@/lib/applySuggestedFilter";
 import { categoryColor } from "@/lib/chart-colors";
 import {
@@ -265,8 +266,31 @@ function Index() {
     },
   ];
 
-  const chartData = useMemo(() => chartUnitsByCategory(dash), [dash]);
-  const chartMode = useMemo(() => chartBarMode(dash), [dash]);
+  const purchaseForChart = chatBoard?.purchaseList ?? api.purchaseList;
+  const chartHints = useMemo(
+    () => ({
+      health: slice.health,
+      coverage: slice.coverage,
+      suppliers: slice.suppliers,
+      nameTokens: slice.nameTokens,
+      outOfStockOnly: slice.outOfStockOnly,
+      purchaseList: purchaseForChart,
+    }),
+    [
+      slice.health,
+      slice.coverage,
+      slice.suppliers,
+      slice.nameTokens,
+      slice.outOfStockOnly,
+      purchaseForChart,
+    ],
+  );
+  const chartData = useMemo(
+    () => chartUnitsByCategory(dash, chartHints),
+    [dash, chartHints],
+  );
+  const chartMode = useMemo(() => chartBarMode(dash, chartHints), [dash, chartHints]);
+  const chartKey = `${chartMode}:${chartData.map((b) => `${b.productId ?? b.category}:${b.units}`).join("|")}`;
 
   const poRows = useMemo(() => {
     const scope: UiSlice = { ...(frozen ?? slice), buyOnly: true };
@@ -330,6 +354,22 @@ function Index() {
         });
       }
       if (res.scope != null) pushSlice(applied.slice);
+      const uiChartMode = chartBarMode(res.dashboard, {
+        health: applied.slice.health,
+        coverage: applied.slice.coverage,
+        suppliers: applied.slice.suppliers,
+        nameTokens: applied.slice.nameTokens,
+        outOfStockOnly: applied.slice.outOfStockOnly,
+        purchaseList: res.purchase_list ?? [],
+      });
+      emitClientTurnTrace(
+        buildClientTurnTrace({
+          message: query,
+          res,
+          slice: applied.slice,
+          chartMode: uiChartMode,
+        }),
+      );
       setThreads((previous) =>
         previous.map((thread) =>
           thread.id !== pending.threadId
@@ -380,6 +420,12 @@ function Index() {
     const id = `t${Date.now()}`;
     setThreads((previous) => [{ id, title: "Nueva conversación", messages: [] }, ...previous]);
     setActiveId(id);
+    setChatBoard(null);
+    setHorizonDays(HORIZON_DAYS);
+    clearSlice();
+    setFrozen(null);
+    setMode("explore");
+    setOpen(null);
     setMobileView("chat");
     setMobileMenu(false);
   }
@@ -436,7 +482,8 @@ function Index() {
   function findRowForProduct(productId: string): Calc | undefined {
     const fromRows = rows.find((row) => row.sku.product_id === productId);
     if (fromRows) return fromRows;
-    const fromList = api.purchaseList.find((item) => item.product_id === productId);
+    const list = chatBoard?.purchaseList ?? api.purchaseList;
+    const fromList = list.find((item) => item.product_id === productId);
     if (fromList) return calcFromApiRow(rowFromPurchaseItem(fromList));
     return undefined;
   }
@@ -627,15 +674,19 @@ function Index() {
                   <div className="border-y border-ops-border bg-ops-panel px-4 py-4 lg:px-5">
                     <div className="mb-3 flex items-center justify-between gap-2">
                       <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-                        {chartMode === "subcategory"
-                          ? "Unidades a reponer por subcategoría"
-                          : "Unidades a reponer por categoría"}
+                        {chartMode === "sku"
+                          ? "Top productos a reponer"
+                          : chartMode === "subcategory"
+                            ? "Unidades a reponer por subcategoría"
+                            : "Unidades a reponer por categoría"}
                       </div>
                       {chartData.length > 1 && (
                         <div className="text-[11px] text-muted-foreground">
-                          {chartMode === "subcategory"
-                            ? "Tocá una barra para ver esa subcategoría"
-                            : "Tocá una barra para ver esa categoría"}
+                          {chartMode === "sku"
+                            ? "Tocá una barra para abrir el producto"
+                            : chartMode === "subcategory"
+                              ? "Tocá una barra para ver esa subcategoría"
+                              : "Tocá una barra para ver esa categoría"}
                         </div>
                       )}
                     </div>
@@ -648,7 +699,7 @@ function Index() {
                     ) : (
                       <div className="h-[210px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={chartData} margin={{ top: 40, right: 8, bottom: 28, left: 0 }}>
+                          <BarChart key={chartKey} data={chartData} margin={{ top: 40, right: 8, bottom: 28, left: 0 }}>
                             <CartesianGrid stroke="var(--ops-border)" vertical={false} />
                             <XAxis
                               dataKey="category"
@@ -656,7 +707,9 @@ function Index() {
                               tickLine={false}
                               axisLine={{ stroke: "var(--ops-border)" }}
                               interval={0}
-                              tickFormatter={(value: string) => chartTickLabel(value, chartData.length)}
+                              tickFormatter={(value: string) =>
+                                chartTickLabel(value, chartData.length, chartMode === "sku" ? 10 : 13)
+                              }
                             />
                             <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickLine={false} axisLine={false} width={44} />
                             <Tooltip cursor={{ fill: "var(--ops-row)" }} contentStyle={{ background: "var(--ops-panel)", border: "1px solid var(--ops-border)", borderRadius: 8, fontSize: 12, color: "var(--foreground)" }} formatter={(item: number) => [nf.format(item), "Unidades"]} />
@@ -666,7 +719,16 @@ function Index() {
                               radius={[4, 4, 0, 0]}
                               cursor="pointer"
                               isAnimationActive={false}
-                              onClick={(bar: { category?: string }) => {
+                              onClick={(bar: { category?: string; productId?: string }) => {
+                                if (chartMode === "sku") {
+                                  const productId =
+                                    bar.productId ||
+                                    chartData.find((item) => item.category === bar.category)?.productId;
+                                  if (!productId) return;
+                                  const row = findRowForProduct(productId);
+                                  if (row) void openDetail(row);
+                                  return;
+                                }
                                 if (!bar.category) return;
                                 if (chartMode === "subcategory") {
                                   mutateSlice((previous) => ({
@@ -680,17 +742,21 @@ function Index() {
                             >
                               {chartData.map((item) => {
                                 const active =
-                                  chartMode === "subcategory"
-                                    ? slice.subcategories.includes(item.category)
-                                    : slice.cats.includes(item.category);
+                                  chartMode === "sku"
+                                    ? slice.highlightProductId === item.productId
+                                    : chartMode === "subcategory"
+                                      ? slice.subcategories.includes(item.category)
+                                      : slice.cats.includes(item.category);
                                 const dimmed =
-                                  chartMode === "subcategory"
-                                    ? slice.subcategories.length > 0 && !active
-                                    : slice.cats.length > 0 && !active;
+                                  chartMode === "sku"
+                                    ? Boolean(slice.highlightProductId) && !active
+                                    : chartMode === "subcategory"
+                                      ? slice.subcategories.length > 0 && !active
+                                      : slice.cats.length > 0 && !active;
                                 return (
                                   <Cell
-                                    key={item.category}
-                                    fill={categoryColor(item.category)}
+                                    key={item.productId ?? item.category}
+                                    fill={categoryColor(item.productId ?? item.category)}
                                     stroke={active ? "var(--foreground)" : "transparent"}
                                     strokeWidth={active ? 2 : 0}
                                     fillOpacity={dimmed ? 0.45 : 1}
