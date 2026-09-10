@@ -15,6 +15,7 @@ export type AnalyticalScopePayload = {
   suppliers?: string[];
   name_tokens?: string[];
   highlight_product_id?: string;
+  out_of_stock_only?: boolean;
 };
 
 export type PurchaseListItem = {
@@ -50,12 +51,18 @@ export type InventoryDashboard = {
   by_category: { category: string; recommended_quantity: number; sku_count: number }[];
 };
 
+export type SuggestedFilter = {
+  action: string;
+  args: Record<string, string>;
+  label: string;
+};
+
 export type ReplenishmentSlice = {
   scope: AnalyticalScopePayload;
   evidence: string;
   dashboard: InventoryDashboard;
   purchase_list: PurchaseListItem[];
-  suggested_filters: { action: string; args: Record<string, string>; label: string }[];
+  suggested_filters: SuggestedFilter[];
 };
 
 export type ReplenishmentCalculation = {
@@ -128,11 +135,20 @@ export function toSearchParams(scope: ScopeQuery): URLSearchParams {
   return params;
 }
 
+export class HttpError extends Error {
+  status: number;
+  constructor(status: number, path: string, detail: string) {
+    super(`${status} ${path}: ${detail.slice(0, 200)}`);
+    this.name = "HttpError";
+    this.status = status;
+  }
+}
+
 async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, init);
   if (!res.ok) {
     const detail = await res.text().catch(() => res.statusText);
-    throw new Error(`${res.status} ${path}: ${detail.slice(0, 200)}`);
+    throw new HttpError(res.status, path, detail);
   }
   return res.json() as Promise<T>;
 }
@@ -173,5 +189,6 @@ export function scopeQueryToPayload(query: ScopeQuery): AnalyticalScopePayload {
   if (query.supplier?.length) payload.suppliers = query.supplier;
   if (query.name_token?.length) payload.name_tokens = query.name_token;
   if (query.highlight_product_id) payload.highlight_product_id = query.highlight_product_id;
+  if (query.out_of_stock) payload.out_of_stock_only = true;
   return payload;
 }

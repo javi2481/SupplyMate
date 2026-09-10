@@ -1,31 +1,25 @@
 import type { InventoryDashboard } from "@/lib/api";
 
-/** Offline fallback: Catálogo demo only when mock is active. Never leak API host. */
-export function dataSourceLabel(useMock: boolean): "Motor listo" | "Catálogo demo" {
-  return useMock ? "Catálogo demo" : "Motor listo";
+export const COPY_CATEGORIES_LOAD_FAILED =
+  "No pude cargar las categorías. Intentá de nuevo en un momento.";
+
+/** Status chrome: live catalog vs not loaded. Never leak the API host. */
+export function dataSourceLabel(live: boolean): "Motor listo" | "Sin catálogo" {
+  return live ? "Motor listo" : "Sin catálogo";
 }
 
-/** Category chips/chart: live dashboard names, never Lovable demo names while the API is in use. */
-export function categoryNamesForUi(
-  useMock: boolean,
-  dashboard: InventoryDashboard | null,
-  mockCategories: string[],
-): string[] {
-  if (useMock) return mockCategories;
+/** Category chips/chart from the live dashboard only. */
+export function categoryNamesForUi(dashboard: InventoryDashboard | null): string[] {
   return (dashboard?.by_category ?? []).map((bar) => bar.category);
 }
 
 export function chartUnitsByCategory(
-  useMock: boolean,
   dashboard: InventoryDashboard | null,
-  mockBars: { category: string; units: number }[],
 ): { category: string; units: number }[] {
-  const bars = useMock
-    ? mockBars
-    : (dashboard?.by_category ?? []).map((item) => ({
-        category: item.category,
-        units: item.recommended_quantity,
-      }));
+  const bars = (dashboard?.by_category ?? []).map((item) => ({
+    category: item.category,
+    units: item.recommended_quantity,
+  }));
   return bars.filter((item) => item.units > 0).sort((a, b) => b.units - a.units);
 }
 
@@ -76,12 +70,10 @@ export function tableScopeCaption(opts: {
   return { shown: opts.pageRows, total: opts.pageRows, noun: "productos" };
 }
 
-/** Prefer live API when a base URL is configured and mock is not forced. */
+/** Fetch the live catalog when a base URL is configured. */
 export function preferLiveApi(
   env: Record<string, string | undefined> = import.meta.env as Record<string, string | undefined>,
 ): boolean {
-  const flag = env["VITE_SUPPLYMATE_USE_MOCK"];
-  if (flag === "1" || flag === "true") return false;
   return Boolean(env["VITE_SUPPLYMATE_API_URL"]?.trim());
 }
 

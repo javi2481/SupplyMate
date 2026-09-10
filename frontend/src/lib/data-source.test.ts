@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { rowFromPurchaseItem } from "@/lib/adapter";
 import type { InventoryDashboard, PurchaseListItem } from "@/lib/api";
 import {
+  COPY_CATEGORIES_LOAD_FAILED,
   categoryNamesForUi,
   chartUnitsByCategory,
   csvExportLimit,
@@ -10,7 +11,6 @@ import {
   preferLiveApi,
   tableScopeCaption,
 } from "@/lib/data-source";
-import { ROWS } from "@/lib/supplymate";
 
 describe("slice data source helpers", () => {
   it("uses dashboard KPIs from JSON when present", () => {
@@ -66,10 +66,14 @@ describe("slice data source helpers", () => {
     });
   });
 
-  it("shows Catálogo demo only when mock is active", () => {
-    expect(dataSourceLabel(true)).toBe("Catálogo demo");
-    expect(dataSourceLabel(true)).not.toMatch(/localhost|127\.0\.0\.1|API/i);
-    expect(dataSourceLabel(false)).toBe("Motor listo");
+  it("says Sin catálogo when data did not load, never Catálogo demo", () => {
+    expect(dataSourceLabel(true)).toBe("Motor listo");
+    expect(dataSourceLabel(false)).toBe("Sin catálogo");
+    expect(dataSourceLabel(false)).not.toMatch(/demo|localhost|127\.0\.0\.1|API|motor caíd/i);
+    expect(COPY_CATEGORIES_LOAD_FAILED).toBe(
+      "No pude cargar las categorías. Intentá de nuevo en un momento.",
+    );
+    expect(COPY_CATEGORIES_LOAD_FAILED).not.toMatch(/motor|API|localhost/i);
   });
 
   it("csvExportLimit caps at 10000 and uses purchase_skus", () => {
@@ -79,7 +83,6 @@ describe("slice data source helpers", () => {
   });
 
   it("does not show Lovable demo categories when the live dashboard is in use", () => {
-    const mock = ["Mamaderas", "Pañales", "Nutrición", "Cuidado", "Farmacia"];
     const dash: InventoryDashboard = {
       skus: 13125,
       stockout_risk: 1,
@@ -93,43 +96,41 @@ describe("slice data source helpers", () => {
         { category: "Cosmetica", recommended_quantity: 80, sku_count: 8 },
       ],
     };
-    expect(categoryNamesForUi(false, dash, mock)).toEqual(["Cuidado del Cabello", "Cosmetica"]);
-    expect(categoryNamesForUi(false, null, mock)).toEqual([]);
-    expect(categoryNamesForUi(true, dash, mock)).toEqual(mock);
-    expect(chartUnitsByCategory(false, dash, mock.map((category) => ({ category, units: 1 })))).toEqual([
+    expect(categoryNamesForUi(dash)).toEqual(["Cuidado del Cabello", "Cosmetica"]);
+    expect(categoryNamesForUi(null)).toEqual([]);
+    expect(chartUnitsByCategory(dash)).toEqual([
       { category: "Cuidado del Cabello", units: 100 },
       { category: "Cosmetica", units: 80 },
     ]);
   });
 
-  it("prefers live API only when a URL is set and mock is off", () => {
+  it("prefers live API when a URL is set, ignoring the old mock flag", () => {
     expect(preferLiveApi({ VITE_SUPPLYMATE_API_URL: "http://127.0.0.1:8000" })).toBe(true);
     expect(preferLiveApi({ VITE_SUPPLYMATE_API_URL: "" })).toBe(false);
     expect(
       preferLiveApi({ VITE_SUPPLYMATE_API_URL: "http://127.0.0.1:8000", VITE_SUPPLYMATE_USE_MOCK: "1" }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
-  it("mock rows remain available as fallback catalog", () => {
-    expect(ROWS.length).toBeGreaterThan(0);
+  it("projects a purchase list item without a demo catalog", () => {
     const projected = rowFromPurchaseItem({
-      product_id: ROWS[0]!.sku.product_id,
-      barcode: ROWS[0]!.sku.barcode,
-      product_name: ROWS[0]!.sku.product_name,
-      supplier: ROWS[0]!.sku.supplier,
-      category: ROWS[0]!.sku.category,
+      product_id: "P-1",
+      barcode: "100",
+      product_name: "Serum",
+      supplier: "Prov",
+      category: "Cuidado",
       subcategory: "",
-      current_stock: ROWS[0]!.sku.stock,
+      current_stock: 4,
       reorder_point: null,
       below_reorder_point: false,
-      average_daily_demand: ROWS[0]!.avg_daily,
-      days_of_supply: ROWS[0]!.coverage_days,
+      average_daily_demand: 1,
+      days_of_supply: 4,
       health_bucket: "stockout_risk",
-      recommended_quantity: ROWS[0]!.recommended_quantity,
+      recommended_quantity: 12,
       operational_priority: "critical",
       purchase_cost: null,
-      estimated_purchase_value: ROWS[0]!.estimated_purchase_value,
+      estimated_purchase_value: 1200,
     } satisfies PurchaseListItem);
-    expect(projected.recommended_quantity).toBe(ROWS[0]!.recommended_quantity);
+    expect(projected.recommended_quantity).toBe(12);
   });
 });

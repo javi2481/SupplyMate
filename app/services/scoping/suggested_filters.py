@@ -18,6 +18,21 @@ ACTION_FILTER_HEALTH = "filter_health"
 ACTION_FILTER_SUPPLIER = "filter_supplier"
 ACTION_FILTER_NAME_TOKEN = "filter_name_token"
 ACTION_OPEN_SKU = "open_sku"
+ACTION_DRAFT_OC = "draft_oc"
+
+MAX_CHIPS = 6
+
+
+def _label_category(category: str) -> str:
+    return f"¿Qué hay en {category}?"
+
+
+def _label_coverage(bucket: str) -> str:
+    return f"¿Cobertura {bucket}?"
+
+
+def _label_sku(name: str) -> str:
+    return f"¿Cuánto pedir de {name[:32]}?"
 
 
 def suggest_next_filters(
@@ -31,47 +46,50 @@ def suggest_next_filters(
     active_health = set(scope.health_buckets)
     active_suppliers = set(scope.suppliers)
 
-    for bar in snap.by_category:
-        if bar.category in active_categories:
-            continue
+    unused_cats = [bar for bar in snap.by_category if bar.category not in active_categories]
+    for bar in unused_cats[:2]:
         candidates.append(
             SuggestedFilter(
                 action=ACTION_FILTER_CATEGORY,
                 args={"category": bar.category},
-                label=(
-                    f"Ver {bar.category} — {bar.sku_count} SKUs · "
-                    f"{bar.recommended_quantity} u."
-                ),
+                label=_label_category(bar.category),
             )
         )
-        break
 
-    bucket_order = ["0–3 días"] + [
-        b.bucket for b in snap.coverage if b.bucket != "0–3 días"
-    ]
-    seen_buckets: set[str] = set()
-    for bucket_name in bucket_order:
-        if bucket_name in seen_buckets or bucket_name in active_buckets:
-            continue
-        seen_buckets.add(bucket_name)
-        match = next((b for b in snap.coverage if b.bucket == bucket_name), None)
-        if match is None or match.sku_count <= 0:
-            continue
+    preferred = next((b for b in snap.coverage if b.bucket == "0–3 días" and b.sku_count > 0), None)
+    coverage_pick = None
+    if preferred is not None and preferred.bucket not in active_buckets:
+        coverage_pick = preferred
+    else:
+        for bar in snap.coverage:
+            if bar.sku_count <= 0 or bar.bucket in active_buckets:
+                continue
+            coverage_pick = bar
+            break
+    if coverage_pick is not None:
         candidates.append(
             SuggestedFilter(
                 action=ACTION_FILTER_COVERAGE,
-                args={"coverage_bucket": bucket_name},
-                label=f"Ver cobertura {bucket_name} — {match.sku_count} SKUs",
+                args={"coverage_bucket": coverage_pick.bucket},
+                label=_label_coverage(coverage_pick.bucket),
             )
         )
-        break
 
     if snap.stockout_risk > 0 and metrics.BUCKET_STOCKOUT_RISK not in active_health:
         candidates.append(
             SuggestedFilter(
                 action=ACTION_FILTER_HEALTH,
                 args={"health_bucket": metrics.BUCKET_STOCKOUT_RISK},
-                label=f"Ver riesgo de quiebre — {snap.stockout_risk} SKUs",
+                label="¿Riesgo de quiebre?",
+            )
+        )
+
+    if snap.overstock > 0 and metrics.BUCKET_OVERSTOCK not in active_health:
+        candidates.append(
+            SuggestedFilter(
+                action=ACTION_FILTER_HEALTH,
+                args={"health_bucket": metrics.BUCKET_OVERSTOCK},
+                label="¿Hay sobrestock?",
             )
         )
 
@@ -80,13 +98,13 @@ def suggest_next_filters(
             item.supplier for item in items if (item.supplier or "").strip()
         )
         if supplier_counts:
-            top_supplier, count = supplier_counts.most_common(1)[0]
+            top_supplier, _count = supplier_counts.most_common(1)[0]
             if top_supplier not in active_suppliers:
                 candidates.append(
                     SuggestedFilter(
                         action=ACTION_FILTER_SUPPLIER,
                         args={"supplier": top_supplier},
-                        label=f"Ver proveedor {top_supplier} — {count} líneas",
+                        label=f"¿Qué pide {top_supplier}?",
                     )
                 )
 
@@ -96,10 +114,17 @@ def suggest_next_filters(
             SuggestedFilter(
                 action=ACTION_OPEN_SKU,
                 args={"product_id": top.product_id},
-                label=(
-                    f"Revisar {top.product_name[:40]} — "
-                    f"{top.recommended_quantity} u."
-                ),
+                label=_label_sku(top.product_name),
+            )
+        )
+
+    recorte_qty = snap.recommended_units or sum(item.recommended_quantity for item in items)
+    if recorte_qty > 0:
+        candidates.append(
+            SuggestedFilter(
+                action=ACTION_DRAFT_OC,
+                args={},
+                label="¿Armar la OC?",
             )
         )
 
@@ -111,6 +136,6 @@ def suggest_next_filters(
             continue
         seen_actions.add(key)
         out.append(chip)
-        if len(out) >= 3:
+        if len(out) >= MAX_CHIPS:
             break
     return out

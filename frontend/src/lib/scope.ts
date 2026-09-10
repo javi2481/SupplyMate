@@ -22,6 +22,10 @@ export type UiSlice = {
   buyOnly: boolean;
   /** Client-only: stock === 0. Not sent as health_bucket. */
   outOfStockOnly: boolean;
+  suppliers: string[];
+  nameTokens: string[];
+  subcategories: string[];
+  highlightProductId: string;
 };
 
 export const EMPTY_SLICE: UiSlice = {
@@ -30,6 +34,10 @@ export const EMPTY_SLICE: UiSlice = {
   coverage: null,
   buyOnly: false,
   outOfStockOnly: false,
+  suppliers: [],
+  nameTokens: [],
+  subcategories: [],
+  highlightProductId: "",
 };
 
 const HEALTH_TO_API: Partial<Record<HealthTag, string>> = {
@@ -54,6 +62,10 @@ export function sliceToScopeQuery(slice: UiSlice, limit = 50): ScopeQuery {
   if (health_bucket.length) query.health_bucket = health_bucket;
   if (slice.coverage) query.coverage_bucket = [slice.coverage];
   if (slice.outOfStockOnly) query.out_of_stock = true;
+  if (slice.suppliers?.length) query.supplier = slice.suppliers;
+  if (slice.nameTokens?.length) query.name_token = slice.nameTokens;
+  if (slice.subcategories?.length) query.subcategory = slice.subcategories;
+  if (slice.highlightProductId) query.highlight_product_id = slice.highlightProductId;
   return query;
 }
 
@@ -75,7 +87,7 @@ const API_HEALTH_TO_UI: Record<string, HealthTag> = {
   overstock: "sobrestock",
 };
 
-/** Map chat/API scope payload back onto the UI recorte (client filters preserved separately). */
+/** Map chat/API scope onto UiSlice. Empty lists clear filters (replace, not merge). */
 export function scopePayloadToUiSlice(
   payload: AnalyticalScopePayload | null | undefined,
   base: UiSlice = EMPTY_SLICE,
@@ -86,15 +98,23 @@ export function scopePayloadToUiSlice(
     const tag = API_HEALTH_TO_UI[bucket];
     if (tag && !health.includes(tag)) health.push(tag);
   }
+  const outOfStockOnly = Boolean(payload.out_of_stock_only);
+  if (outOfStockOnly && !health.includes("sin_stock")) health.push("sin_stock");
   const coverageRaw = payload.coverage_buckets?.[0];
   const coverage =
     coverageRaw && (COVERAGE_ORDER as readonly string[]).includes(coverageRaw)
       ? (coverageRaw as CoverageBand)
       : null;
   return {
-    ...base,
-    cats: payload.categories?.length ? [...payload.categories] : base.cats,
-    health: health.length ? health : base.health,
-    coverage: coverage ?? base.coverage,
+    ...EMPTY_SLICE,
+    buyOnly: base.buyOnly,
+    cats: [...(payload.categories ?? [])],
+    health,
+    coverage,
+    outOfStockOnly,
+    suppliers: [...(payload.suppliers ?? [])],
+    nameTokens: [...(payload.name_tokens ?? [])],
+    subcategories: [...(payload.subcategories ?? [])],
+    highlightProductId: payload.highlight_product_id ?? "",
   };
 }

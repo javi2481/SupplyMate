@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useScope } from "@/hooks/use-scope";
 import { useSlice } from "@/hooks/use-slice";
 import {
   fetchReplenishment,
@@ -33,20 +34,26 @@ import {
   purchaseListCsvUrl,
   scopeQueryToPayload,
 } from "@/lib/api";
-import { factsFromRecommendation } from "@/lib/adapter";
+import { factsFromRecommendation, rowFromPurchaseItem } from "@/lib/adapter";
+import { applyChatScope, chatFailureMessage } from "@/lib/applyChatScope";
+import { applySuggestedFilter, type SuggestedChip } from "@/lib/applySuggestedFilter";
 import { categoryColor } from "@/lib/chart-colors";
-import { categoryNamesForUi, chartUnitsByCategory, csvExportLimit, dataSourceLabel, kpisFromDashboard, tableScopeCaption } from "@/lib/data-source";
-import { calcFromApiRow } from "@/lib/ops-row";
-import { COVERAGE_ORDER, inCoverageBand, sliceToScopeQuery, type CoverageBand } from "@/lib/scope";
 import {
-  CATEGORIES,
+  COPY_CATEGORIES_LOAD_FAILED,
+  categoryNamesForUi,
+  chartUnitsByCategory,
+  csvExportLimit,
+  dataSourceLabel,
+  kpisFromDashboard,
+  tableScopeCaption,
+} from "@/lib/data-source";
+import { calcFromApiRow } from "@/lib/ops-row";
+import { COVERAGE_ORDER, sliceToScopeQuery, type UiSlice } from "@/lib/scope";
+import {
   HEALTH_FILTERS,
   HEALTH_LABEL,
   HORIZON_DAYS,
   PRIORITY_LABEL,
-  ROWS,
-  answerFor,
-  csvFor,
   dec,
   money,
   nf,
@@ -77,28 +84,8 @@ export const Route = createFileRoute("/")({
 type Msg = { id: number; role: "user" | "assistant"; text: string };
 type Thread = { id: string; title: string; messages: Msg[] };
 type MobileView = "chat" | "explore" | "po";
-type Slice = { cats: string[]; health: HealthTag[]; coverage: CoverageBand | null; buyOnly: boolean };
-
-const EMPTY: Slice = { cats: [], health: [], coverage: null, buyOnly: false };
-
-function toScopeQuery(slice: Slice, limit = 50) {
-  return sliceToScopeQuery(
-    {
-      cats: slice.cats,
-      health: slice.health.filter(
-        (tag): tag is "riesgo_quiebre" | "sin_stock" | "sobrestock" =>
-          tag === "riesgo_quiebre" || tag === "sin_stock" || tag === "sobrestock",
-      ),
-      coverage: slice.coverage,
-      buyOnly: slice.buyOnly,
-      outOfStockOnly: slice.health.includes("sin_stock"),
-    },
-    limit,
-  );
-}
 
 const BUY_QUERY = "¿Qué productos debería comprar?";
-const DEFAULT_CHIPS = ["¿Cuánto pedir de 6033436?", "Riesgo de quiebre en Pañales", "Sobrestock"];
 
 const SEED: Thread[] = [
   {
@@ -112,8 +99,6 @@ const SEED: Thread[] = [
       },
     ],
   },
-  { id: "t2", title: "Quiebres de stock", messages: [] },
-  { id: "t3", title: "Revisión de sobrestock", messages: [] },
 ];
 
 const healthIcon: Record<HealthTag, typeof AlertTriangle> = {
@@ -127,20 +112,11 @@ function visibleHealth(row: Calc): HealthTag[] {
   return row.health.filter((tag) => HEALTH_FILTERS.includes(tag));
 }
 
-function applySlice(slice: Slice): Calc[] {
-  return ROWS.filter(
-    (row) =>
-      (!slice.buyOnly || row.recommended_quantity > 0) &&
-      (slice.health.length === 0 || slice.health.some((tag) => row.health.includes(tag))) &&
-      (slice.cats.length === 0 || slice.cats.includes(row.sku.category)) &&
-      (slice.coverage === null || inCoverageBand(row.coverage_days, slice.coverage)),
-  );
-}
-
-function sliceLabels(slice: Slice): string[] {
+function sliceLabels(slice: UiSlice): string[] {
   const labels: string[] = [];
   if (slice.buyOnly) labels.push("A comprar");
   labels.push(...slice.cats);
+  labels.push(...(slice.suppliers ?? []));
   labels.push(...slice.health.map((tag) => HEALTH_LABEL[tag]));
   if (slice.coverage) {
     labels.push(`Cobertura ${slice.coverage}`);
@@ -148,37 +124,7 @@ function sliceLabels(slice: Slice): string[] {
   return labels;
 }
 
-function sliceFromText(text: string, categories: string[]): Slice | null {
-  const q = text.toLowerCase();
-  const next: Slice = { ...EMPTY };
-  let touched = false;
-
-  for (const category of categories) {
-    if (q.includes(category.toLowerCase())) {
-      next.cats = [category];
-      touched = true;
-    }
-  }
-  if (q.includes("quiebre") || q.includes("riesgo")) {
-    next.health = [...next.health, "riesgo_quiebre"];
-    touched = true;
-  }
-  if (q.includes("sin stock") || q.includes("falta de stock")) {
-    next.health = [...next.health, "sin_stock"];
-    touched = true;
-  }
-  if (q.includes("sobrestock")) {
-    next.health = [...next.health, "sobrestock"];
-    touched = true;
-  }
-  if (q.includes("comprar") || q.includes("pedir") || q.includes("repon")) {
-    next.buyOnly = true;
-    touched = true;
-  }
-  return touched ? next : null;
-}
-
-function applyClientFilters(rows: Calc[], slice: Slice): Calc[] {
+function applyClientFilters(rows: Calc[], slice: UiSlice): Calc[] {
   const onlyOutOfStock =
     slice.health.includes("sin_stock") && slice.health.every((tag) => tag === "sin_stock");
   return rows.filter((row) => {
@@ -194,65 +140,45 @@ function Index() {
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<"explore" | "po">("explore");
   const [mobileView, setMobileView] = useState<MobileView>("explore");
-  const [slice, setSlice] = useState<Slice>(EMPTY);
-  const [history, setHistory] = useState<Slice[]>([]);
+  const { slice, history, pushSlice, goBack, clearSlice } = useScope();
   const [open, setOpen] = useState<Calc | null>(null);
-  const [frozen, setFrozen] = useState<Slice | null>(null);
+  const [frozen, setFrozen] = useState<UiSlice | null>(null);
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [chatBusy, setChatBusy] = useState(false);
 
-  const scopeQuery = useMemo(() => toScopeQuery(slice, 50), [slice]);
+  const scopeQuery = useMemo(() => sliceToScopeQuery(slice, 50), [slice]);
   const api = useSlice(scopeQuery, 50);
   const online = api.online;
-  const statusLabel = dataSourceLabel(api.useMock);
-  const statusLive = !api.useMock;
+  const statusLabel = dataSourceLabel(online);
+  const statusLive = online;
 
-  const categoryNames = useMemo(
-    () => categoryNamesForUi(api.useMock, api.dashboard, CATEGORIES),
-    [api.useMock, api.dashboard],
-  );
-
-  const chips = useMemo(() => {
-    const top = categoryNames[0];
-    if (!top || top === "Pañales" || top === "Mamaderas") return DEFAULT_CHIPS;
-    return [`¿Cuánto pedir de 6033436?`, `Riesgo de quiebre en ${top}`, "Sobrestock"];
-  }, [categoryNames]);
+  const categoryNames = useMemo(() => categoryNamesForUi(api.dashboard), [api.dashboard]);
 
   const active = threads.find((thread) => thread.id === activeId) ?? threads[0];
-  const rows = useMemo(() => {
-    if (!api.useMock) {
-      return applyClientFilters(api.rows.map(calcFromApiRow), slice);
-    }
-    return applySlice(slice);
-  }, [api.useMock, api.rows, slice]);
+  const rows = useMemo(
+    () => applyClientFilters(api.rows.map(calcFromApiRow), slice),
+    [api.rows, slice],
+  );
   const labels = sliceLabels(slice);
 
-  function pushSlice(next: Slice | ((previous: Slice) => Slice)) {
-    setSlice((previous) => {
-      const value = typeof next === "function" ? next(previous) : next;
-      setHistory((stack) => [...stack, previous]);
-      return value;
-    });
-  }
-
-  function goBack() {
-    setHistory((stack) => {
-      if (stack.length === 0) return stack;
-      setSlice(stack[stack.length - 1] ?? EMPTY);
-      return stack.slice(0, -1);
-    });
-  }
-
-  function clearSlice() {
-    pushSlice(EMPTY);
-  }
+  const nextStepChips = useMemo(
+    () => (api.suggestedFilters ?? []).slice(0, 6),
+    [api.suggestedFilters],
+  );
 
   function toggleList<T>(list: T[], item: T): T[] {
     return list.includes(item) ? list.filter((value) => value !== item) : [...list, item];
   }
 
-  const dash = api.useMock ? null : api.dashboard;
+  function toggleHealth(tag: "riesgo_quiebre" | "sin_stock" | "sobrestock") {
+    pushSlice((previous) => {
+      const health = toggleList(previous.health, tag);
+      return { ...previous, health, outOfStockOnly: health.includes("sin_stock") };
+    });
+  }
+
+  const dash = api.dashboard;
   const listUnits = rows.reduce((sum, row) => sum + row.recommended_quantity, 0);
   const listOutOfStock = rows.filter((row) => row.sku.stock === 0).length;
   const kpisDash = kpisFromDashboard(dash, listUnits, listOutOfStock);
@@ -273,7 +199,7 @@ function Index() {
       detail: "requieren atención",
       icon: AlertTriangle,
       active: slice.health.includes("riesgo_quiebre"),
-      onClick: () => pushSlice((previous) => ({ ...previous, health: toggleList(previous.health, "riesgo_quiebre" as HealthTag) })),
+      onClick: () => toggleHealth("riesgo_quiebre"),
     },
     {
       label: "Falta de stock",
@@ -281,7 +207,7 @@ function Index() {
       detail: "reposición urgente",
       icon: CircleAlert,
       active: slice.health.includes("sin_stock"),
-      onClick: () => pushSlice((previous) => ({ ...previous, health: toggleList(previous.health, "sin_stock" as HealthTag) })),
+      onClick: () => toggleHealth("sin_stock"),
     },
     {
       label: "Unidades a pedir",
@@ -293,23 +219,12 @@ function Index() {
     },
   ];
 
-  const chartData = useMemo(() => {
-    const mockBars = CATEGORIES.map((category) => ({
-      category,
-      units: applySlice({ ...slice, cats: [] })
-        .filter((row) => row.sku.category === category)
-        .reduce((sum, row) => sum + row.recommended_quantity, 0),
-    }));
-    return chartUnitsByCategory(api.useMock, dash, mockBars);
-  }, [slice, api.useMock, dash]);
+  const chartData = useMemo(() => chartUnitsByCategory(dash), [dash]);
 
   const poRows = useMemo(() => {
-    const scope: Slice = { ...(frozen ?? slice), buyOnly: true };
-    if (!api.useMock) {
-      return applyClientFilters(api.rows.map(calcFromApiRow), scope);
-    }
-    return applySlice(scope);
-  }, [frozen, slice, api.useMock, api.rows]);
+    const scope: UiSlice = { ...(frozen ?? slice), buyOnly: true };
+    return applyClientFilters(api.rows.map(calcFromApiRow), scope);
+  }, [frozen, slice, api.rows]);
   const units = dash?.recommended_units ?? poRows.reduce((sum, row) => sum + row.recommended_quantity, 0);
   const value = dash?.estimated_purchase_value ?? poRows.reduce((sum, row) => sum + row.estimated_purchase_value, 0);
   const poSkuCount = dash?.purchase_skus ?? poRows.length;
@@ -318,13 +233,6 @@ function Index() {
     const query = text.trim();
     if (!query || chatBusy) return;
     setInput("");
-    const parsed = sliceFromText(query, categoryNames);
-    const nextSlice =
-      query.toLowerCase() === BUY_QUERY.toLowerCase() ? { ...EMPTY, buyOnly: true } : parsed;
-    const scopeForChat = nextSlice ?? slice;
-    const scopeRows = nextSlice ? (api.useMock ? applySlice(nextSlice) : rows) : rows;
-    const scopeLabels = sliceLabels(scopeForChat);
-    const context = scopeLabels.length > 0 ? `Estás viendo ${scopeLabels.join(", ")}.\n` : "";
 
     setThreads((previous) =>
       previous.map((thread) =>
@@ -337,68 +245,59 @@ function Index() {
             },
       ),
     );
-    if (nextSlice) pushSlice(nextSlice);
     setMode("explore");
     setMobileView("explore");
 
-    if (online) {
-      setChatBusy(true);
-      try {
-        const res = await postChat(query, scopeQueryToPayload(toScopeQuery(scopeForChat)));
-        setThreads((previous) =>
-          previous.map((thread) =>
-            thread.id !== activeId
-              ? thread
-              : {
-                  ...thread,
-                  messages: [
-                    ...thread.messages,
-                    {
-                      id: Date.now() + 1,
-                      role: "assistant" as const,
-                      text: context + (res.answer || "Sin respuesta del motor."),
-                    },
-                  ],
-                },
-          ),
-        );
-      } catch {
-        setThreads((previous) =>
-          previous.map((thread) =>
-            thread.id !== activeId
-              ? thread
-              : {
-                  ...thread,
-                  messages: [
-                    ...thread.messages,
-                    {
-                      id: Date.now() + 1,
-                      role: "assistant" as const,
-                      text: context + answerFor(query, scopeRows),
-                    },
-                  ],
-                },
-          ),
-        );
-      } finally {
-        setChatBusy(false);
+    setChatBusy(true);
+    try {
+      const res = await postChat(query, scopeQueryToPayload(sliceToScopeQuery(slice)));
+      const applied = applyChatScope(slice, res);
+      if (res.scope != null) pushSlice(applied.slice);
+      setThreads((previous) =>
+        previous.map((thread) =>
+          thread.id !== activeId
+            ? thread
+            : {
+                ...thread,
+                messages: [
+                  ...thread.messages,
+                  {
+                    id: Date.now() + 1,
+                    role: "assistant" as const,
+                    text: res.answer || "Sin respuesta del catálogo.",
+                  },
+                ],
+              },
+        ),
+      );
+      if (applied.openProductId) {
+        const fromRes = res.purchase_list.find((item) => item.product_id === applied.openProductId);
+        const row = fromRes
+          ? calcFromApiRow(rowFromPurchaseItem(fromRes))
+          : findRowForProduct(applied.openProductId);
+        if (row) void openDetail(row);
       }
-      return;
+    } catch (error) {
+      setThreads((previous) =>
+        previous.map((thread) =>
+          thread.id !== activeId
+            ? thread
+            : {
+                ...thread,
+                messages: [
+                  ...thread.messages,
+                  {
+                    id: Date.now() + 1,
+                    role: "assistant" as const,
+                    text: chatFailureMessage(query, error),
+                  },
+                ],
+              },
+        ),
+      );
+    } finally {
+      setChatBusy(false);
     }
-
-    setThreads((previous) =>
-      previous.map((thread) =>
-        thread.id !== activeId
-          ? thread
-          : {
-              ...thread,
-              messages: [
-                ...thread.messages,
-                { id: Date.now() + 1, role: "assistant" as const, text: context + answerFor(query, scopeRows) },
-              ],
-            },
-      ),
-    );
   }
 
   function newThread() {
@@ -422,20 +321,12 @@ function Index() {
   }
 
   function exportOrder() {
-    if (online) {
-      const purchaseSkus = dash?.purchase_skus ?? poRows.length;
-      window.open(
-        purchaseListCsvUrl(toScopeQuery(frozen ?? slice, csvExportLimit(purchaseSkus))),
-        "_blank",
-      );
-      return;
-    }
-    const blob = new Blob([csvFor(poRows)], { type: "text/csv;charset=utf-8" });
-    const anchor = document.createElement("a");
-    anchor.href = URL.createObjectURL(blob);
-    anchor.download = "orden_de_compra_supplymate.csv";
-    anchor.click();
-    URL.revokeObjectURL(anchor.href);
+    if (!online) return;
+    const purchaseSkus = dash?.purchase_skus ?? poRows.length;
+    window.open(
+      purchaseListCsvUrl(sliceToScopeQuery(frozen ?? slice, csvExportLimit(purchaseSkus))),
+      "_blank",
+    );
   }
 
   async function openDetail(row: Calc) {
@@ -466,6 +357,30 @@ function Index() {
     }
   }
 
+  function findRowForProduct(productId: string): Calc | undefined {
+    const fromRows = rows.find((row) => row.sku.product_id === productId);
+    if (fromRows) return fromRows;
+    const fromList = api.purchaseList.find((item) => item.product_id === productId);
+    if (fromList) return calcFromApiRow(rowFromPurchaseItem(fromList));
+    return undefined;
+  }
+
+  function applyChip(chip: SuggestedChip) {
+    const result = applySuggestedFilter(chip, slice);
+    if (result.type === "slice") {
+      pushSlice(result.slice);
+      return;
+    }
+    if (result.type === "open_sku") {
+      const row = findRowForProduct(result.productId);
+      if (row) void openDetail(row);
+      return;
+    }
+    if (result.type === "draft_oc") {
+      openPo();
+    }
+  }
+
   const rail = (
     <aside className={`${railCollapsed ? "w-[72px]" : "w-[72px] xl:w-[248px]"} flex h-full shrink-0 flex-col border-r border-ops-border bg-ops-panel transition-[width] duration-200`}>
       <div className="grid h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-ops-border px-4">
@@ -485,13 +400,12 @@ function Index() {
       <nav aria-label="Conversaciones" className="flex-1 overflow-y-auto px-3">
         {!railCollapsed && <div className="mb-2 hidden px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground xl:block">Ejemplos</div>}
         <div className="space-y-1">
-          {threads.map((thread, index) => (
+          {threads.map((thread) => (
             <button key={thread.id} type="button" title={thread.title} onClick={() => { setActiveId(thread.id); setMobileMenu(false); setMobileView("chat"); }} className={`flex h-10 w-full items-center gap-3 rounded-md px-3 text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-ops-accent ${thread.id === activeId ? "bg-ops-row text-foreground" : "text-muted-foreground hover:bg-ops-row hover:text-foreground"}`}>
               <MessageSquareText className={`h-4 w-4 shrink-0 ${thread.id === activeId ? "text-ops-accent" : ""}`} />
               {!railCollapsed && (
                 <span className="hidden min-w-0 flex-1 items-center gap-2 xl:flex">
                   <span className="truncate">{thread.title}</span>
-                  {index > 0 && <span className="shrink-0 rounded border border-ops-border px-1 text-[9px] uppercase text-muted-foreground">Demo</span>}
                 </span>
               )}
             </button>
@@ -541,7 +455,21 @@ function Index() {
               </div>
               <div className="border-t border-ops-border bg-ops-panel p-4">
                 {labels.length > 0 && <p className="mb-2 text-[11px] text-muted-foreground">Recorte actual: <span className="text-foreground">{labels.join(" · ")}</span></p>}
-                <div className="mb-2 flex flex-wrap gap-1.5">{chips.map((chip) => <button key={chip} type="button" onClick={() => void send(chip)} className="rounded-md border border-ops-border bg-background px-2.5 py-1.5 text-[11px] text-muted-foreground outline-none hover:border-ops-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-focus">{chip}</button>)}</div>
+                {nextStepChips.length > 0 && (
+                  <div className="mb-2 grid grid-cols-3 gap-1.5">
+                    {nextStepChips.map((chip) => (
+                      <button
+                        key={`${chip.action}:${JSON.stringify(chip.args)}`}
+                        type="button"
+                        title={chip.label}
+                        onClick={() => applyChip(chip)}
+                        className="truncate rounded-md border border-ops-border bg-background px-2.5 py-1.5 text-[11px] text-muted-foreground outline-none hover:border-ops-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-focus"
+                      >
+                        {chip.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <form onSubmit={(event) => { event.preventDefault(); void send(input); }} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
                   <div className="relative min-w-0"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><input value={input} onChange={(event) => setInput(event.target.value)} aria-label="Consulta de reposición" placeholder="Escribí una consulta…" className="h-10 w-full rounded-md border border-ops-border bg-background pl-9 pr-3 text-sm outline-none placeholder:text-muted-foreground focus:border-ops-accent focus:ring-2 focus:ring-ops-focus" /></div>
                   <button type="submit" aria-label="Enviar consulta" disabled={chatBusy} className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-ops-accent text-ops-accent-foreground outline-none hover:bg-ops-accent-hover focus-visible:ring-2 focus-visible:ring-ops-focus disabled:opacity-50"><Send className="h-4 w-4" /></button>
@@ -583,7 +511,9 @@ function Index() {
                       <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Unidades a reponer por categoría</div>
                       <div className="text-[11px] text-muted-foreground">Tocá una barra para ver esa categoría</div>
                     </div>
-                    {api.loading && chartData.length === 0 ? (
+                    {api.error && chartData.length === 0 ? (
+                      <p className="py-6 text-center text-xs text-muted-foreground">{COPY_CATEGORIES_LOAD_FAILED}</p>
+                    ) : api.loading && chartData.length === 0 ? (
                       <p className="py-6 text-center text-xs text-muted-foreground">Cargando categorías del catálogo…</p>
                     ) : chartData.length === 0 ? (
                       <p className="py-6 text-center text-xs text-muted-foreground">No hay unidades a reponer en este recorte.</p>
@@ -609,7 +539,21 @@ function Index() {
                     <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground"><SlidersHorizontal className="h-3.5 w-3.5" />Filtros</div>
                     <div className="flex flex-wrap gap-1.5">
                       <button type="button" onClick={() => pushSlice((previous) => ({ ...previous, buyOnly: !previous.buyOnly }))} className={`rounded-full border px-2.5 py-1 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-ops-focus ${slice.buyOnly ? "border-ops-accent bg-ops-accent-soft text-ops-accent" : "border-ops-border text-muted-foreground hover:border-ops-accent"}`}><ShoppingCart className="mr-1 inline h-3 w-3" />A comprar</button>
-                      {HEALTH_FILTERS.map((tag) => { const Icon = healthIcon[tag]; return <button key={tag} type="button" onClick={() => pushSlice((previous) => ({ ...previous, health: toggleList(previous.health, tag) }))} className={`rounded-full border px-2.5 py-1 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-ops-focus ${slice.health.includes(tag) ? "border-ops-accent bg-ops-accent-soft text-foreground" : "border-ops-border text-muted-foreground hover:border-ops-accent"}`}><Icon className="mr-1 inline h-3 w-3" />{HEALTH_LABEL[tag]}</button>; })}
+                      {HEALTH_FILTERS.map((tag) => {
+                        const Icon = healthIcon[tag];
+                        const healthTag = tag as "riesgo_quiebre" | "sin_stock" | "sobrestock";
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => toggleHealth(healthTag)}
+                            className={`rounded-full border px-2.5 py-1 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-ops-focus ${slice.health.includes(healthTag) ? "border-ops-accent bg-ops-accent-soft text-foreground" : "border-ops-border text-muted-foreground hover:border-ops-accent"}`}
+                          >
+                            <Icon className="mr-1 inline h-3 w-3" />
+                            {HEALTH_LABEL[tag]}
+                          </button>
+                        );
+                      })}
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       <span className="mr-1 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">Cobertura</span>

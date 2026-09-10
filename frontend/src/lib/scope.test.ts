@@ -3,6 +3,7 @@ import { toSearchParams } from "@/lib/api";
 import * as scope from "@/lib/scope";
 import {
   COVERAGE_ORDER,
+  EMPTY_SLICE,
   coverageBandFromDays,
   inCoverageBand,
   scopePayloadToUiSlice,
@@ -51,11 +52,10 @@ describe("no Lovable 14+ bridge", () => {
 describe("sliceToScopeQuery", () => {
   it("serializes category, coverage, and health onto ScopeQuery", () => {
     const scope = sliceToScopeQuery({
+      ...EMPTY_SLICE,
       cats: ["Pañales"],
       health: ["riesgo_quiebre"],
       coverage: "0–3 días",
-      buyOnly: false,
-      outOfStockOnly: false,
     });
     expect(scope.category).toEqual(["Pañales"]);
     expect(scope.coverage_bucket).toEqual(["0–3 días"]);
@@ -64,32 +64,24 @@ describe("sliceToScopeQuery", () => {
 
   it("sends one coverage_bucket for 14–30 días", () => {
     const query = sliceToScopeQuery({
-      cats: [],
-      health: [],
+      ...EMPTY_SLICE,
       coverage: "14–30 días",
-      buyOnly: false,
-      outOfStockOnly: false,
     });
     expect(query.coverage_bucket).toEqual(["14–30 días"]);
   });
 
   it("sends one coverage_bucket for 30+ días", () => {
     const query = sliceToScopeQuery({
-      cats: [],
-      health: [],
+      ...EMPTY_SLICE,
       coverage: "30+ días",
-      buyOnly: false,
-      outOfStockOnly: false,
     });
     expect(query.coverage_bucket).toEqual(["30+ días"]);
   });
 
   it("does not send sin_stock as a health_bucket", () => {
     const scope = sliceToScopeQuery({
-      cats: [],
+      ...EMPTY_SLICE,
       health: ["sin_stock", "sobrestock"],
-      coverage: null,
-      buyOnly: false,
       outOfStockOnly: true,
     });
     expect(scope.health_bucket).toEqual(["overstock"]);
@@ -99,10 +91,8 @@ describe("sliceToScopeQuery", () => {
 
   it("sends out_of_stock when the Falta de stock chip is active", () => {
     const query = sliceToScopeQuery({
-      cats: [],
+      ...EMPTY_SLICE,
       health: ["sin_stock"],
-      coverage: null,
-      buyOnly: false,
       outOfStockOnly: true,
     });
     expect(query.out_of_stock).toBe(true);
@@ -117,17 +107,49 @@ describe("sliceToScopeQuery", () => {
         coverage_buckets: ["0–3 días"],
       },
       {
-        cats: [],
-        health: [],
-        coverage: null,
+        ...EMPTY_SLICE,
         buyOnly: true,
-        outOfStockOnly: false,
       },
     );
     expect(next.cats).toEqual(["Nutrición"]);
     expect(next.health).toEqual(["riesgo_quiebre"]);
     expect(next.coverage).toBe("0–3 días");
     expect(next.buyOnly).toBe(true);
+  });
+
+  it("replace: empty categories clear a leftover category", () => {
+    const next = scopePayloadToUiSlice(
+      { health_buckets: ["stockout_risk"] },
+      { ...EMPTY_SLICE, cats: ["Cuidado"], health: ["sobrestock"] },
+    );
+    expect(next.cats).toEqual([]);
+    expect(next.health).toEqual(["riesgo_quiebre"]);
+  });
+
+  it("maps out_of_stock_only, name_tokens, and subcategories onto the query", () => {
+    const next = scopePayloadToUiSlice({
+      out_of_stock_only: true,
+      name_tokens: ["serum"],
+      subcategories: ["Ampollas"],
+    });
+    expect(next.outOfStockOnly).toBe(true);
+    expect(next.health).toContain("sin_stock");
+    expect(next.nameTokens).toEqual(["serum"]);
+    expect(next.subcategories).toEqual(["Ampollas"]);
+    const query = sliceToScopeQuery(next);
+    expect(query.out_of_stock).toBe(true);
+    expect(query.name_token).toEqual(["serum"]);
+    expect(query.subcategory).toEqual(["Ampollas"]);
+  });
+
+  it("round-trips suppliers onto ScopeQuery.supplier", () => {
+    const query = sliceToScopeQuery({
+      ...EMPTY_SLICE,
+      suppliers: ["Higiene Sur"],
+    });
+    expect(query.supplier).toEqual(["Higiene Sur"]);
+    const params = toSearchParams(query);
+    expect(params.getAll("supplier")).toEqual(["Higiene Sur"]);
   });
 });
 

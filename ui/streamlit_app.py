@@ -459,6 +459,9 @@ def apply_filter_action(action: str, args: dict[str, str], *, source: str = "chi
             value=token,
             label_human=token.upper() if token.islower() else token,
         )
+    elif action == suggested_filters.ACTION_DRAFT_OC:
+        _enter_commit_mode()
+        return
     elif action == suggested_filters.ACTION_OPEN_SKU:
         pid = args["product_id"]
         scope = scope_svc.set_highlight(scope, pid)
