@@ -361,7 +361,14 @@ async def _run_disambiguation(message: str, resolution) -> ChatResponse:
     )
 
 
-async def _run_single_product(message: str) -> ChatResponse:
+async def _run_single_product(
+    message: str,
+    *,
+    horizon_days: int | None = None,
+) -> ChatResponse:
+    from app.core.replenishment import clamp_horizon_days
+
+    days = clamp_horizon_days(horizon_days)
     product_id = _extract_product_id(message)
     context = SupplyContext(product_id=product_id)
     supply_agent = build_supply_agent()
@@ -379,7 +386,10 @@ async def _run_single_product(message: str) -> ChatResponse:
 
     assert context.inventory is not None
     product_id = context.inventory.product_id
-    recommendation = catalog_service.get_replenishment_recommendation(product_id)
+    recommendation = catalog_service.get_replenishment_recommendation(
+        product_id,
+        horizon_days=days,
+    )
     context.result = recommendation.calculation
     context.recommendation = recommendation
 
@@ -417,6 +427,7 @@ async def _run_single_product(message: str) -> ChatResponse:
         recommended_quantity=recommendation.recommended_quantity,
         calculation=recommendation.calculation,
         context=recommendation.context,
+        horizon_days=days,
     )
 
 
@@ -519,10 +530,21 @@ async def run_supplymate(
         return await _run_top_categories()
 
     exact = next((r for r in resolved if r.match_kind == "exact_sku"), None)
-    if interpretation.intent == "single_sku" or exact:
+    has_group = any(r.match_kind == "group" for r in resolved)
+    list_like = (
+        is_purchase_list_query(message)
+        or interpretation.intent in ("replenishment", "inventory_risk")
+    )
+    # List / explore queries must not hijack to single SKU when a group is present.
+    # True single-SKU: explicit single_sku intent, or exact_sku without a group
+    # and without list cues (or a numeric catalog code in the message).
+    if interpretation.intent == "single_sku" or (
+        exact
+        and not has_group
+        and (not list_like or message_looks_like_sku(message))
+    ):
         sku_message = f"cuanto pedir de {exact.product_id}" if exact else message
-        if interpretation.intent == "single_sku" or exact or message_looks_like_sku(message):
-            return await _run_single_product(sku_message)
+        return await _run_single_product(sku_message, horizon_days=horizon)
 
     if interpretation.intent in ("replenishment", "inventory_risk"):
         if not interpretation.references:
@@ -560,20 +582,20 @@ async def run_supplymate(
     if rule == "sales_categories":
         return await _run_top_categories()
     if rule == "purchase_list":
-        return await _run_purchase_list(message)
+        return await _run_purchase_list(message, resolution.scope)
 
     if message_looks_like_sku(message):
-        return await _run_single_product(message)
+        return await _run_single_product(message, horizon_days=horizon)
 
     intent = await classify_intent(message)
     if intent == "sales_categories":
         return await _run_top_categories()
     if intent == "purchase_list":
-        return await _run_purchase_list(message)
+        return await _run_purchase_list(message, resolution.scope)
     if intent == "single_product":
-        return await _run_single_product(message)
+        return await _run_single_product(message, horizon_days=horizon)
     if intent is None:
-        return await _run_single_product(message)
+        return await _run_single_product(message, horizon_days=horizon)
 
     raise ProductNotFoundError(
         "No entendí si preguntás por un producto o por la lista de reposición. "

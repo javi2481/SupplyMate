@@ -139,6 +139,7 @@ def from_rows(rows: list[dict], *, category_limit: int = 8) -> InventoryDashboar
     coverage_days: list[float] = []
     bucket_counts = {name: 0 for name in COVERAGE_ORDER}
     category_qty: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+    subcategory_qty: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     sales_qty: dict[str, list[int]] = defaultdict(lambda: [0, 0])
 
     for row in rows:
@@ -158,8 +159,12 @@ def from_rows(rows: list[dict], *, category_limit: int = 8) -> InventoryDashboar
         if qty > 0:
             category_qty[name][0] += qty
             category_qty[name][1] += 1
+            sub = str(row.get("subcategory") or "").strip() or "Sin subcategoría"
+            subcategory_qty[sub][0] += qty
+            subcategory_qty[sub][1] += 1
 
     ranked = sorted(category_qty.items(), key=lambda pair: (-pair[1][0], pair[0]))
+    ranked_subs = sorted(subcategory_qty.items(), key=lambda pair: (-pair[1][0], pair[0]))
     ranked_sales = sorted(
         ((name, vals) for name, vals in sales_qty.items() if vals[0] > 0),
         key=lambda pair: (-pair[1][0], pair[0]),
@@ -185,6 +190,10 @@ def from_rows(rows: list[dict], *, category_limit: int = 8) -> InventoryDashboar
         by_category=[
             CategoryBar(category=name, recommended_quantity=qty, sku_count=n)
             for name, (qty, n) in ranked[:category_limit]
+        ],
+        by_subcategory=[
+            CategoryBar(category=name, recommended_quantity=qty, sku_count=n)
+            for name, (qty, n) in ranked_subs[:category_limit]
         ],
         by_sales=[
             CategorySalesBar(category=name, units_sold=sold, sku_count=n)

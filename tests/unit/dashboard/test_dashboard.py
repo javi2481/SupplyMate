@@ -124,6 +124,38 @@ def test_from_rows_health_and_charts():
     assert snap.purchase_skus == 2
 
 
+def test_from_rows_by_subcategory():
+    rows = [
+        _row(
+            product_id="a",
+            category="Cosmetica",
+            subcategory="Facial",
+            recommended_quantity=30,
+            health_bucket="stockout_risk",
+        ),
+        _row(
+            product_id="b",
+            category="Cosmetica",
+            subcategory="Labios",
+            recommended_quantity=20,
+            health_bucket="stockout_risk",
+        ),
+        _row(
+            product_id="c",
+            category="Cosmetica",
+            subcategory="Facial",
+            recommended_quantity=10,
+            health_bucket="healthy",
+        ),
+    ]
+    snap = dashboard.from_rows(rows)
+    assert [c.category for c in snap.by_category] == ["Cosmetica"]
+    assert [c.category for c in snap.by_subcategory] == ["Facial", "Labios"]
+    assert snap.by_subcategory[0].recommended_quantity == 40
+    assert snap.by_subcategory[0].sku_count == 2
+    assert snap.by_subcategory[1].recommended_quantity == 20
+
+
 def test_from_rows_out_of_stock_count():
     rows = [
         _row(product_id="a", current_stock=0, recommended_quantity=3),

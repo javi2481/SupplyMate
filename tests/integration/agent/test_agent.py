@@ -297,6 +297,39 @@ async def test_llm_first_interprets_rexona_horizon(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_compound_cosmetica_criticos_coverage_not_single_sku(monkeypatch):
+    """Golden: compound list query must explore Cosmetica, never BASICCARE 8112743."""
+    from app.core.models import QueryInterpretation, Reference
+
+    llm_interp = QueryInterpretation(
+        intent="inventory_risk",
+        references=[Reference(text="cosmética", kind="product_group")],
+        filter_hints=["criticos", "cobertura 0-3"],
+        confidence="high",
+        source="llm",
+        relation="new_query",
+    )
+    monkeypatch.setattr(
+        "app.pipeline.query_interpreter_agent.interpret_query_llm",
+        AsyncMock(return_value=llm_interp),
+    )
+    response = await run_supplymate(
+        "mostrame los productos críticos de cosmética que tengan "
+        "menos de 3 días de cobertura y ordenalos por unidades a pedir"
+    )
+    assert response.mode in ("explore", "list")
+    assert response.product_id != "8112743"
+    assert "BASICCARE" not in (response.answer or "").upper()
+    assert "demanda 7 días" not in (response.answer or "").lower()
+    assert response.scope is not None
+    assert "Cosmetica" in response.scope.categories
+    assert "0–3 días" in response.scope.coverage_buckets
+    assert "stockout_risk" in response.scope.health_buckets
+    assert response.dashboard is not None
+    assert response.purchase_list is not None
+
+
+@pytest.mark.asyncio
 async def test_run_analyze_priorities_subset_of_purchase_list():
     import json
 

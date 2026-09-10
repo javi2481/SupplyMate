@@ -50,6 +50,7 @@ export type InventoryDashboard = {
   purchase_skus?: number;
   out_of_stock?: number;
   by_category: { category: string; recommended_quantity: number; sku_count: number }[];
+  by_subcategory?: { category: string; recommended_quantity: number; sku_count: number }[];
 };
 
 export type SuggestedFilter = {

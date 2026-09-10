@@ -75,3 +75,13 @@ def test_panales_xxg_keeps_category_and_size():
         parts = set(store.get_master(pid).product_name.lower().split())
         assert "xxg" in parts
         assert "xxxg" not in parts
+
+
+def test_cosmetica_prefers_category_over_unique_name_hit():
+    """«cosmética» must not hijack to BASICCARE BOTELLAS COSMETICAS (8112743)."""
+    resolved = resolve_single_reference(Reference(text="cosmética"))
+    assert resolved.match_kind == "group"
+    assert resolved.scope_dimension == "category"
+    assert resolved.scope_value == "Cosmetica"
+    assert resolved.product_id != "8112743"
+    assert "8112743" not in resolved.sku_ids or resolved.sku_count > 1

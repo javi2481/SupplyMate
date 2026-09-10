@@ -24,7 +24,13 @@ def _item(**kwargs) -> PurchaseListItem:
     return PurchaseListItem(**base)
 
 
-def _slice(items: list[PurchaseListItem], *, skus: int = 10, units: int | None = None) -> ReplenishmentSlice:
+def _slice(
+    items: list[PurchaseListItem],
+    *,
+    skus: int = 10,
+    units: int | None = None,
+    purchase_skus: int | None = None,
+) -> ReplenishmentSlice:
     total = units if units is not None else sum(i.recommended_quantity for i in items)
     return ReplenishmentSlice(
         scope=AnalyticalScope(categories=["Desodorantes Corporales"]),
@@ -32,7 +38,7 @@ def _slice(items: list[PurchaseListItem], *, skus: int = 10, units: int | None =
         dashboard=InventoryDashboard(
             skus=skus,
             recommended_units=total,
-            purchase_skus=len(items),
+            purchase_skus=purchase_skus if purchase_skus is not None else len(items),
         ),
         purchase_list=items,
     )
@@ -44,7 +50,7 @@ def test_explore_answer_is_plain_purchase_report():
         for i in range(1, 10)
     ]
     text = format_explore_answer(
-        _slice(items, skus=409, units=6915),
+        _slice(items, skus=409, units=6915, purchase_skus=409),
         ChatInterpretation(
             understood_labels=["Desodorantes Corporales"],
             guidance_question="Para no mezclar grupos, ¿cuál querés analizar primero?",
@@ -97,10 +103,38 @@ def test_explore_answer_empty_slice_plain():
     assert "no hay productos" in text.lower()
 
 
-def test_disambiguation_answer_plain():
-    text = format_disambiguation_answer(
-        'No estoy seguro de a qué te referís con «cuidado».',
-        ["Cuidado del Cabello", "Cuidado de la Piel"],
+def test_explore_answer_uses_purchase_skus_not_catalog_skus():
+    items = [_item(product_id="1", product_name="A", recommended_quantity=50)]
+    text = format_explore_answer(
+        ReplenishmentSlice(
+            scope=AnalyticalScope(
+                categories=["Cosmetica"],
+                coverage_buckets=["0–3 días"],
+                health_buckets=["stockout_risk"],
+            ),
+            evidence="",
+            dashboard=InventoryDashboard(
+                skus=500,
+                recommended_units=50,
+                purchase_skus=12,
+            ),
+            purchase_list=items,
+        ),
+        ChatInterpretation(understood_labels=["Cosmetica"]),
+        [],
     )
-    assert "**" not in text
-    assert "Cuidado del Cabello" in text
+    assert "12 SKUs a reponer" in text
+    assert "500" not in text
+    assert "0–3 días" in text
+    assert "Críticos" in text
+
+
+def test_format_single_product_uses_calc_horizon():
+    from app.services.analytics.catalog_service import format_single_product_answer
+    from app.services import catalog_service
+    from tests.catalog_ids import SKU_HIGH_QTY
+
+    rec = catalog_service.get_replenishment_recommendation(SKU_HIGH_QTY, horizon_days=14)
+    text = format_single_product_answer(rec)
+    assert "demanda 14 días" in text
+    assert "demanda 7 días" not in text

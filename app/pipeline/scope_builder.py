@@ -61,9 +61,24 @@ def build_scope(
     if interpretation.intent == "inventory_risk":
         scope = scope_svc.add(scope, "health_bucket", metrics.BUCKET_STOCKOUT_RISK)
 
+    risk_hints = {
+        "riesgo",
+        "quiebre",
+        "sin stock",
+        "en falta",
+        "faltante",
+        "critico",
+        "criticos",
+        "critica",
+        "criticas",
+    }
+    from app.services.analytics.dashboard import COVERAGE_ORDER
+
     for hint in interpretation.filter_hints:
-        if hint in ("riesgo", "quiebre", "sin stock", "en falta", "faltante"):
+        if hint in risk_hints:
             scope = scope_svc.add(scope, "health_bucket", metrics.BUCKET_STOCKOUT_RISK)
+        elif hint in COVERAGE_ORDER:
+            scope = scope_svc.add(scope, "coverage_bucket", hint)
 
     return scope
 

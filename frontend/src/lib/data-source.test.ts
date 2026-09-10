@@ -4,6 +4,7 @@ import type { InventoryDashboard, PurchaseListItem } from "@/lib/api";
 import {
   COPY_CATEGORIES_LOAD_FAILED,
   categoryNamesForUi,
+  chartBarMode,
   chartTickLabel,
   chartUnitsByCategory,
   csvExportLimit,
@@ -54,6 +55,24 @@ describe("slice data source helpers", () => {
     expect(kpisFromDashboard(null, 42, 3).out_of_stock).toBe(3);
   });
 
+  it("exposes purchase_skus for A comprar KPI alignment", () => {
+    const dash: InventoryDashboard = {
+      skus: 13125,
+      stockout_risk: 4715,
+      understock: 0,
+      overstock: 0,
+      healthy: 0,
+      avg_coverage: 31.6,
+      estimated_purchase_value: 1,
+      recommended_units: 3436798,
+      purchase_skus: 11956,
+      by_category: [],
+    };
+    const kpis = kpisFromDashboard(dash, 0);
+    expect(kpis.skus).toBe(13125);
+    expect(kpis.purchase_skus).toBe(11956);
+  });
+
   it("table caption uses purchase_skus when the page is truncated", () => {
     expect(tableScopeCaption({ displayed: 50, pageRows: 50, recorteToBuy: 1059, searching: false })).toEqual({
       shown: 50,
@@ -102,6 +121,29 @@ describe("slice data source helpers", () => {
     expect(chartUnitsByCategory(dash)).toEqual([
       { category: "Cuidado del Cabello", units: 100 },
       { category: "Cosmetica", units: 80 },
+    ]);
+    expect(chartBarMode(dash)).toBe("category");
+  });
+
+  it("charts by subcategory when the recorte collapses to one category", () => {
+    const dash: InventoryDashboard = {
+      skus: 100,
+      stockout_risk: 10,
+      understock: 0,
+      overstock: 0,
+      healthy: 90,
+      avg_coverage: 5,
+      estimated_purchase_value: 1,
+      by_category: [{ category: "Cosmetica", recommended_quantity: 500, sku_count: 20 }],
+      by_subcategory: [
+        { category: "Facial", recommended_quantity: 300, sku_count: 12 },
+        { category: "Labios", recommended_quantity: 200, sku_count: 8 },
+      ],
+    };
+    expect(chartBarMode(dash)).toBe("subcategory");
+    expect(chartUnitsByCategory(dash)).toEqual([
+      { category: "Facial", units: 300 },
+      { category: "Labios", units: 200 },
     ]);
   });
 

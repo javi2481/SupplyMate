@@ -13,10 +13,23 @@ export function categoryNamesForUi(dashboard: InventoryDashboard | null): string
   return (dashboard?.by_category ?? []).map((bar) => bar.category);
 }
 
+export type ChartBarMode = "category" | "subcategory";
+
+export function chartBarMode(dashboard: InventoryDashboard | null): ChartBarMode {
+  const cats = (dashboard?.by_category ?? []).filter((b) => b.recommended_quantity > 0);
+  const subs = (dashboard?.by_subcategory ?? []).filter((b) => b.recommended_quantity > 0);
+  if (cats.length <= 1 && subs.length > 0) return "subcategory";
+  return "category";
+}
+
+/** Units chart: subcategory when the recorte collapses to one category. */
 export function chartUnitsByCategory(
   dashboard: InventoryDashboard | null,
 ): { category: string; units: number }[] {
-  const bars = (dashboard?.by_category ?? []).map((item) => ({
+  const mode = chartBarMode(dashboard);
+  const source =
+    mode === "subcategory" ? (dashboard?.by_subcategory ?? []) : (dashboard?.by_category ?? []);
+  const bars = source.map((item) => ({
     category: item.category,
     units: item.recommended_quantity,
   }));

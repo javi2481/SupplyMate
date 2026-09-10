@@ -51,6 +51,7 @@ import {
 import {
   COPY_CATEGORIES_LOAD_FAILED,
   categoryNamesForUi,
+  chartBarMode,
   chartTickLabel,
   chartUnitsByCategory,
   csvExportLimit,
@@ -106,7 +107,7 @@ const SEED: Thread[] = [
       {
         id: 1,
         role: "assistant",
-        text: `Listo para revisar la reposición de los próximos ${HORIZON_DAYS} días. Elegí una consulta rápida para comenzar: las cantidades salen del motor de cálculo.`,
+        text: `Listo para revisar la reposición del recorte. Elegí una consulta rápida para comenzar: las cantidades salen del motor de cálculo.`,
       },
     ],
   },
@@ -226,8 +227,12 @@ function Index() {
   const kpis = [
     {
       label: "Productos",
-      value: nf.format(dash?.skus ?? rows.length),
-      detail: "en este recorte",
+      value: nf.format(
+        slice.buyOnly
+          ? (dash?.purchase_skus ?? rows.length)
+          : (dash?.skus ?? rows.length),
+      ),
+      detail: slice.buyOnly ? "a reponer" : "en este recorte",
       icon: Box,
       active: slice.buyOnly,
       onClick: () => mutateSlice((previous) => ({ ...previous, buyOnly: !previous.buyOnly })),
@@ -261,6 +266,7 @@ function Index() {
   ];
 
   const chartData = useMemo(() => chartUnitsByCategory(dash), [dash]);
+  const chartMode = useMemo(() => chartBarMode(dash), [dash]);
 
   const poRows = useMemo(() => {
     const scope: UiSlice = { ...(frozen ?? slice), buyOnly: true };
@@ -467,7 +473,7 @@ function Index() {
       <div className="grid h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-ops-border px-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-ops-accent text-ops-accent-foreground"><Box className="h-4 w-4" /></div>
-          {!railCollapsed && <div className="hidden min-w-0 xl:block"><div className="truncate font-display text-base font-semibold text-foreground">SupplyMate</div><div className="truncate text-[11px] text-muted-foreground">Reposición · 7 días</div></div>}
+          {!railCollapsed && <div className="hidden min-w-0 xl:block"><div className="truncate font-display text-base font-semibold text-foreground">SupplyMate</div><div className="truncate text-[11px] text-muted-foreground">Reposición · {horizonDays} días</div></div>}
         </div>
         <button type="button" aria-label={railCollapsed ? "Expandir menú" : "Reducir menú"} onClick={() => setRailCollapsed((value) => !value)} className="hidden h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground outline-none hover:bg-ops-row hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-accent md:grid">
           {railCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
@@ -509,7 +515,7 @@ function Index() {
           <header className="grid h-16 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-ops-border bg-ops-panel px-4 md:px-5">
             <div className="flex min-w-0 items-center gap-3">
               <button type="button" aria-label="Abrir menú" onClick={() => setMobileMenu(true)} className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted-foreground outline-none hover:bg-ops-row focus-visible:ring-2 focus-visible:ring-ops-accent md:hidden"><Menu className="h-5 w-5" /></button>
-              <div className="min-w-0"><h1 className="truncate font-display text-lg font-semibold">SupplyMate · Operación de reposición</h1><p className="truncate text-[11px] text-muted-foreground">Próximos {HORIZON_DAYS} días · este recorte</p></div>
+              <div className="min-w-0"><h1 className="truncate font-display text-lg font-semibold">SupplyMate · Operación de reposición</h1><p className="truncate text-[11px] text-muted-foreground">Próximos {horizonDays} días · este recorte</p></div>
             </div>
             <div className={`flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase ${statusLive ? "border-ops-ok/30 bg-ops-ok-soft text-ops-ok" : "border-ops-warn/40 bg-ops-warn/10 text-ops-warn"}`}><span className={`h-1.5 w-1.5 rounded-full ${statusLive ? "bg-ops-ok" : "bg-ops-warn"}`} />{statusLabel}</div>
           </header>
@@ -620,9 +626,17 @@ function Index() {
 
                   <div className="border-y border-ops-border bg-ops-panel px-4 py-4 lg:px-5">
                     <div className="mb-3 flex items-center justify-between gap-2">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Unidades a reponer por categoría</div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                        {chartMode === "subcategory"
+                          ? "Unidades a reponer por subcategoría"
+                          : "Unidades a reponer por categoría"}
+                      </div>
                       {chartData.length > 1 && (
-                        <div className="text-[11px] text-muted-foreground">Tocá una barra para ver esa categoría</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {chartMode === "subcategory"
+                            ? "Tocá una barra para ver esa subcategoría"
+                            : "Tocá una barra para ver esa categoría"}
+                        </div>
                       )}
                     </div>
                     {api.error && chartData.length === 0 ? (
@@ -652,9 +666,37 @@ function Index() {
                               radius={[4, 4, 0, 0]}
                               cursor="pointer"
                               isAnimationActive={false}
-                              onClick={(bar: { category?: string }) => bar.category && mutateSlice((previous) => ({ ...previous, cats: [bar.category as string] }))}
+                              onClick={(bar: { category?: string }) => {
+                                if (!bar.category) return;
+                                if (chartMode === "subcategory") {
+                                  mutateSlice((previous) => ({
+                                    ...previous,
+                                    subcategories: [bar.category as string],
+                                  }));
+                                  return;
+                                }
+                                mutateSlice((previous) => ({ ...previous, cats: [bar.category as string] }));
+                              }}
                             >
-                              {chartData.map((item) => <Cell key={item.category} fill={categoryColor(item.category)} stroke={slice.cats.includes(item.category) ? "var(--foreground)" : "transparent"} strokeWidth={slice.cats.includes(item.category) ? 2 : 0} fillOpacity={slice.cats.length === 0 || slice.cats.includes(item.category) ? 1 : 0.45} />)}
+                              {chartData.map((item) => {
+                                const active =
+                                  chartMode === "subcategory"
+                                    ? slice.subcategories.includes(item.category)
+                                    : slice.cats.includes(item.category);
+                                const dimmed =
+                                  chartMode === "subcategory"
+                                    ? slice.subcategories.length > 0 && !active
+                                    : slice.cats.length > 0 && !active;
+                                return (
+                                  <Cell
+                                    key={item.category}
+                                    fill={categoryColor(item.category)}
+                                    stroke={active ? "var(--foreground)" : "transparent"}
+                                    strokeWidth={active ? 2 : 0}
+                                    fillOpacity={dimmed ? 0.45 : 1}
+                                  />
+                                );
+                              })}
                               <LabelList
                                 dataKey="units"
                                 position="top"

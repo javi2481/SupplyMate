@@ -392,6 +392,23 @@ def resolve_single_reference(ref: Reference) -> ResolvedReference:
 
     name_hits = list(dict.fromkeys(name_hits))
 
+    # Prefer category/subcategory over a unique product-name hit so tokens like
+    # «cosmética» resolve to Cosmetica, not BASICCARE BOTELLAS COSMETICAS.
+    group_pick = _pick_best_group(token, categories, subcategories)
+    if group_pick:
+        dim, value, pids = group_pick
+        return ResolvedReference(
+            label=_label_for_group(dim, value),
+            user_text=user_text,
+            match_kind="group",
+            sku_ids=pids,
+            scope_dimension=dim,  # type: ignore[arg-type]
+            scope_value=value,
+            sku_count=len(pids),
+            recommended_quantity=_qty_for_skus(pids),
+            confidence="high",
+        )
+
     if len(name_hits) == 1:
         pid = name_hits[0]
         master = store.get_master(pid)
@@ -412,21 +429,6 @@ def resolve_single_reference(ref: Reference) -> ResolvedReference:
             scope_value=pid,
             sku_count=1,
             recommended_quantity=qty,
-            confidence="high",
-        )
-
-    group_pick = _pick_best_group(token, categories, subcategories)
-    if group_pick:
-        dim, value, pids = group_pick
-        return ResolvedReference(
-            label=_label_for_group(dim, value),
-            user_text=user_text,
-            match_kind="group",
-            sku_ids=pids,
-            scope_dimension=dim,  # type: ignore[arg-type]
-            scope_value=value,
-            sku_count=len(pids),
-            recommended_quantity=_qty_for_skus(pids),
             confidence="high",
         )
 

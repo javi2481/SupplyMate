@@ -216,6 +216,7 @@ class InventoryDashboard(BaseModel):
     purchase_skus: int = 0
     out_of_stock: int = 0
     by_category: list[CategoryBar] = Field(default_factory=list)
+    by_subcategory: list[CategoryBar] = Field(default_factory=list)
     by_sales: list[CategorySalesBar] = Field(default_factory=list)
     coverage: list[CoverageBar] = Field(default_factory=list)
 

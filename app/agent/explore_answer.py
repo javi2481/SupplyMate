@@ -32,22 +32,36 @@ def format_explore_answer(
     horizon_days: int = 7,
 ) -> str:
     """Plain-text purchase report for the Lovable chat bubble (no markdown)."""
+    from app.services.analytics import metrics
+
     lines: list[str] = []
     dash = slice_data.dashboard
-    labels = " · ".join(interpretation.understood_labels) if interpretation.understood_labels else ""
+    scope = slice_data.scope
     days = horizon_days or 7
 
-    if group_summaries:
+    label_parts = list(interpretation.understood_labels or [])
+    for bucket in scope.coverage_buckets:
+        if bucket not in label_parts:
+            label_parts.append(bucket)
+    if any(b == metrics.BUCKET_STOCKOUT_RISK for b in scope.health_buckets):
+        if "Riesgo de quiebre" not in label_parts and "Críticos" not in label_parts:
+            label_parts.append("Críticos")
+    labels = " · ".join(label_parts)
+
+    purchase_count = dash.purchase_skus or (
+        len(slice_data.purchase_list) if slice_data.purchase_list else 0
+    )
+    if group_summaries and not slice_data.purchase_list:
         total_units = sum(item.recommended_quantity for item in group_summaries)
-        sku_hint = dash.skus or sum(item.sku_count for item in group_summaries)
+        sku_hint = purchase_count or sum(item.sku_count for item in group_summaries)
     elif slice_data.purchase_list:
         total_units = dash.recommended_units or sum(
             i.recommended_quantity for i in slice_data.purchase_list
         )
-        sku_hint = dash.skus or len(slice_data.purchase_list)
+        sku_hint = purchase_count or len(slice_data.purchase_list)
     else:
         total_units = 0
-        sku_hint = dash.skus
+        sku_hint = purchase_count or dash.skus
 
     if labels:
         if interpretation.relation == "refinement":
@@ -68,7 +82,7 @@ def format_explore_answer(
     if total_units:
         header_parts.append(f"{total_units} unidades a reponer")
     if sku_hint:
-        header_parts.append(f"{sku_hint} SKUs en el recorte")
+        header_parts.append(f"{sku_hint} SKUs a reponer")
     if header_parts:
         lines.append(" · ".join(header_parts) + ".")
 
@@ -84,7 +98,7 @@ def format_explore_answer(
             lines.append(
                 f"{i}. {item.product_name} — {item.recommended_quantity} unidades"
             )
-        remaining = len(slice_data.purchase_list) - len(ranked)
+        remaining = max(0, (purchase_count or len(slice_data.purchase_list)) - len(ranked))
         if remaining > 0:
             lines.append(f"… y {remaining} más en el panel.")
     elif group_summaries:

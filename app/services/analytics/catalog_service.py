@@ -277,10 +277,11 @@ def format_purchase_list_answer(items: list[ReplenishmentRecommendation]) -> str
 def format_single_product_answer(rec: ReplenishmentRecommendation) -> str:
     """Deterministic SKU explanation when the LLM narration fails validation."""
     calc = rec.calculation
+    days = calc.horizon_days or HORIZON_DAYS
     return (
         f"Para {rec.product_name} ({rec.product_id}) la cantidad recomendada es "
         f"{rec.recommended_quantity} unidades.\n\n"
-        f"Política order-up-to: demanda 7 días ({calc.demand_horizon:.1f}) + "
+        f"Política order-up-to: demanda {days} días ({calc.demand_horizon:.1f}) + "
         f"demanda en lead time ({calc.demand_lead_time:.1f}) + stock de seguridad "
         f"({calc.safety_stock}) − stock actual ({calc.current_stock}), "
         f"redondeado hacia arriba.\n"

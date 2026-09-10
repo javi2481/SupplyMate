@@ -53,3 +53,48 @@ def test_short_refinement_without_entity_tokens():
     interp = interpret_query_rules("bebé", scope)
     assert interp is not None
     assert interp.relation == "refinement"
+
+
+def test_criticos_and_coverage_hints():
+    from app.pipeline.query_interpretation import extract_coverage_bucket, _extract_filter_hints
+
+    msg = (
+        "mostrame los productos críticos de cosmética que tengan "
+        "menos de 3 días de cobertura y ordenalos por unidades a pedir"
+    )
+    assert extract_coverage_bucket(msg) == "0–3 días"
+    hints = _extract_filter_hints(msg)
+    assert "criticos" in hints
+    assert "0–3 días" in hints
+    interp = interpret_query_rules(msg)
+    assert interp is not None
+    assert interp.intent == "inventory_risk"
+    assert "0–3 días" in interp.filter_hints
+    assert any("cosmetica" in r.text for r in interp.references)
+
+
+def test_build_scope_applies_coverage_and_criticos():
+    from app.core.models import QueryInterpretation, Reference, ResolvedReference
+    from app.pipeline.scope_builder import build_scope
+    from app.services.analytics import metrics
+
+    interp = QueryInterpretation(
+        intent="inventory_risk",
+        references=[Reference(text="cosmética", kind="product_group")],
+        filter_hints=["criticos", "0–3 días"],
+        source="rules",
+    )
+    resolved = [
+        ResolvedReference(
+            label="Cosmetica",
+            user_text="cosmética",
+            match_kind="group",
+            scope_dimension="category",
+            scope_value="Cosmetica",
+            sku_count=10,
+        )
+    ]
+    scope = build_scope(interp, resolved)
+    assert scope.categories == ["Cosmetica"]
+    assert metrics.BUCKET_STOCKOUT_RISK in scope.health_buckets
+    assert "0–3 días" in scope.coverage_buckets
