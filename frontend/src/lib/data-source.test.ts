@@ -4,6 +4,7 @@ import type { InventoryDashboard, PurchaseListItem } from "@/lib/api";
 import {
   COPY_CATEGORIES_LOAD_FAILED,
   categoryNamesForUi,
+  chartTickLabel,
   chartUnitsByCategory,
   csvExportLimit,
   dataSourceLabel,
@@ -102,6 +103,12 @@ describe("slice data source helpers", () => {
       { category: "Cuidado del Cabello", units: 100 },
       { category: "Cosmetica", units: 80 },
     ]);
+  });
+
+  it("keeps full category names when there are few bars", () => {
+    expect(chartTickLabel("Desodorantes Corporales", 1)).toBe("Desodorantes Corporales");
+    expect(chartTickLabel("Desodorantes Corporales", 2)).toBe("Desodorantes Corporales");
+    expect(chartTickLabel("Desodorantes Corporales", 5)).toBe("Desodorantes …");
   });
 
   it("prefers live API when a URL is set, ignoring the old mock flag", () => {

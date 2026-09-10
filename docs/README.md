@@ -22,6 +22,8 @@ Spanish twins: `*.es.md` in the same folder.
 | [`operations/security-deps.md`](operations/security-deps.md) | Dependency audit notes |
 | [`operations/compatibility-matrix.md`](operations/compatibility-matrix.md) | Browser / OS matrix |
 | [`operations/beta-test-protocol.md`](operations/beta-test-protocol.md) | Beta UX scenario |
+| [`operations/qa-consulta-desodorantes-2026-09-10.md`](operations/qa-consulta-desodorantes-2026-09-10.md) | QA 10 sep 2026: chat wizard + gráfico de 1 barra |
+| [`operations/estado-superficies-2026-09-10.md`](operations/estado-superficies-2026-09-10.md) | Runtime: Lovable+FastAPI; Streamlit leftover; rol del LLM |
 
 ## Templates
 

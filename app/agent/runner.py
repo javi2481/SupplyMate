@@ -317,7 +317,7 @@ async def _run_explore(
 async def _run_disambiguation(message: str, resolution) -> ChatResponse:
     question = (
         f"No estoy seguro de a qué te referís con "
-        f"**«{resolution.resolved[0].user_text if resolution.resolved else 'eso'}»**."
+        f"«{resolution.resolved[0].user_text if resolution.resolved else 'eso'}»."
     )
     options = resolution.disambiguation_options
     answer = format_disambiguation_answer(question, options)

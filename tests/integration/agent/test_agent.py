@@ -187,7 +187,10 @@ async def test_run_supplymate_explore_jabones():
     assert response.scope is not None
     assert "Jabon de Tocador" in response.scope.categories
     assert response.group_summaries
-    assert "Entendí" in response.answer
+    assert "Entendí" not in response.answer
+    assert "**" not in response.answer
+    assert response.purchase_list
+    assert response.purchase_list[0].product_name in response.answer or "unidades a reponer" in response.answer
 
 
 @pytest.mark.asyncio

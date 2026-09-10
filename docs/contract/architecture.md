@@ -15,7 +15,7 @@ SupplyMate is a **replenishment assistant**, not a generic chat wrapper. User in
 | `ProductMaster` | Unified row for metrics and replenishment |
 | `calculate_replenishment()` | Operational qty truth |
 | LLM roles | Intent, explain, insight, commit (narration only) |
-| Streamlit | Consumer UI (not source of truth) |
+| Lovable frontend | Live consumer UI (not source of truth) |
 
 ```text
 CSV → CatalogStore → ProductMaster → calculate_replenishment → REST / CSV
@@ -54,7 +54,7 @@ Policy constants: `HORIZON_DAYS = 7`, `HISTORY_DAYS = 30`, policy name `order-up
 
 - **`GET /replenishment/slice`** — filtered SKU rows; same predicates as purchase-list CSV.
 - **`AnalyticalScope`** — category, supplier, health chips, coverage band; frozen when building a PO.
-- **Clicks in Streamlit Explore** — update scope in Python; **0 LLM calls** per filter click.
+- **Clicks in the Lovable Explore panel** — update scope via slice query params; **0 LLM calls** per filter click.
 
 [`app/services/scope/scope.py`](../app/services/scope/scope.py) sanitizes scope payloads. [`app/scope_builder.py`](../app/scope_builder.py) merges UI events into scope.
 
@@ -63,7 +63,8 @@ Policy constants: `HORIZON_DAYS = 7`, `HISTORY_DAYS = 30`, policy name `order-up
 | Surface | Port | Role |
 |---------|------|------|
 | FastAPI | 8000 | Runtime: `/chat`, `/replenishment/*`, `/products/*` |
-| Streamlit | 8501 | Chat + Explore + Build PO + AI Analyst |
+| Lovable frontend (`frontend/`) | 5173 | Live UI: chat + Explore + Build PO |
+| Streamlit (`ui/`) | 8501 | Leftover demo surface (not the product UI) |
 | Docker image | 8000 | API only (`COPY app`, `COPY data`; no Streamlit in image) |
 
 Key endpoints:
@@ -89,7 +90,8 @@ Layered layout — detail in [`app/README.md`](../../app/README.md) and [`tests/
 | `app/services/scoping/` | Scope mutations, panel modes, suggested filters |
 | `app/services/insight/` | Prompt compiler, validator, insight cache |
 | `app/middleware/` | Rate limit, safe errors, security headers |
-| `ui/` | Streamlit demo surface |
+| `ui/` | Streamlit leftover (optional demo) |
+| `frontend/` | Live Lovable / Vite UI |
 | `data/` | Resource CSVs (see [data-contract.md](data-contract.md)) |
 | `tests/` | Layered pytest + golden CSVs |
 | `docs/contract/` | Public architecture, evaluation, data contract |

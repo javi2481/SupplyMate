@@ -17,7 +17,7 @@ SupplyMate es un **asistente de reposición**, no un chat genérico. La entrada 
 | `ProductMaster` | Fila unificada para métricas y reposición |
 | `calculate_replenishment()` | Verdad operativa de qty |
 | Roles LLM | Intent, explain, insight, commit (solo narración) |
-| Streamlit | UI consumidora (no fuente de verdad) |
+| Frontend Lovable | UI consumidora viva (no fuente de verdad) |
 
 ```text
 CSV → CatalogStore → ProductMaster → calculate_replenishment → REST / CSV
@@ -56,7 +56,7 @@ Constantes de política: `HORIZON_DAYS = 7`, `HISTORY_DAYS = 30`, nombre `order-
 
 - **`GET /replenishment/slice`** — filas SKU filtradas; mismos predicados que el CSV de compra.
 - **`AnalyticalScope`** — categoría, proveedor, chips de salud, banda de cobertura; congelado al armar OC.
-- **Clicks en Streamlit Explorar** — actualizan scope en Python; **0 llamadas LLM** por click de filtro.
+- **Clicks en el panel Explorar Lovable** — actualizan scope vía query params del slice; **0 llamadas LLM** por click de filtro.
 
 [`app/services/scope/scope.py`](../app/services/scope/scope.py) sanitiza payloads de scope. [`app/scope_builder.py`](../app/scope_builder.py) fusiona eventos UI en scope.
 
@@ -65,7 +65,8 @@ Constantes de política: `HORIZON_DAYS = 7`, `HISTORY_DAYS = 30`, nombre `order-
 | Superficie | Puerto | Rol |
 |------------|--------|-----|
 | FastAPI | 8000 | Runtime: `/chat`, `/replenishment/*`, `/products/*` |
-| Streamlit | 8501 | Chat + Explorar + Armar OC + Analista IA |
+| Frontend Lovable (`frontend/`) | 5173 | UI viva: chat + Explorar + Armar OC |
+| Streamlit (`ui/`) | 8501 | Leftover de demo (no es la UI de producto) |
 | Imagen Docker | 8000 | Solo API (`COPY app`, `COPY data`; Streamlit fuera de imagen) |
 
 Endpoints clave:
@@ -91,7 +92,8 @@ Layout por capas — detalle en [`app/README.md`](../../app/README.md) y [`tests
 | `app/services/scoping/` | Mutaciones de scope, panel modes, filtros sugeridos |
 | `app/services/insight/` | Prompt compiler, validator, cache de insight |
 | `app/middleware/` | Rate limit, safe errors, security headers |
-| `ui/` | Superficie demo Streamlit |
+| `ui/` | Leftover Streamlit (demo opcional) |
+| `frontend/` | UI viva Lovable / Vite |
 | `data/` | CSVs por recurso (ver [data-contract.es.md](data-contract.es.md)) |
 | `tests/` | pytest por capas + goldens CSV |
 | `docs/contract/` | Arquitectura, evaluación, contrato de datos |

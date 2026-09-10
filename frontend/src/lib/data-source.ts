@@ -23,6 +23,12 @@ export function chartUnitsByCategory(
   return bars.filter((item) => item.units > 0).sort((a, b) => b.units - a.units);
 }
 
+/** Axis label: full name when few bars; truncate when the chart is crowded. */
+export function chartTickLabel(name: string, barCount: number, maxLen = 13): string {
+  if (barCount <= 2 || name.length <= maxLen) return name;
+  return `${name.slice(0, maxLen)}…`;
+}
+
 export function kpisFromDashboard(
   dashboard: InventoryDashboard | null,
   listUnits: number,

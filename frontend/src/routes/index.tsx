@@ -41,6 +41,7 @@ import { categoryColor } from "@/lib/chart-colors";
 import {
   COPY_CATEGORIES_LOAD_FAILED,
   categoryNamesForUi,
+  chartTickLabel,
   chartUnitsByCategory,
   csvExportLimit,
   dataSourceLabel,
@@ -509,7 +510,9 @@ function Index() {
                   <div className="border-y border-ops-border bg-ops-panel px-4 py-4 lg:px-5">
                     <div className="mb-3 flex items-center justify-between gap-2">
                       <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Unidades a reponer por categoría</div>
-                      <div className="text-[11px] text-muted-foreground">Tocá una barra para ver esa categoría</div>
+                      {chartData.length > 1 && (
+                        <div className="text-[11px] text-muted-foreground">Tocá una barra para ver esa categoría</div>
+                      )}
                     </div>
                     {api.error && chartData.length === 0 ? (
                       <p className="py-6 text-center text-xs text-muted-foreground">{COPY_CATEGORIES_LOAD_FAILED}</p>
@@ -520,14 +523,36 @@ function Index() {
                     ) : (
                       <div className="h-[210px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={chartData} margin={{ top: 24, right: 8, bottom: 28, left: 0 }}>
+                          <BarChart data={chartData} margin={{ top: 40, right: 8, bottom: 28, left: 0 }}>
                             <CartesianGrid stroke="var(--ops-border)" vertical={false} />
-                            <XAxis dataKey="category" tick={{ fill: "var(--muted-foreground)", fontSize: 10 }} tickLine={false} axisLine={{ stroke: "var(--ops-border)" }} interval={0} tickFormatter={(value: string) => (value.length > 14 ? `${value.slice(0, 13)}…` : value)} />
+                            <XAxis
+                              dataKey="category"
+                              tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+                              tickLine={false}
+                              axisLine={{ stroke: "var(--ops-border)" }}
+                              interval={0}
+                              tickFormatter={(value: string) => chartTickLabel(value, chartData.length)}
+                            />
                             <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickLine={false} axisLine={false} width={44} />
                             <Tooltip cursor={{ fill: "var(--ops-row)" }} contentStyle={{ background: "var(--ops-panel)", border: "1px solid var(--ops-border)", borderRadius: 8, fontSize: 12, color: "var(--foreground)" }} formatter={(item: number) => [nf.format(item), "Unidades"]} />
-                            <Bar dataKey="units" radius={[4, 4, 0, 0]} cursor="pointer" isAnimationActive={false} onClick={(bar: { category?: string }) => bar.category && pushSlice((previous) => ({ ...previous, cats: [bar.category as string] }))}>
+                            <Bar
+                              dataKey="units"
+                              maxBarSize={64}
+                              radius={[4, 4, 0, 0]}
+                              cursor="pointer"
+                              isAnimationActive={false}
+                              onClick={(bar: { category?: string }) => bar.category && pushSlice((previous) => ({ ...previous, cats: [bar.category as string] }))}
+                            >
                               {chartData.map((item) => <Cell key={item.category} fill={categoryColor(item.category)} stroke={slice.cats.includes(item.category) ? "var(--foreground)" : "transparent"} strokeWidth={slice.cats.includes(item.category) ? 2 : 0} fillOpacity={slice.cats.length === 0 || slice.cats.includes(item.category) ? 1 : 0.45} />)}
-                              <LabelList dataKey="units" position="top" formatter={(value: number) => `${nf.format(value)} ud`} fill="var(--foreground)" fontSize={11} fontWeight={600} />
+                              <LabelList
+                                dataKey="units"
+                                position="top"
+                                offset={8}
+                                formatter={(value: number) => `${nf.format(value)} ud`}
+                                fill="var(--foreground)"
+                                fontSize={11}
+                                fontWeight={600}
+                              />
                             </Bar>
                           </BarChart>
                         </ResponsiveContainer>

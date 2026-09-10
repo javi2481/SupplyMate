@@ -296,7 +296,11 @@ def test_chat_explore_jabones():
     assert "Jabon de Tocador" in body["scope"]["categories"]
     assert body["purchase_list"]
     assert body["group_summaries"]
-    assert "Entendí" in body["answer"]
+    assert "Entendí" not in body["answer"]
+    assert "**" not in body["answer"]
+    assert body["purchase_list"]
+    top = body["purchase_list"][0]["product_name"]
+    assert top in body["answer"] or "unidades a reponer" in body["answer"]
 
 
 def test_chat_explore_jabones_and_shampoo():

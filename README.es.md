@@ -55,7 +55,7 @@ User
 | 3 tools + [`app/core/replenishment.py`](app/core/replenishment.py) | Inventario / ventas / params; qty en Python |
 | Roles LLM | Intent, explainer de SKU, insight (Explorar), commit (Armar OC) |
 | REST | search, replenishment, `/chat`, `/slice`, `/analyze`, dashboard, CSV |
-| Streamlit | Chat + **Explorar** / **Armar OC** + Analista IA |
+| Frontend Lovable (`frontend/`) | UI viva: chat + **Explorar** / **Armar OC** |
 
 ### Política de reposición (honesta)
 
@@ -88,8 +88,9 @@ Detalle: [`docs/contract/architecture.es.md`](docs/contract/architecture.es.md)
 | Listo al clonar | Opcional |
 |-----------------|----------|
 | CSVs en [`data/`](data/) | `GROQ_API_KEY` en `.env` |
-| Tests pytest | Streamlit |
+| Tests pytest | Streamlit leftover (`ui/`) |
 | FastAPI + agente + fórmula | OpenAI pago |
+| Frontend Vite (`frontend/`) | |
 
 ## Inicio rápido
 
@@ -109,10 +110,12 @@ uvicorn app.api:app --reload --host 127.0.0.1 --port 8000
 En otra terminal:
 
 ```bash
-streamlit run ui/streamlit_app.py
+cd frontend
+npm install
+npm run dev
 ```
 
-Abrí http://localhost:8501.
+Abrí http://127.0.0.1:5173 (o el puerto que imprima Vite). Copiá `frontend/.env.example` a `frontend/.env` para que `VITE_SUPPLYMATE_API_URL` apunte a `:8000`.
 
 Smoke de API (con uvicorn en :8000):
 
@@ -127,7 +130,7 @@ Smoke de API (con uvicorn en :8000):
 3. Mirá el cálculo (Python, no el LLM) — *Hechos calculados por Python*
 4. **Listo — armar OC** → exportá el CSV de ese recorte
 
-Clicks, filtros y CSV = **0 llamadas al LLM**. El modelo entra en la pregunta libre, el insight del recorte y el resumen de OC.
+Clicks, filtros y CSV = **0 llamadas al LLM**. El modelo entra en la pregunta libre y la explicación de un SKU.
 
 SKU demo: `6033436`. Vocabulario: Riesgo de quiebre, Falta de stock, Sobrestock, Cobertura, Cantidad recomendada.
 
@@ -190,14 +193,18 @@ curl -s -X POST http://127.0.0.1:8000/chat \
 | 3 tools de inventario + roles LLM acotados | RAG, embeddings, vector DB |
 | Cálculo determinístico order-up-to | Forecasting / ML / EOQ |
 | Catálogo CSV | Postgres app DB / dbt / Airflow / Superset |
-| Streamlit Explorar / Armar OC + Analista IA | Frontend React / BI aparte obligatorio |
+| Frontend Lovable Explorar / Armar OC | BI aparte obligatorio |
 | Export CSV OC (scope congelado en Agent) | Multi-agent swarm / LangChain |
-| `/replenishment/analyze` (LLM interpreta, Python calcula) | LLM calcula qty o filtra filas |
+| `/replenishment/analyze` (LLM interpreta, Python calcula; leftover Streamlit) | LLM calcula qty o filtra filas |
 | Evals de insight + golden intents (CI sin Groq live) | LangSmith / OpenTelemetry |
 
-## UI Streamlit opcional
+## UI viva (frontend Lovable)
 
-Chat + **Explorar** / **Armar OC** en http://localhost:8501. La API en `:8000` es el runtime; Streamlit es la superficie de demo.
+Chat + **Explorar** / **Armar OC** en http://127.0.0.1:5173 contra la API en `:8000`. Ver [`frontend/README.md`](frontend/README.md).
+
+### Leftover Streamlit (opcional)
+
+`ui/streamlit_app.py` sigue en el repo para demos viejas (`streamlit run ui/streamlit_app.py` → :8501). **No** es la UI de producto.
 
 Docker (solo API):
 

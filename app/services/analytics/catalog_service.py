@@ -198,8 +198,8 @@ def format_dashboard_answer(
         f"{snap.avg_coverage:.1f} días" if snap.avg_coverage is not None else "—"
     )
     return (
-        f"**{snap.stockout_risk}** productos en riesgo de quiebre · "
-        f"**{len(items)} productos** para reponer. "
+        f"{snap.stockout_risk} productos en riesgo de quiebre · "
+        f"{len(items)} productos para reponer. "
         f"Cobertura promedio: {coverage}."
     )
 
@@ -207,10 +207,10 @@ def format_dashboard_answer(
 def format_sales_answer(snap: InventoryDashboard) -> str:
     if not snap.by_sales:
         return "No hay ventas registradas en los últimos 30 días para armar un ranking de categorías."
-    lines = ["Estas son las **categorías más vendidas** (unidades, últimos 30 días):\n"]
+    lines = ["Estas son las categorías más vendidas (unidades, últimos 30 días):\n"]
     for i, row in enumerate(snap.by_sales[:8], 1):
         lines.append(
-            f"{i}. **{row.category}** — **{row.units_sold}** unidades ({row.sku_count} productos)"
+            f"{i}. {row.category} — {row.units_sold} unidades ({row.sku_count} productos)"
         )
     return "\n".join(lines)
 
@@ -222,11 +222,11 @@ def format_purchase_list_answer(items: list[ReplenishmentRecommendation]) -> str
             "no hay productos que requieran reposición para cubrir los próximos 7 días."
         )
     lines = [
-        f"Estos son los **{len(items)} productos** con mayor necesidad de reposición:\n"
+        f"Estos son los {len(items)} productos con mayor necesidad de reposición:\n"
     ]
     for i, rec in enumerate(items, 1):
         lines.append(
-            f"{i}. **{rec.product_name}** — pedir **{rec.recommended_quantity}** unidades"
+            f"{i}. {rec.product_name} — pedir {rec.recommended_quantity} unidades"
         )
     lines.append(
         "\nLas cantidades las calculó el sistema según ventas, stock, lead time y stock de seguridad."
@@ -238,8 +238,8 @@ def format_single_product_answer(rec: ReplenishmentRecommendation) -> str:
     """Deterministic SKU explanation when the LLM narration fails validation."""
     calc = rec.calculation
     return (
-        f"Para **{rec.product_name}** (`{rec.product_id}`) la cantidad recomendada es "
-        f"**{rec.recommended_quantity}** unidades.\n\n"
+        f"Para {rec.product_name} ({rec.product_id}) la cantidad recomendada es "
+        f"{rec.recommended_quantity} unidades.\n\n"
         f"Política order-up-to: demanda 7 días ({calc.demand_horizon:.1f}) + "
         f"demanda en lead time ({calc.demand_lead_time:.1f}) + stock de seguridad "
         f"({calc.safety_stock}) − stock actual ({calc.current_stock}), "
