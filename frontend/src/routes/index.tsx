@@ -60,8 +60,11 @@ import {
   kpisFromDashboard,
   tableScopeCaption,
 } from "@/lib/data-source";
+import { toggleBuyOnly, toggleHealthTag } from "@/lib/kpi-actions";
 import { calcFromApiRow } from "@/lib/ops-row";
+import { filterChipsCoveredByCharts } from "@/lib/nextStepChips";
 import { COVERAGE_ORDER, sliceToScopeQuery, type UiSlice } from "@/lib/scope";
+import { sliceLabels } from "@/lib/scope-label";
 import {
   HEALTH_FILTERS,
   HEALTH_LABEL,
@@ -123,19 +126,6 @@ const healthIcon: Record<HealthTag, typeof AlertTriangle> = {
 
 function visibleHealth(row: Calc): HealthTag[] {
   return row.health.filter((tag) => HEALTH_FILTERS.includes(tag));
-}
-
-function sliceLabels(slice: UiSlice, horizonDays = HORIZON_DAYS): string[] {
-  const labels: string[] = [];
-  if (slice.buyOnly) labels.push("A comprar");
-  if (horizonDays !== HORIZON_DAYS) labels.push(`Horizonte ${horizonDays} días`);
-  labels.push(...slice.cats);
-  labels.push(...(slice.suppliers ?? []));
-  labels.push(...slice.health.map((tag) => HEALTH_LABEL[tag]));
-  if (slice.coverage) {
-    labels.push(`Cobertura ${slice.coverage}`);
-  }
-  return labels;
 }
 
 function applyClientFilters(rows: Calc[], slice: UiSlice): Calc[] {
@@ -200,11 +190,6 @@ function Index() {
   );
   const labels = sliceLabels(slice, horizonDays);
 
-  const nextStepChips = useMemo(
-    () => (api.suggestedFilters ?? []).slice(0, 6),
-    [api.suggestedFilters],
-  );
-
   function toggleList<T>(list: T[], item: T): T[] {
     return list.includes(item) ? list.filter((value) => value !== item) : [...list, item];
   }
@@ -216,10 +201,7 @@ function Index() {
   }
 
   function toggleHealth(tag: "riesgo_quiebre" | "sin_stock" | "sobrestock") {
-    mutateSlice((previous) => {
-      const health = toggleList(previous.health, tag);
-      return { ...previous, health, outOfStockOnly: health.includes("sin_stock") };
-    });
+    mutateSlice((previous) => toggleHealthTag(previous, tag));
   }
 
   const listUnits = rows.reduce((sum, row) => sum + row.recommended_quantity, 0);
@@ -236,7 +218,7 @@ function Index() {
       detail: slice.buyOnly ? "a reponer" : "en este recorte",
       icon: Box,
       active: slice.buyOnly,
-      onClick: () => mutateSlice((previous) => ({ ...previous, buyOnly: !previous.buyOnly })),
+      onClick: () => mutateSlice((previous) => toggleBuyOnly(previous)),
     },
     {
       label: "Riesgo de quiebre",
@@ -262,7 +244,7 @@ function Index() {
       detail: `para ${horizonDays} días`,
       icon: PackageCheck,
       active: slice.buyOnly,
-      onClick: () => mutateSlice((previous) => ({ ...previous, buyOnly: !previous.buyOnly })),
+      onClick: () => mutateSlice((previous) => toggleBuyOnly(previous)),
     },
   ];
 
@@ -291,6 +273,12 @@ function Index() {
   );
   const chartMode = useMemo(() => chartBarMode(dash, chartHints), [dash, chartHints]);
   const chartKey = `${chartMode}:${chartData.map((b) => `${b.productId ?? b.category}:${b.units}`).join("|")}`;
+
+  const nextStepChips = useMemo(
+    () =>
+      filterChipsCoveredByCharts((api.suggestedFilters ?? []).slice(0, 6), chartMode),
+    [api.suggestedFilters, chartMode],
+  );
 
   const poRows = useMemo(() => {
     const scope: UiSlice = { ...(frozen ?? slice), buyOnly: true };

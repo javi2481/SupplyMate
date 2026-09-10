@@ -2,6 +2,8 @@
 
 import { coverageBandFromDays, COVERAGE_ORDER, type CoverageBand, type HealthTag } from "@/lib/scope";
 import type { Calc } from "@/lib/supplymate";
+import type { SuggestedChip } from "@/lib/applySuggestedFilter";
+import type { ChartBarMode } from "@/lib/data-source";
 
 export type ChipSlice = {
   cats: string[];
@@ -10,13 +12,26 @@ export type ChipSlice = {
   suppliers: string[];
 };
 
-export type SuggestedChip = {
-  action: string;
-  args: Record<string, string>;
-  label: string;
-};
+export type { SuggestedChip };
 
 const MAX_CHIPS = 6;
+
+/**
+ * Drop category/coverage chips when the Explore chart already answers that dimension.
+ * Keep action chips (draft_oc, open_sku, health, supplier, …).
+ */
+export function filterChipsCoveredByCharts(
+  chips: SuggestedChip[],
+  chartMode: ChartBarMode,
+): SuggestedChip[] {
+  const hasCategoryChart = chartMode === "category" || chartMode === "subcategory";
+  const hasCoverageChart = chartMode === "category" || chartMode === "subcategory";
+  return chips.filter((chip) => {
+    if (chip.action === "filter_category" && hasCategoryChart) return false;
+    if (chip.action === "filter_coverage" && hasCoverageChart) return false;
+    return true;
+  });
+}
 
 function unionPush(list: SuggestedChip[], chip: SuggestedChip | null): void {
   if (!chip) return;

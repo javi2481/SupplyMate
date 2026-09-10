@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Calc, Sku } from "@/lib/supplymate";
-import { mockNextStepChips, type ChipSlice } from "@/lib/nextStepChips";
+import { filterChipsCoveredByCharts, mockNextStepChips, type ChipSlice } from "@/lib/nextStepChips";
 
 const EMPTY: ChipSlice = { cats: [], health: [], coverage: null, suppliers: [] };
 
@@ -92,5 +92,28 @@ describe("mockNextStepChips", () => {
     if (skuChip) {
       expect(skuChip.args.product_id).toBe("1");
     }
+  });
+});
+
+describe("filterChipsCoveredByCharts", () => {
+  const chips = [
+    { action: "filter_category", args: { category: "Cabello" }, label: "Cabello" },
+    { action: "filter_coverage", args: { coverage_bucket: "0–3 días" }, label: "0–3" },
+    { action: "filter_health", args: { health_bucket: "stockout_risk" }, label: "Riesgo" },
+    { action: "draft_oc", args: {}, label: "Armar OC" },
+  ];
+
+  it("drops category and coverage when chart is taxonomy-shaped", () => {
+    const kept = filterChipsCoveredByCharts(chips, "category");
+    expect(kept.map((c) => c.action)).toEqual(["filter_health", "draft_oc"]);
+  });
+
+  it("keeps all chips when chart is top SKUs", () => {
+    expect(filterChipsCoveredByCharts(chips, "sku").map((c) => c.action)).toEqual([
+      "filter_category",
+      "filter_coverage",
+      "filter_health",
+      "draft_oc",
+    ]);
   });
 });
