@@ -2,11 +2,11 @@ schema: spec-driven
 
 context: |
   Project: SupplyMate — AI replenishment advisor for SME distributors.
-  Stack: Python 3.12, FastAPI, Pydantic, openai-agents, CSV, pytest, Streamlit.
+  Stack: Python 3.12, FastAPI, Pydantic, openai-agents, CSV, pytest, Vite/React (Lovable frontend).
   Architecture: LLM orchestrates tools; deterministic Python calculates order qty.
-  Product: one Streamlit chat — “¿Cuánto pedir?” and “¿Qué está pasando?” in the same reply
-  (KPIs + lollipop/histogram + purchase table). Shared metrics vocabulary. No Superset/DuckDB.
-  Out of scope: RAG, embeddings, LangChain, multi-agent swarm, React frontend, Postgres/dbt/Airflow, K8s, Apache Superset.
+  Product: FastAPI + Lovable Explore/Build PO UI (chat + slice dashboard + purchase CSV).
+  Shared metrics vocabulary. No Superset/DuckDB. Streamlit is retired (not a product surface).
+  Out of scope: RAG, embeddings, LangChain, multi-agent swarm, Postgres/dbt/Airflow, K8s, Apache Superset.
 
 strict_tdd: true
 
@@ -28,7 +28,7 @@ rules:
     - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
   design:
     - LLM must not invent critical numbers; quantity from Python only
-    - Chart type follows data-to-viz: ranking → lollipop; numeric distribution → histogram
+    - Chart granularity follows recorte shape (category → subcategory → top SKUs), not hardcoded rubros
   tasks:
     - Order tasks for Strict TDD
     - Group by phase, hierarchical numbering

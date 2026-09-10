@@ -44,7 +44,7 @@ API de reposición inteligente para operación comercial.
 - **Reposición** — slice, dashboard, lista de compra y análisis
 - **Catálogo** — búsqueda de productos y cálculo por SKU
 
-UI de demo: `streamlit run ui/streamlit_app.py`
+UI viva: frontend Vite/Lovable (`frontend/`, típicamente http://127.0.0.1:8080).
 """.strip()
 
 OPENAPI_TAGS = [
