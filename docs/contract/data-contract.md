@@ -37,7 +37,7 @@ Source (local, not shipped in git): `docs/perfumeria_enriched.xlsx` (~13,125 SKU
 
 ## Runtime
 
-- [`app/store.py`](../app/store.py) loads CSVs at startup (in-memory cache).
+- [`app/catalog/store.py`](../../app/catalog/store.py) loads CSVs at startup (in-memory cache).
 - [`app/services/analytics/catalog_service.py`](../app/services/analytics/catalog_service.py) exposes unified row (`ProductMaster`) and deterministic recommendation.
 - Fields min/max/reorder_point and prices are **context**; order quantity uses the 7-day formula in [`app/core/replenishment.py`](../app/core/replenishment.py).
 

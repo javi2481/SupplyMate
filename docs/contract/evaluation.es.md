@@ -63,7 +63,7 @@ Layout: [`tests/README.md`](../tests/README.md).
 
 ## Evals de insight y analyze
 
-- [`app/services/insight_validator.py`](../app/services/insight_validator.py) — rechaza enteros huérfanos, SKUs desconocidos, prioridades inválidas
+- [`app/services/insight/insight_validator.py`](../../app/services/insight/insight_validator.py) — rechaza enteros huérfanos, SKUs desconocidos, prioridades inválidas
 - [`tests/unit/insight_validator/test_insight_validator.py`](../tests/unit/insight_validator/test_insight_validator.py) — checks de schema y hechos
 - [`tests/integration/api/test_analyze_api.py`](../tests/integration/api/test_analyze_api.py) — contrato `/replenishment/analyze`
 

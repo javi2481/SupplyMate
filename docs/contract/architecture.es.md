@@ -13,7 +13,7 @@ SupplyMate es un **asistente de reposición**, no un chat genérico. La entrada 
 | Artefacto | Rol |
 |-----------|-----|
 | CSVs en `data/` | Evidencia primaria del catálogo |
-| `app/store.py` | Carga in-memory + `CatalogStore` |
+| `app/catalog/store.py` | Carga in-memory + `CatalogStore` |
 | `ProductMaster` | Fila unificada para métricas y reposición |
 | `calculate_replenishment()` | Verdad operativa de qty |
 | Roles LLM | Intent, explain, insight, commit (solo narración) |
@@ -58,7 +58,7 @@ Constantes de política: `HORIZON_DAYS = 7`, `HISTORY_DAYS = 30`, nombre `order-
 - **`AnalyticalScope`** — categoría, proveedor, chips de salud, banda de cobertura; congelado al armar OC.
 - **Clicks en el panel Explorar Lovable** — actualizan scope vía query params del slice; **0 llamadas LLM** por click de filtro.
 
-[`app/services/scope/scope.py`](../app/services/scope/scope.py) sanitiza payloads de scope. [`app/scope_builder.py`](../app/scope_builder.py) fusiona eventos UI en scope.
+[`app/services/scoping/scope_sanitize.py`](../../app/services/scoping/scope_sanitize.py) sanitiza payloads de scope. [`app/pipeline/scope_builder.py`](../../app/pipeline/scope_builder.py) fusiona eventos UI en scope.
 
 ## Superficies
 

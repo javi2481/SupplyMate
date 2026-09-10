@@ -63,7 +63,7 @@ Layout overview: [`tests/README.md`](../tests/README.md).
 
 ## Insight and analyze evals
 
-- [`app/services/insight_validator.py`](../app/services/insight_validator.py) — rejects orphan integers, unknown SKUs, invalid priorities
+- [`app/services/insight/insight_validator.py`](../../app/services/insight/insight_validator.py) — rejects orphan integers, unknown SKUs, invalid priorities
 - [`tests/unit/insight_validator/test_insight_validator.py`](../tests/unit/insight_validator/test_insight_validator.py) — schema and fact checks
 - [`tests/integration/api/test_analyze_api.py`](../tests/integration/api/test_analyze_api.py) — `/replenishment/analyze` contract
 

@@ -49,7 +49,7 @@ User
 | Piece | Role |
 |-------|------|
 | CSVs in [`data/`](data/) | Simulated catalog (~13k SKUs) |
-| [`app/services/metrics.py`](app/services/metrics.py) | Metric contracts + coverage + health + priority |
+| [`app/services/analytics/metrics.py`](app/services/analytics/metrics.py) | Metric contracts + coverage + health + priority |
 | 3 tools + [`app/core/replenishment.py`](app/core/replenishment.py) | Inventory / sales / params; qty in Python |
 | LLM roles | Intent, SKU explainer, insight (Explore), commit (Build PO) |
 | REST | search, replenishment, `/chat`, `/slice`, `/analyze`, dashboard, CSV |

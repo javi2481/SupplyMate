@@ -11,7 +11,7 @@ SupplyMate is a **replenishment assistant**, not a generic chat wrapper. User in
 | Artifact | Role |
 |----------|------|
 | CSVs in `data/` | Primary catalog evidence |
-| `app/store.py` | In-memory load + `CatalogStore` |
+| `app/catalog/store.py` | In-memory load + `CatalogStore` |
 | `ProductMaster` | Unified row for metrics and replenishment |
 | `calculate_replenishment()` | Operational qty truth |
 | LLM roles | Intent, explain, insight, commit (narration only) |
@@ -56,7 +56,7 @@ Policy constants: `HORIZON_DAYS = 7`, `HISTORY_DAYS = 30`, policy name `order-up
 - **`AnalyticalScope`** — category, supplier, health chips, coverage band; frozen when building a PO.
 - **Clicks in the Lovable Explore panel** — update scope via slice query params; **0 LLM calls** per filter click.
 
-[`app/services/scope/scope.py`](../app/services/scope/scope.py) sanitizes scope payloads. [`app/scope_builder.py`](../app/scope_builder.py) merges UI events into scope.
+[`app/services/scoping/scope_sanitize.py`](../../app/services/scoping/scope_sanitize.py) sanitizes scope payloads. [`app/pipeline/scope_builder.py`](../../app/pipeline/scope_builder.py) merges UI events into scope.
 
 ## Surfaces
 
