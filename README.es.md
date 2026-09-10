@@ -88,8 +88,8 @@ Detalle: [`docs/contract/architecture.es.md`](docs/contract/architecture.es.md)
 | Listo al clonar | Opcional |
 |-----------------|----------|
 | CSVs en [`data/`](data/) | `GROQ_API_KEY` en `.env` |
-| Tests pytest | Streamlit leftover (`ui/`) |
-| FastAPI + agente + fórmula | OpenAI pago |
+| Tests pytest | OpenAI pago |
+| FastAPI + agente + fórmula | |
 | Frontend Vite (`frontend/`) | |
 
 ## Inicio rápido
@@ -195,16 +195,12 @@ curl -s -X POST http://127.0.0.1:8000/chat \
 | Catálogo CSV | Postgres app DB / dbt / Airflow / Superset |
 | Frontend Lovable Explorar / Armar OC | BI aparte obligatorio |
 | Export CSV OC (scope congelado en Agent) | Multi-agent swarm / LangChain |
-| `/replenishment/analyze` (LLM interpreta, Python calcula; leftover Streamlit) | LLM calcula qty o filtra filas |
+| `/replenishment/analyze` (LLM interpreta, Python calcula; API de insight opcional) | LLM calcula qty o filtra filas |
 | Evals de insight + golden intents (CI sin Groq live) | LangSmith / OpenTelemetry |
 
 ## UI viva (frontend Lovable)
 
-Chat + **Explorar** / **Armar OC** en http://127.0.0.1:5173 contra la API en `:8000`. Ver [`frontend/README.md`](frontend/README.md).
-
-### Leftover Streamlit (opcional)
-
-`ui/streamlit_app.py` sigue en el repo para demos viejas (`streamlit run ui/streamlit_app.py` → :8501). **No** es la UI de producto.
+Chat + **Explorar** / **Armar OC** en http://127.0.0.1:8080 contra la API en `:8000`. Ver [`frontend/README.md`](frontend/README.md).
 
 Docker (solo API):
 

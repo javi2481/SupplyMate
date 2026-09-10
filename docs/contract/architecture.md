@@ -63,9 +63,8 @@ Policy constants: `HORIZON_DAYS = 7`, `HISTORY_DAYS = 30`, policy name `order-up
 | Surface | Port | Role |
 |---------|------|------|
 | FastAPI | 8000 | Runtime: `/chat`, `/replenishment/*`, `/products/*` |
-| Lovable frontend (`frontend/`) | 5173 | Live UI: chat + Explore + Build PO |
-| Streamlit (`ui/`) | 8501 | Leftover demo surface (not the product UI) |
-| Docker image | 8000 | API only (`COPY app`, `COPY data`; no Streamlit in image) |
+| Lovable frontend (`frontend/`) | 8080 | Live UI: chat + Explore + Build PO |
+| Docker image | 8000 | API only (`COPY app`, `COPY data`) |
 
 Key endpoints:
 
@@ -90,7 +89,6 @@ Layered layout — detail in [`app/README.md`](../../app/README.md) and [`tests/
 | `app/services/scoping/` | Scope mutations, panel modes, suggested filters |
 | `app/services/insight/` | Prompt compiler, validator, insight cache |
 | `app/middleware/` | Rate limit, safe errors, security headers |
-| `ui/` | Streamlit leftover (optional demo) |
 | `frontend/` | Live Lovable / Vite UI |
 | `data/` | Resource CSVs (see [data-contract.md](data-contract.md)) |
 | `tests/` | Layered pytest + golden CSVs |

@@ -1,4 +1,4 @@
-"""Inventory dashboard for the Streamlit chat — same metrics as Python replenishment."""
+"""Inventory dashboard KPIs — same metrics as Python replenishment."""
 
 from __future__ import annotations
 

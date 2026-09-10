@@ -12,7 +12,7 @@ Operador de distribución / compras (conoce categorías y OC).
 
 ## Escenario narrativo
 
-> Sos el responsable de compras. Abrís SupplyMate en http://localhost:8501. Querés saber qué comprar esta semana, recortar por categoría problemática, refinar por cobertura, exportar la OC de ese recorte y revisar un SKU puntual.
+> Sos el responsable de compras. Abrís SupplyMate en http://localhost:8080. Querés saber qué comprar esta semana, recortar por categoría problemática, refinar por cobertura, exportar la OC de ese recorte y revisar un SKU puntual.
 
 ### Pasos
 

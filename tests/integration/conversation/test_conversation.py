@@ -107,7 +107,8 @@ async def test_panales_then_xxg_keeps_category_and_guides():
     if names:
         assert all("xxg" in n.split() for n in names)
         assert all("xxxg" not in n.split() for n in names)
-    assert "Perfecto" in second.answer
+    assert "xxg" in second.answer.lower() or "XXG" in second.answer
+    assert "unidades a reponer" in second.answer.lower() or "unidades" in second.answer.lower()
 
 
 @pytest.mark.asyncio

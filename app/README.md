@@ -52,7 +52,7 @@ app/
 
 | Layer | Owns | Must not |
 |-------|------|----------|
-| **core** | qty formula, shared models | Call LLM or Streamlit |
+| **core** | qty formula, shared models | Call LLM |
 | **catalog** | Load CSV, resolve SKU/name | Filter slices or narrate |
 | **pipeline** | Parse user text → scope | Compute replenishment qty |
 | **guidance** | Chips, missions, next question | Change catalog evidence |

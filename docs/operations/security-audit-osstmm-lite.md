@@ -1,6 +1,6 @@
 # Auditoría OSSTMM lite — Sección C (Internet)
 
-Aplicación: SupplyMate API + Streamlit local.
+Aplicación: SupplyMate API + frontend Vite local.
 
 ## C — Seguridad en tecnologías de Internet
 

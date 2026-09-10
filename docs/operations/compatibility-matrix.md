@@ -2,7 +2,7 @@
 
 SupplyMate MVP — entorno objetivo de prueba manual.
 
-## Navegador × SO (Streamlit :8501)
+## Navegador × SO (Vite UI :8080)
 
 | | Windows 10/11 | macOS 14+ | Ubuntu 22.04+ |
 |---|:---:|:---:|:---:|
@@ -15,7 +15,7 @@ SupplyMate MVP — entorno objetivo de prueba manual.
 | Cliente | Soportado |
 |---------|-----------|
 | curl / httpx | Sí |
-| Streamlit → FastAPI local | Sí |
+| Vite frontend → FastAPI local | Sí |
 | Docker Linux container | Sí (CI smoke) |
 
 ## No probado formalmente
@@ -26,4 +26,4 @@ SupplyMate MVP — entorno objetivo de prueba manual.
 
 ## Regresión manual sugerida
 
-Tras cambios en `ui/streamlit_app.py` o `ui/charts.py`, verificar UX-01 … UX-07 en [`docs/operations/beta-test-protocol.md`](beta-test-protocol.md).
+Tras cambios en `frontend/src/routes/index.tsx` o libs de scope/chart, verificar el flujo Explorar / Armar OC en [`docs/operations/beta-test-protocol.md`](beta-test-protocol.md).

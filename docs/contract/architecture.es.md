@@ -65,9 +65,8 @@ Constantes de política: `HORIZON_DAYS = 7`, `HISTORY_DAYS = 30`, nombre `order-
 | Superficie | Puerto | Rol |
 |------------|--------|-----|
 | FastAPI | 8000 | Runtime: `/chat`, `/replenishment/*`, `/products/*` |
-| Frontend Lovable (`frontend/`) | 5173 | UI viva: chat + Explorar + Armar OC |
-| Streamlit (`ui/`) | 8501 | Leftover de demo (no es la UI de producto) |
-| Imagen Docker | 8000 | Solo API (`COPY app`, `COPY data`; Streamlit fuera de imagen) |
+| Frontend Lovable (`frontend/`) | 8080 | UI viva: chat + Explorar + Armar OC |
+| Imagen Docker | 8000 | Solo API (`COPY app`, `COPY data`) |
 
 Endpoints clave:
 
@@ -92,7 +91,6 @@ Layout por capas — detalle en [`app/README.md`](../../app/README.md) y [`tests
 | `app/services/scoping/` | Mutaciones de scope, panel modes, filtros sugeridos |
 | `app/services/insight/` | Prompt compiler, validator, cache de insight |
 | `app/middleware/` | Rate limit, safe errors, security headers |
-| `ui/` | Leftover Streamlit (demo opcional) |
 | `frontend/` | UI viva Lovable / Vite |
 | `data/` | CSVs por recurso (ver [data-contract.es.md](data-contract.es.md)) |
 | `tests/` | pytest por capas + goldens CSV |

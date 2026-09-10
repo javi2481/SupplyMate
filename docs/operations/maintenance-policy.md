@@ -8,13 +8,13 @@ Basado en las Leyes de Lehman (Cap. III, Celi-Párraga et al., 2023).
 |------|------------------------|
 | **Correctivo** | Bug en CSV, regresión en scope |
 | **Adaptativo** | Nuevo proveedor LLM, Python 3.x |
-| **Perfectivo** | Refactor Streamlit sin cambiar UX |
+| **Perfectivo** | Refactor Explore (Vite) sin cambiar UX |
 
 ## Mantenimiento preventivo (Ley #2)
 
 Cada **3 changes SDD** completados, dedicar un mini-sprint **sin features nuevas**:
 
-- Refactor de módulos con deuda (p. ej. `ui/streamlit_app.py`)
+- Refactor de módulos con deuda (p. ej. `frontend/src/routes/index.tsx`, libs de scope)
 - Actualizar `traceability-matrix.md`
 - Revisar umbrales de `tests/performance/test_performance.py`
 
