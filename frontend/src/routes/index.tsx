@@ -20,11 +20,12 @@ import {
   Search,
   Send,
   ShoppingCart,
+  Loader2,
   SlidersHorizontal,
   Timer,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useScope } from "@/hooks/use-scope";
 import { useSlice } from "@/hooks/use-slice";
@@ -33,11 +34,20 @@ import {
   postChat,
   purchaseListCsvUrl,
   scopeQueryToPayload,
+  type InventoryDashboard,
+  type PurchaseListItem,
 } from "@/lib/api";
 import { factsFromRecommendation, rowFromPurchaseItem } from "@/lib/adapter";
 import { applyChatScope, chatFailureMessage } from "@/lib/applyChatScope";
 import { applySuggestedFilter, type SuggestedChip } from "@/lib/applySuggestedFilter";
 import { categoryColor } from "@/lib/chart-colors";
+import {
+  completeTurn,
+  loadThreads,
+  nextMsgId,
+  saveThreads,
+  type PendingTurn,
+} from "@/lib/chatTurn";
 import {
   COPY_CATEGORIES_LOAD_FAILED,
   categoryNamesForUi,
@@ -82,7 +92,7 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-type Msg = { id: number; role: "user" | "assistant"; text: string };
+type Msg = { id: number; role: "user" | "assistant" | "thinking"; text: string };
 type Thread = { id: string; title: string; messages: Msg[] };
 type MobileView = "chat" | "explore" | "po";
 
@@ -113,9 +123,10 @@ function visibleHealth(row: Calc): HealthTag[] {
   return row.health.filter((tag) => HEALTH_FILTERS.includes(tag));
 }
 
-function sliceLabels(slice: UiSlice): string[] {
+function sliceLabels(slice: UiSlice, horizonDays = HORIZON_DAYS): string[] {
   const labels: string[] = [];
   if (slice.buyOnly) labels.push("A comprar");
+  if (horizonDays !== HORIZON_DAYS) labels.push(`Horizonte ${horizonDays} días`);
   labels.push(...slice.cats);
   labels.push(...(slice.suppliers ?? []));
   labels.push(...slice.health.map((tag) => HEALTH_LABEL[tag]));
@@ -136,8 +147,9 @@ function applyClientFilters(rows: Calc[], slice: UiSlice): Calc[] {
 }
 
 function Index() {
-  const [threads, setThreads] = useState<Thread[]>(SEED);
-  const [activeId, setActiveId] = useState("t1");
+  const boot = useMemo(() => loadThreads(SEED), []);
+  const [threads, setThreads] = useState<Thread[]>(boot.threads);
+  const [activeId, setActiveId] = useState(boot.activeId);
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<"explore" | "po">("explore");
   const [mobileView, setMobileView] = useState<MobileView>("explore");
@@ -147,21 +159,44 @@ function Index() {
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [chatBusy, setChatBusy] = useState(false);
+  const [horizonDays, setHorizonDays] = useState(HORIZON_DAYS);
+  const pendingTurn = useRef<PendingTurn | null>(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  /** Panel snapshot from last /chat so KPIs/chart match the answer even if scope queryKey is unchanged. */
+  const [chatBoard, setChatBoard] = useState<{
+    dashboard: InventoryDashboard;
+    purchaseList: PurchaseListItem[];
+  } | null>(null);
 
-  const scopeQuery = useMemo(() => sliceToScopeQuery(slice, 50), [slice]);
+  useEffect(() => {
+    saveThreads(threads, activeId);
+  }, [threads, activeId]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [threads, activeId, chatBusy]);
+
+  const scopeQuery = useMemo(
+    () => ({ ...sliceToScopeQuery(slice, 50), horizon_days: horizonDays }),
+    [slice, horizonDays],
+  );
   const api = useSlice(scopeQuery, 50);
   const online = api.online;
   const statusLabel = dataSourceLabel(online);
   const statusLive = online;
 
-  const categoryNames = useMemo(() => categoryNamesForUi(api.dashboard), [api.dashboard]);
+  const dash = chatBoard?.dashboard ?? api.dashboard;
+  const boardRows = chatBoard
+    ? chatBoard.purchaseList.map(rowFromPurchaseItem)
+    : api.rows;
+  const categoryNames = useMemo(() => categoryNamesForUi(dash), [dash]);
 
   const active = threads.find((thread) => thread.id === activeId) ?? threads[0];
   const rows = useMemo(
-    () => applyClientFilters(api.rows.map(calcFromApiRow), slice),
-    [api.rows, slice],
+    () => applyClientFilters(boardRows.map(calcFromApiRow), slice),
+    [boardRows, slice],
   );
-  const labels = sliceLabels(slice);
+  const labels = sliceLabels(slice, horizonDays);
 
   const nextStepChips = useMemo(
     () => (api.suggestedFilters ?? []).slice(0, 6),
@@ -172,14 +207,19 @@ function Index() {
     return list.includes(item) ? list.filter((value) => value !== item) : [...list, item];
   }
 
+  /** User-driven recorte changes drop the chat snapshot so /slice owns the panel again. */
+  function mutateSlice(next: UiSlice | ((previous: UiSlice) => UiSlice)) {
+    setChatBoard(null);
+    pushSlice(next);
+  }
+
   function toggleHealth(tag: "riesgo_quiebre" | "sin_stock" | "sobrestock") {
-    pushSlice((previous) => {
+    mutateSlice((previous) => {
       const health = toggleList(previous.health, tag);
       return { ...previous, health, outOfStockOnly: health.includes("sin_stock") };
     });
   }
 
-  const dash = api.dashboard;
   const listUnits = rows.reduce((sum, row) => sum + row.recommended_quantity, 0);
   const listOutOfStock = rows.filter((row) => row.sku.stock === 0).length;
   const kpisDash = kpisFromDashboard(dash, listUnits, listOutOfStock);
@@ -190,7 +230,7 @@ function Index() {
       detail: "en este recorte",
       icon: Box,
       active: slice.buyOnly,
-      onClick: () => pushSlice((previous) => ({ ...previous, buyOnly: !previous.buyOnly })),
+      onClick: () => mutateSlice((previous) => ({ ...previous, buyOnly: !previous.buyOnly })),
     },
     {
       label: "Riesgo de quiebre",
@@ -213,10 +253,10 @@ function Index() {
     {
       label: "Unidades a pedir",
       value: nf.format(kpisDash.units),
-      detail: `para ${HORIZON_DAYS} días`,
+      detail: `para ${horizonDays} días`,
       icon: PackageCheck,
       active: slice.buyOnly,
-      onClick: () => pushSlice((previous) => ({ ...previous, buyOnly: !previous.buyOnly })),
+      onClick: () => mutateSlice((previous) => ({ ...previous, buyOnly: !previous.buyOnly })),
     },
   ];
 
@@ -235,6 +275,15 @@ function Index() {
     if (!query || chatBusy) return;
     setInput("");
 
+    const userMsgId = nextMsgId();
+    const thinkingId = nextMsgId();
+    const pending: PendingTurn = {
+      threadId: activeId,
+      userText: query,
+      userMsgId,
+      thinkingId,
+    };
+    pendingTurn.current = pending;
     setThreads((previous) =>
       previous.map((thread) =>
         thread.id !== activeId
@@ -242,35 +291,56 @@ function Index() {
           : {
               ...thread,
               title: thread.messages.length === 0 ? query.slice(0, 34) : thread.title,
-              messages: [...thread.messages, { id: Date.now(), role: "user" as const, text: query }],
+              messages: [
+                ...thread.messages,
+                { id: userMsgId, role: "user" as const, text: query },
+                {
+                  id: thinkingId,
+                  role: "thinking" as const,
+                  text: "Pensando…",
+                },
+              ],
             },
       ),
     );
     setMode("explore");
-    setMobileView("explore");
-
+    setMobileView("chat");
     setChatBusy(true);
     try {
-      const res = await postChat(query, scopeQueryToPayload(sliceToScopeQuery(slice)));
+      const res = await postChat(
+        query,
+        scopeQueryToPayload({ ...sliceToScopeQuery(slice), horizon_days: horizonDays }),
+      );
       const applied = applyChatScope(slice, res);
+      const nextHorizon =
+        typeof res.horizon_days === "number" && res.horizon_days > 0
+          ? res.horizon_days
+          : horizonDays;
+      setHorizonDays(nextHorizon);
+      if (res.dashboard) {
+        setChatBoard({
+          dashboard: res.dashboard,
+          purchaseList: res.purchase_list ?? [],
+        });
+      }
       if (res.scope != null) pushSlice(applied.slice);
       setThreads((previous) =>
         previous.map((thread) =>
-          thread.id !== activeId
+          thread.id !== pending.threadId
             ? thread
             : {
                 ...thread,
-                messages: [
-                  ...thread.messages,
-                  {
-                    id: Date.now() + 1,
-                    role: "assistant" as const,
-                    text: res.answer || "Sin respuesta del catálogo.",
-                  },
-                ],
+                messages: completeTurn(
+                  thread.messages,
+                  pending,
+                  res.answer || "Sin respuesta del catálogo.",
+                ),
               },
         ),
       );
+      pendingTurn.current = null;
+      setMobileView("chat");
+      window.setTimeout(() => setMobileView("explore"), 1200);
       if (applied.openProductId) {
         const fromRes = res.purchase_list.find((item) => item.product_id === applied.openProductId);
         const row = fromRes
@@ -279,23 +349,22 @@ function Index() {
         if (row) void openDetail(row);
       }
     } catch (error) {
+      const pendingErr = pendingTurn.current ?? pending;
       setThreads((previous) =>
         previous.map((thread) =>
-          thread.id !== activeId
+          thread.id !== pendingErr.threadId
             ? thread
             : {
                 ...thread,
-                messages: [
-                  ...thread.messages,
-                  {
-                    id: Date.now() + 1,
-                    role: "assistant" as const,
-                    text: chatFailureMessage(query, error),
-                  },
-                ],
+                messages: completeTurn(
+                  thread.messages,
+                  pendingErr,
+                  chatFailureMessage(query, error),
+                ),
               },
         ),
       );
+      pendingTurn.current = null;
     } finally {
       setChatBusy(false);
     }
@@ -369,7 +438,7 @@ function Index() {
   function applyChip(chip: SuggestedChip) {
     const result = applySuggestedFilter(chip, slice);
     if (result.type === "slice") {
-      pushSlice(result.slice);
+      mutateSlice(result.slice);
       return;
     }
     if (result.type === "open_sku") {
@@ -380,6 +449,17 @@ function Index() {
     if (result.type === "draft_oc") {
       openPo();
     }
+  }
+
+  function handleGoBack() {
+    setChatBoard(null);
+    goBack();
+  }
+
+  function handleClearSlice() {
+    setChatBoard(null);
+    setHorizonDays(HORIZON_DAYS);
+    clearSlice();
   }
 
   const rail = (
@@ -442,17 +522,48 @@ function Index() {
             <section className={`${mobileView === "chat" ? "flex" : "hidden"} min-h-0 flex-col border-r border-ops-border bg-background md:flex`}>
               <div className="border-b border-ops-border p-4 md:p-5">
                 <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"><MessageSquareText className="h-4 w-4 text-ops-accent" />Consulta de reposición</div>
-                <button type="button" onClick={() => void send(BUY_QUERY)} className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-ops-accent/60 bg-ops-accent-soft p-4 text-left outline-none hover:border-ops-accent focus-visible:ring-2 focus-visible:ring-ops-focus">
+                <button type="button" onClick={() => void send(BUY_QUERY)} disabled={chatBusy} className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-ops-accent/60 bg-ops-accent-soft p-4 text-left outline-none hover:border-ops-accent focus-visible:ring-2 focus-visible:ring-ops-focus disabled:opacity-50">
                   <span className="min-w-0 font-display text-base font-semibold text-foreground">{BUY_QUERY}</span><ChevronRight className="h-5 w-5 shrink-0 text-ops-accent" />
                 </button>
               </div>
               <div className="flex-1 space-y-3 overflow-y-auto p-4 md:p-5">
                 {active?.messages.length === 0 && <p className="text-sm text-muted-foreground">Escribí una consulta sobre reposición. Las cantidades siempre provienen del motor de cálculo.</p>}
                 {active?.messages.map((message) => (
-                  <div key={message.id} className={`whitespace-pre-line rounded-lg px-3.5 py-3 leading-relaxed ${message.role === "user" ? "ml-auto max-w-[88%] border border-ops-accent/50 bg-ops-accent-soft" : "max-w-[94%] border border-ops-border bg-ops-panel"}`}>
-                    {message.role === "assistant" && <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-ops-ok"><CheckCircle2 className="h-3.5 w-3.5" />SupplyMate</div>}{message.text}
+                  <div
+                    key={message.id}
+                    className={`whitespace-pre-line rounded-lg px-3.5 py-3 leading-relaxed ${
+                      message.role === "user"
+                        ? "ml-auto max-w-[88%] border border-ops-accent/50 bg-ops-accent-soft"
+                        : "max-w-[94%] border border-ops-border bg-ops-panel"
+                    }`}
+                  >
+                    {message.role === "thinking" ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-ops-accent" aria-hidden />
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ops-accent">
+                          Pensando
+                        </span>
+                        <span aria-live="polite">{message.text}</span>
+                      </div>
+                    ) : (
+                      <>
+                        {message.role === "user" && (
+                          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-ops-accent">
+                            Vos
+                          </div>
+                        )}
+                        {message.role === "assistant" && (
+                          <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-ops-ok">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            SupplyMate
+                          </div>
+                        )}
+                        {message.text}
+                      </>
+                    )}
                   </div>
                 ))}
+                <div ref={chatEndRef} />
               </div>
               <div className="border-t border-ops-border bg-ops-panel p-4">
                 {labels.length > 0 && <p className="mb-2 text-[11px] text-muted-foreground">Recorte actual: <span className="text-foreground">{labels.join(" · ")}</span></p>}
@@ -485,15 +596,15 @@ function Index() {
               </div>
 
               {mode === "po" ? (
-                <PurchaseOrder rows={poRows} labels={sliceLabels(frozen ?? slice)} units={units} value={value} skuCount={poSkuCount} onExport={exportOrder} onBack={backToExplore} />
+                <PurchaseOrder rows={poRows} labels={sliceLabels(frozen ?? slice, horizonDays)} units={units} value={value} skuCount={poSkuCount} onExport={exportOrder} onBack={backToExplore} />
               ) : (
                 <div className="min-h-0 flex-1 overflow-y-auto">
                   <div className="flex flex-wrap items-center gap-2 border-b border-ops-border bg-ops-panel px-4 py-2.5 lg:px-5">
                     <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Recorte</span>
                     <span className="min-w-0 truncate text-xs text-foreground">{labels.length > 0 ? labels.join(" · ") : "Inventario completo"}</span>
                     <div className="ml-auto flex items-center gap-1.5">
-                      <button type="button" onClick={goBack} disabled={history.length === 0} className="inline-flex h-7 items-center gap-1 rounded-md border border-ops-border px-2 text-[11px] text-muted-foreground outline-none hover:border-ops-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-focus disabled:opacity-40"><ArrowLeft className="h-3.5 w-3.5" />Volver</button>
-                      <button type="button" onClick={clearSlice} disabled={labels.length === 0} className="inline-flex h-7 items-center gap-1 rounded-md border border-ops-border px-2 text-[11px] text-muted-foreground outline-none hover:border-ops-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-focus disabled:opacity-40"><Eraser className="h-3.5 w-3.5" />Limpiar</button>
+                      <button type="button" onClick={handleGoBack} disabled={history.length === 0} className="inline-flex h-7 items-center gap-1 rounded-md border border-ops-border px-2 text-[11px] text-muted-foreground outline-none hover:border-ops-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-focus disabled:opacity-40"><ArrowLeft className="h-3.5 w-3.5" />Volver</button>
+                      <button type="button" onClick={handleClearSlice} disabled={labels.length === 0 && !chatBoard} className="inline-flex h-7 items-center gap-1 rounded-md border border-ops-border px-2 text-[11px] text-muted-foreground outline-none hover:border-ops-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-focus disabled:opacity-40"><Eraser className="h-3.5 w-3.5" />Limpiar</button>
                     </div>
                   </div>
 
@@ -541,7 +652,7 @@ function Index() {
                               radius={[4, 4, 0, 0]}
                               cursor="pointer"
                               isAnimationActive={false}
-                              onClick={(bar: { category?: string }) => bar.category && pushSlice((previous) => ({ ...previous, cats: [bar.category as string] }))}
+                              onClick={(bar: { category?: string }) => bar.category && mutateSlice((previous) => ({ ...previous, cats: [bar.category as string] }))}
                             >
                               {chartData.map((item) => <Cell key={item.category} fill={categoryColor(item.category)} stroke={slice.cats.includes(item.category) ? "var(--foreground)" : "transparent"} strokeWidth={slice.cats.includes(item.category) ? 2 : 0} fillOpacity={slice.cats.length === 0 || slice.cats.includes(item.category) ? 1 : 0.45} />)}
                               <LabelList
@@ -563,7 +674,7 @@ function Index() {
                   <div className="border-b border-ops-border bg-ops-panel px-4 py-3 lg:px-5">
                     <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground"><SlidersHorizontal className="h-3.5 w-3.5" />Filtros</div>
                     <div className="flex flex-wrap gap-1.5">
-                      <button type="button" onClick={() => pushSlice((previous) => ({ ...previous, buyOnly: !previous.buyOnly }))} className={`rounded-full border px-2.5 py-1 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-ops-focus ${slice.buyOnly ? "border-ops-accent bg-ops-accent-soft text-ops-accent" : "border-ops-border text-muted-foreground hover:border-ops-accent"}`}><ShoppingCart className="mr-1 inline h-3 w-3" />A comprar</button>
+                      <button type="button" onClick={() => mutateSlice((previous) => ({ ...previous, buyOnly: !previous.buyOnly }))} className={`rounded-full border px-2.5 py-1 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-ops-focus ${slice.buyOnly ? "border-ops-accent bg-ops-accent-soft text-ops-accent" : "border-ops-border text-muted-foreground hover:border-ops-accent"}`}><ShoppingCart className="mr-1 inline h-3 w-3" />A comprar</button>
                       {HEALTH_FILTERS.map((tag) => {
                         const Icon = healthIcon[tag];
                         const healthTag = tag as "riesgo_quiebre" | "sin_stock" | "sobrestock";
@@ -582,9 +693,9 @@ function Index() {
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       <span className="mr-1 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">Cobertura</span>
-                      {COVERAGE_ORDER.map((band) => <button key={band} type="button" onClick={() => pushSlice((previous) => ({ ...previous, coverage: previous.coverage === band ? null : band }))} className={`rounded-full border px-2.5 py-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ops-focus ${slice.coverage === band ? "border-ops-accent bg-ops-accent-soft text-ops-accent" : "border-ops-border text-muted-foreground hover:border-ops-accent"}`}><Timer className="mr-1 inline h-3 w-3" />{band}</button>)}
+                      {COVERAGE_ORDER.map((band) => <button key={band} type="button" onClick={() => mutateSlice((previous) => ({ ...previous, coverage: previous.coverage === band ? null : band }))} className={`rounded-full border px-2.5 py-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ops-focus ${slice.coverage === band ? "border-ops-accent bg-ops-accent-soft text-ops-accent" : "border-ops-border text-muted-foreground hover:border-ops-accent"}`}><Timer className="mr-1 inline h-3 w-3" />{band}</button>)}
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">{categoryNames.map((category) => <button key={category} type="button" onClick={() => pushSlice((previous) => ({ ...previous, cats: toggleList(previous.cats, category) }))} className={`rounded-md border px-2.5 py-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ops-focus ${slice.cats.includes(category) ? "border-ops-accent text-ops-accent" : "border-ops-border text-muted-foreground hover:border-ops-accent"}`}>{category}</button>)}</div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">{categoryNames.map((category) => <button key={category} type="button" onClick={() => mutateSlice((previous) => ({ ...previous, cats: toggleList(previous.cats, category) }))} className={`rounded-md border px-2.5 py-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ops-focus ${slice.cats.includes(category) ? "border-ops-accent text-ops-accent" : "border-ops-border text-muted-foreground hover:border-ops-accent"}`}>{category}</button>)}</div>
                   </div>
 
                   <SkuTable rows={rows} recorteToBuy={dash?.purchase_skus ?? rows.length} onOpen={(row) => void openDetail(row)} />

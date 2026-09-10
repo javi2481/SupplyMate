@@ -16,6 +16,7 @@ export type AnalyticalScopePayload = {
   name_tokens?: string[];
   highlight_product_id?: string;
   out_of_stock_only?: boolean;
+  horizon_days?: number;
 };
 
 export type PurchaseListItem = {
@@ -102,6 +103,7 @@ export type ChatResponse = {
   purchase_list: PurchaseListItem[];
   dashboard: InventoryDashboard | null;
   scope: AnalyticalScopePayload | null;
+  horizon_days?: number;
 };
 
 /** Query params matching FastAPI `_scope_dependency` (+ limit). */
@@ -115,6 +117,7 @@ export type ScopeQuery = {
   highlight_product_id?: string | undefined;
   out_of_stock?: boolean | undefined;
   limit?: number | undefined;
+  horizon_days?: number | undefined;
 };
 
 export function toSearchParams(scope: ScopeQuery): URLSearchParams {
@@ -130,6 +133,9 @@ export function toSearchParams(scope: ScopeQuery): URLSearchParams {
   }
   if (scope.out_of_stock) {
     params.set("out_of_stock", "true");
+  }
+  if (scope.horizon_days != null && scope.horizon_days > 0) {
+    params.set("horizon_days", String(scope.horizon_days));
   }
   params.set("limit", String(scope.limit ?? 50));
   return params;
@@ -190,5 +196,8 @@ export function scopeQueryToPayload(query: ScopeQuery): AnalyticalScopePayload {
   if (query.name_token?.length) payload.name_tokens = query.name_token;
   if (query.highlight_product_id) payload.highlight_product_id = query.highlight_product_id;
   if (query.out_of_stock) payload.out_of_stock_only = true;
+  if (query.horizon_days != null && query.horizon_days > 0) {
+    payload.horizon_days = query.horizon_days;
+  }
   return payload;
 }

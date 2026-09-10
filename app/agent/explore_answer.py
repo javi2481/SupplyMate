@@ -28,11 +28,14 @@ def format_explore_answer(
     interpretation: ChatInterpretation,
     group_summaries: list[GroupSummary],
     guidance: GuidanceDecision | None = None,
+    *,
+    horizon_days: int = 7,
 ) -> str:
     """Plain-text purchase report for the Lovable chat bubble (no markdown)."""
     lines: list[str] = []
     dash = slice_data.dashboard
     labels = " · ".join(interpretation.understood_labels) if interpretation.understood_labels else ""
+    days = horizon_days or 7
 
     if group_summaries:
         total_units = sum(item.recommended_quantity for item in group_summaries)
@@ -50,9 +53,9 @@ def format_explore_answer(
         if interpretation.relation == "refinement":
             lines.append(f"Recorte: {labels}.")
         else:
-            lines.append(f"{labels} · próximos 7 días.")
+            lines.append(f"{labels} · próximos {days} días.")
     elif sku_hint:
-        lines.append(f"Recorte · {sku_hint} SKUs · próximos 7 días.")
+        lines.append(f"Recorte · {sku_hint} SKUs · próximos {days} días.")
 
     if not slice_data.purchase_list and not group_summaries:
         lines.append(

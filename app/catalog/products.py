@@ -168,3 +168,6 @@ def resolve_from_message(message: str, products_csv: Path | None = None) -> str 
 
 def clear_product_caches() -> None:
     reset_store_cache()
+    from app.services.analytics import catalog_service
+
+    catalog_service.clear_analytics_cache()

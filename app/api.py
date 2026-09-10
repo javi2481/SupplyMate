@@ -469,6 +469,7 @@ def _scope_dependency(
     name_token: list[str] = Query(default=[]),
     highlight_product_id: str = Query(default=""),
     out_of_stock: bool = Query(default=False),
+    horizon_days: int = Query(default=7, ge=1, le=365),
 ) -> AnalyticalScope:
     highlight = highlight_product_id or ""
     if len(highlight.strip()) > MAX_SCOPE_VALUE_LENGTH:
@@ -485,6 +486,7 @@ def _scope_dependency(
         name_tokens=_validate_scope_values(name_token, "name_token"),
         highlight_product_id=sanitize_value(highlight) or "",
         out_of_stock_only=out_of_stock,
+        horizon_days=horizon_days,
     )
 
 

@@ -130,6 +130,30 @@ def test_format_slice_evidence_with_active_filters():
     assert "Proveedores activos" in text
 
 
+def test_format_dashboard_answer_does_not_imply_risk_filter():
+    from app.core.models import InventoryDashboard, PurchaseListItem
+
+    snap = InventoryDashboard(
+        skus=100,
+        stockout_risk=40,
+        understock=0,
+        overstock=0,
+        recommended_units=500,
+        purchase_skus=80,
+        avg_coverage=12.5,
+    )
+    items = [
+        PurchaseListItem(product_id=str(i), product_name=f"p{i}", recommended_quantity=1)
+        for i in range(25)
+    ]
+    text = catalog_service.format_dashboard_answer(snap, items)
+    assert text.startswith("80 productos para reponer")
+    assert "top 25" in text
+    assert "Calculado para 7 días" in text
+    assert "Riesgo de quiebre" in text
+    assert not text.startswith("40 productos en riesgo")
+
+
 def test_format_purchase_list_answer_empty():
     text = catalog_service.format_purchase_list_answer([])
     assert "no hay productos" in text.lower()

@@ -225,27 +225,29 @@ async def interpret_query(
     message: str,
     previous_scope: AnalyticalScope | None = None,
 ) -> QueryInterpretation:
-    ruled = interpret_query_rules(message, previous_scope)
-    if ruled is not None:
-        if previous_scope is not None:
-            ruled = ruled.model_copy(
-                update={"relation": classify_relation(message, previous_scope)}
-            )
-        return ruled
+    """Free-text chat always goes through the LLM; rules are only a fallback.
 
+    Static filters/chips never call this — they apply scope without reinterpretation.
+    """
+    relation = classify_relation(message, previous_scope)
     try:
         from app.pipeline.query_interpreter_agent import interpret_query_llm
 
-        llm_result = await interpret_query_llm(message, previous_scope)
+        llm_result = await interpret_query_llm(
+            message, previous_scope, force=True
+        )
         if llm_result is not None:
-            relation = classify_relation(message, previous_scope)
             return llm_result.model_copy(update={"relation": relation})
     except Exception:
         pass
+
+    ruled = interpret_query_rules(message, previous_scope)
+    if ruled is not None:
+        return ruled.model_copy(update={"relation": relation})
 
     return QueryInterpretation(
         intent="unknown",
         confidence="low",
         source="rules",
-        relation=classify_relation(message, previous_scope),
+        relation=relation,
     )

@@ -147,10 +147,12 @@ def operational_priority(
     bucket: HealthBucket,
     recommended_quantity: int,
     coverage: float | None,
+    *,
+    horizon_days: int = HORIZON_DAYS,
 ) -> OperationalPriority:
     if bucket == BUCKET_STOCKOUT_RISK:
         return PRIORITY_CRITICAL
-    if recommended_quantity > 0 and coverage is not None and coverage < HORIZON_DAYS:
+    if recommended_quantity > 0 and coverage is not None and coverage < horizon_days:
         return PRIORITY_HIGH
     return PRIORITY_NORMAL
 
@@ -173,6 +175,7 @@ def sku_analytics_row(master: ProductMaster, calculation: ReplenishmentResult) -
     bucket = health_bucket(master, calculation)
     cost = purchase_cost(master)
     qty = calculation.recommended_quantity
+    horizon = calculation.horizon_days or HORIZON_DAYS
     return {
         "product_id": master.product_id,
         "product_name": master.product_name,
@@ -193,9 +196,12 @@ def sku_analytics_row(master: ProductMaster, calculation: ReplenishmentResult) -
         "recommended_quantity": qty,
         "health_bucket": bucket,
         "health_label": BUCKET_LABELS[bucket],
-        "operational_priority": operational_priority(bucket, qty, coverage),
+        "operational_priority": operational_priority(
+            bucket, qty, coverage, horizon_days=horizon
+        ),
         "price": master.price,
         "price_offer": master.price_offer,
         "purchase_cost": cost,
         "estimated_purchase_value": estimated_purchase_value(qty, cost),
+        "horizon_days": horizon,
     }

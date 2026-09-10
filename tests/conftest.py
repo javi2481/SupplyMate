@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
+from unittest.mock import AsyncMock
 
+import pytest
 from dotenv import load_dotenv
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -30,3 +32,18 @@ config.SALES_HISTORY_CSV = _DATA / "sales_history.csv"
 config.PRICES_CSV = _DATA / "prices.csv"
 config.REPLENISHMENT_PARAMS_CSV = _DATA / "replenishment_params.csv"
 clear_product_caches()
+
+
+@pytest.fixture(autouse=True)
+def _llm_interpret_off_by_default(monkeypatch: pytest.MonkeyPatch):
+    """Free-text uses LLM in prod; tests fall back to rules unless they mock the LLM."""
+    if os.getenv("RUN_LLM_EVALS") == "1":
+        return
+
+    async def _no_llm(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(
+        "app.pipeline.query_interpreter_agent.interpret_query_llm",
+        AsyncMock(side_effect=_no_llm),
+    )

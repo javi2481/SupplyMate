@@ -24,12 +24,13 @@ Extraé la intención y las referencias del usuario en español. Respondé SOLO 
 }
 
 Reglas:
-- references: sustantivos/rubros que nombra el usuario (ej. jabones, shampoo, xxg). NO nombres de categoría interna del catálogo.
+- references: sustantivos/rubros/marcas que nombra el usuario (ej. jabones, shampoo, rexona, xxg). NO nombres de categoría interna del catálogo.
 - Un talle o variante (xxg, xxxg) es product_group, no single_sku.
+- «para N días / próximos N días / a N días» es el horizonte del operador: IGNORALO en references y filter_hints (no pegues «dias» a una marca). Python extrae N y recalcula cantidades con ese horizonte (default 7).
 - relation=refinement si el usuario recorta el análisis actual (me refiero a, sólo, los de, un talle).
 - relation=new_query si cambia de rubro (pañales → shampoo).
 - Si no hay suficiente contexto para responder bien, igual extraé la referencia y usá replenishment + refinement; Python guía las opciones.
-- replenishment: cuánto comprar/pedir/reponer, o un recorte de rubro/talle.
+- replenishment: cuánto comprar/pedir/reponer, o un recorte de rubro/marca/talle.
 - inventory_risk: riesgo, quiebre, sin stock sobre un alcance.
 - sales_ranking: categorías más vendidas.
 - single_sku: un producto concreto o código numérico.
@@ -82,10 +83,17 @@ def _parse_interpretation(raw: dict, message: str) -> QueryInterpretation | None
     )
 
 
-async def interpret_query_llm(message: str, previous_scope=None) -> QueryInterpretation | None:
-    ruled = interpret_query_rules(message, previous_scope)
-    if ruled is not None and ruled.intent != "unknown":
-        return ruled
+async def interpret_query_llm(
+    message: str,
+    previous_scope=None,
+    *,
+    force: bool = False,
+) -> QueryInterpretation | None:
+    """LLM query interpreter. When force=True, skip rules (catalog-failed escalation)."""
+    if not force:
+        ruled = interpret_query_rules(message, previous_scope)
+        if ruled is not None and ruled.intent != "unknown":
+            return ruled
 
     try:
         agent = Agent(

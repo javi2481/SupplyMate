@@ -230,6 +230,7 @@ class AnalyticalScope(BaseModel):
     guidance_dismissed: list[str] = Field(default_factory=list)
     highlight_product_id: str = ""
     out_of_stock_only: bool = False
+    horizon_days: int = 7
 
 
 class Reference(BaseModel):
@@ -399,6 +400,7 @@ class ChatResponse(BaseModel):
     interpretation: ChatInterpretation | None = None
     group_summaries: list[GroupSummary] = Field(default_factory=list)
     guidance: GuidanceDecision | None = None
+    horizon_days: int = 7
 
 
 class ProductNotFoundError(Exception):

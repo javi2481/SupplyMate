@@ -14,19 +14,27 @@ from app.core.models import (
     SalesHistory,
 )
 from app.catalog.products import resolve_product_id
-from app.core.replenishment import calculate_replenishment
+from app.core.replenishment import HORIZON_DAYS, calculate_replenishment, clamp_horizon_days
 from app.services.analytics import dashboard, metrics
 from app.services.scoping import suggested_filters
 from app.catalog.store import SALES_AS_OF, get_store
 
-_sku_rows_cache: list[dict] | None = None
+_sku_rows_cache: dict[int, list[dict]] = {}
 
 
-def _sku_analytics_rows() -> list[dict]:
-    global _sku_rows_cache
-    if _sku_rows_cache is None:
-        _sku_rows_cache = dashboard.analytics_rows(tuple(get_store().products.values()))
-    return _sku_rows_cache
+def clear_analytics_cache() -> None:
+    _sku_rows_cache.clear()
+
+
+def _sku_analytics_rows(horizon_days: int = HORIZON_DAYS) -> list[dict]:
+    days = clamp_horizon_days(horizon_days)
+    cached = _sku_rows_cache.get(days)
+    if cached is None:
+        cached = dashboard.analytics_rows(
+            tuple(get_store().products.values()), horizon_days=days
+        )
+        _sku_rows_cache[days] = cached
+    return cached
 
 
 def resolve_product(query: str) -> str:
@@ -51,7 +59,11 @@ def get_sales_history(
     return get_store().sales_history(product_id, days=days, as_of=as_of or SALES_AS_OF)
 
 
-def get_replenishment_recommendation(product_id: str) -> ReplenishmentRecommendation:
+def get_replenishment_recommendation(
+    product_id: str,
+    *,
+    horizon_days: int = HORIZON_DAYS,
+) -> ReplenishmentRecommendation:
     product_id = resolve_product_id(product_id)
     master = get_store().get_master(product_id)
     calculation = calculate_replenishment(
@@ -60,6 +72,7 @@ def get_replenishment_recommendation(product_id: str) -> ReplenishmentRecommenda
         total_units_sold_last_30=master.units_sold_30d,
         lead_time_days=master.lead_time_days,
         safety_stock=master.safety_stock,
+        horizon_days=horizon_days,
     )
     return ReplenishmentRecommendation.from_master(master, calculation)
 
@@ -79,11 +92,14 @@ def safe_resolve(query: str) -> str | None:
 def list_purchase_recommendations(
     limit: int = 25,
     min_quantity: int = 1,
+    *,
+    horizon_days: int = HORIZON_DAYS,
 ) -> list[ReplenishmentRecommendation]:
     """All SKUs with recommended_quantity >= min_quantity, sorted desc."""
+    days = clamp_horizon_days(horizon_days)
     ranked = [
         row
-        for row in _sku_analytics_rows()
+        for row in _sku_analytics_rows(days)
         if int(row.get("recommended_quantity") or 0) >= min_quantity
     ]
     ranked.sort(
@@ -99,6 +115,7 @@ def list_purchase_recommendations(
             total_units_sold_last_30=master.units_sold_30d,
             lead_time_days=master.lead_time_days,
             safety_stock=master.safety_stock,
+            horizon_days=days,
         )
         items.append(ReplenishmentRecommendation.from_master(master, calculation))
     return items
@@ -108,7 +125,9 @@ def chat_dashboard(
     limit: int = 25,
     scope: AnalyticalScope | None = None,
 ) -> tuple[InventoryDashboard, list[PurchaseListItem]]:
-    rows = dashboard.filter_rows(_sku_analytics_rows(), scope)
+    active = scope or AnalyticalScope()
+    days = clamp_horizon_days(active.horizon_days)
+    rows = dashboard.filter_rows(_sku_analytics_rows(days), active)
     return dashboard.from_rows(rows), dashboard.purchase_items(rows, limit=limit)
 
 
@@ -152,7 +171,9 @@ def format_slice_evidence(
 
 
 def scoped_analytics_rows(scope: AnalyticalScope | None = None) -> list[dict]:
-    return dashboard.filter_rows(_sku_analytics_rows(), scope)
+    active = scope or AnalyticalScope()
+    days = clamp_horizon_days(active.horizon_days)
+    return dashboard.filter_rows(_sku_analytics_rows(days), active)
 
 
 def replenishment_slice(
@@ -188,19 +209,38 @@ def replenishment_slice(
 def format_dashboard_answer(
     snap: InventoryDashboard,
     items: list[PurchaseListItem],
+    *,
+    horizon_days: int = HORIZON_DAYS,
 ) -> str:
+    days = clamp_horizon_days(horizon_days)
     if not items:
         return (
             "Con el stock y las ventas de los últimos 30 días, "
-            "no hay productos que requieran reposición para cubrir los próximos 7 días."
+            f"no hay productos que requieran reposición para cubrir los próximos {days} días."
         )
     coverage = (
         f"{snap.avg_coverage:.1f} días" if snap.avg_coverage is not None else "—"
     )
+    shown = len(items)
+    to_buy = snap.purchase_skus or shown
+    # Do not lead with stockout_risk: that number is a catalog KPI, not a filter.
+    # Leading with risk made operators think the panel had switched to "riesgo".
+    if to_buy > shown:
+        head = (
+            f"{to_buy} productos para reponer en este recorte "
+            f"(prioridad: top {shown} en el panel)."
+        )
+    else:
+        head = f"{shown} productos para reponer en este recorte."
+    risk = (
+        f" {snap.stockout_risk} SKUs con riesgo de quiebre — "
+        f"tocá «Riesgo de quiebre» en el panel para filtrarlos."
+        if snap.stockout_risk
+        else ""
+    )
     return (
-        f"{snap.stockout_risk} productos en riesgo de quiebre · "
-        f"{len(items)} productos para reponer. "
-        f"Cobertura promedio: {coverage}."
+        f"{head} Calculado para {days} días. "
+        f"Cobertura promedio: {coverage}.{risk}"
     )
 
 

@@ -13,7 +13,7 @@ from app.core.models import (
     ProductMaster,
     PurchaseListItem,
 )
-from app.core.replenishment import calculate_replenishment
+from app.core.replenishment import HORIZON_DAYS, calculate_replenishment, clamp_horizon_days
 from app.services.analytics import metrics
 from app.pipeline.reference_resolver import name_has_token
 
@@ -113,7 +113,12 @@ def filter_rows(rows: list[dict], scope: AnalyticalScope | None) -> list[dict]:
     return filtered
 
 
-def analytics_rows(products: list[ProductMaster] | tuple[ProductMaster, ...]) -> list[dict]:
+def analytics_rows(
+    products: list[ProductMaster] | tuple[ProductMaster, ...],
+    *,
+    horizon_days: int = HORIZON_DAYS,
+) -> list[dict]:
+    days = clamp_horizon_days(horizon_days)
     rows: list[dict] = []
     for master in products:
         calculation = calculate_replenishment(
@@ -122,6 +127,7 @@ def analytics_rows(products: list[ProductMaster] | tuple[ProductMaster, ...]) ->
             total_units_sold_last_30=master.units_sold_30d,
             lead_time_days=master.lead_time_days,
             safety_stock=master.safety_stock,
+            horizon_days=days,
         )
         rows.append(metrics.sku_analytics_row(master, calculation))
     return rows

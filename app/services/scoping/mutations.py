@@ -117,7 +117,10 @@ def scope_from_query_params(
     name_tokens: list[str] | None = None,
     highlight_product_id: str = "",
     out_of_stock_only: bool = False,
+    horizon_days: int = 7,
 ) -> AnalyticalScope:
+    from app.core.replenishment import clamp_horizon_days
+
     return AnalyticalScope(
         categories=list(categories or []),
         subcategories=list(subcategories or []),
@@ -127,6 +130,7 @@ def scope_from_query_params(
         name_tokens=list(name_tokens or []),
         highlight_product_id=highlight_product_id or "",
         out_of_stock_only=bool(out_of_stock_only),
+        horizon_days=clamp_horizon_days(horizon_days),
     )
 
 
@@ -142,5 +146,6 @@ def cache_key(scope: AnalyticalScope) -> str:
         f"guidance_dismissed={','.join(sorted(scope.guidance_dismissed))}",
         f"highlight={scope.highlight_product_id or ''}",
         f"out_of_stock_only={int(scope.out_of_stock_only)}",
+        f"horizon_days={getattr(scope, 'horizon_days', 7)}",
     ]
     return "|".join(parts)

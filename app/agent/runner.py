@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 
 from agents import Agent, Runner
@@ -28,6 +29,7 @@ from app.core.models import (
     ProductNotFoundError,
     SupplyContext,
 )
+from app.core.replenishment import HORIZON_DAYS
 from app.catalog.products import NUMERIC_CODE_RE, message_looks_like_sku, resolve_from_message, resolve_product_id
 from app.pipeline.query_interpretation import _scope_empty, interpret_query
 from app.pipeline.reference_resolver import resolve_references
@@ -82,6 +84,22 @@ oc_summary must mention SKU count and total recommended units from the payload.
 """.strip()
 
 PURCHASE_LIST_LIMIT = 25
+
+_HORIZON_REQUEST_RE = re.compile(
+    r"(?:pr[oó]ximos?|para(?:\s+los)?|a)\s+(\d+)\s*d[ií]as",
+    re.IGNORECASE,
+)
+
+
+def resolve_horizon_days(message: str, previous: AnalyticalScope | None = None) -> int:
+    from app.core.replenishment import clamp_horizon_days
+
+    match = _HORIZON_REQUEST_RE.search(message or "")
+    if match:
+        return clamp_horizon_days(int(match.group(1)))
+    if previous is not None and previous.horizon_days:
+        return clamp_horizon_days(previous.horizon_days)
+    return HORIZON_DAYS
 
 
 async def _run_logged(agent, prompt, context=None, **kwargs):
@@ -271,14 +289,18 @@ async def _run_top_categories() -> ChatResponse:
 async def _run_purchase_list(message: str, scope: AnalyticalScope | None = None) -> ChatResponse:
     active = scope or AnalyticalScope()
     slice_data = catalog_service.replenishment_slice(active, limit=PURCHASE_LIST_LIMIT)
+    answer = catalog_service.format_dashboard_answer(
+        slice_data.dashboard,
+        slice_data.purchase_list,
+        horizon_days=active.horizon_days,
+    )
     return ChatResponse(
-        answer=catalog_service.format_dashboard_answer(
-            slice_data.dashboard, slice_data.purchase_list
-        ),
+        answer=answer,
         mode="list",
         scope=active,
         purchase_list=slice_data.purchase_list,
         dashboard=slice_data.dashboard,
+        horizon_days=active.horizon_days,
     )
 
 
@@ -301,7 +323,13 @@ async def _run_explore(
                 "guidance_options": guide.options,
             }
         )
-    answer = format_explore_answer(slice_data, chat_interp, summaries, guide)
+    answer = format_explore_answer(
+        slice_data,
+        chat_interp,
+        summaries,
+        guide,
+        horizon_days=scope.horizon_days,
+    )
     return ChatResponse(
         answer=answer,
         mode="explore",
@@ -311,6 +339,7 @@ async def _run_explore(
         purchase_list=slice_data.purchase_list,
         dashboard=slice_data.dashboard,
         guidance=guide,
+        horizon_days=scope.horizon_days,
     )
 
 
@@ -426,10 +455,17 @@ async def run_supplymate(
         return await run_apply_chip(scope or AnalyticalScope(), chip)
 
     previous = scope
+    # Free-text → LLM interpret (rules only fallback). Chips/filters skip this path.
     interpretation = await interpret_query(message, previous_scope=previous)
     resolved = resolve_references(interpretation)
     interpretation = promote_new_query_if_needed(interpretation, resolved, previous)
     resolution = build_resolution_result(interpretation, resolved, previous)
+    horizon = resolve_horizon_days(message, previous)
+    resolution = resolution.model_copy(
+        update={
+            "scope": resolution.scope.model_copy(update={"horizon_days": horizon})
+        }
+    )
 
     if resolution.blocking:
         unresolved_all = resolved and all(r.match_kind == "unresolved" for r in resolved)
@@ -445,11 +481,14 @@ async def run_supplymate(
                 "Podés elegir una de estas opciones o preguntar por otro rubro."
             )
             options = guide.options or []
+            scoped_prev = (previous or AnalyticalScope()).model_copy(
+                update={"horizon_days": horizon}
+            )
             return await _run_explore(
                 message,
-                previous,  # type: ignore[arg-type]
+                scoped_prev,
                 interpretation=ChatInterpretation(
-                    understood_labels=_labels_from_scope(previous),
+                    understood_labels=_labels_from_scope(scoped_prev),
                     relation="refinement",
                     guidance_question=question,
                     guidance_options=options,
