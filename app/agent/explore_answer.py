@@ -48,22 +48,17 @@ def format_explore_answer(
             label_parts.append("Críticos")
     labels = " · ".join(label_parts)
 
-    purchase_count = dash.purchase_skus or (
-        len(slice_data.purchase_list) if slice_data.purchase_list else 0
-    )
-    empty_purchase = not slice_data.purchase_list and purchase_count == 0
-    # Never invent totals from per-ref group_summaries when the applied slice is empty.
-    if empty_purchase:
-        total_units = 0
-        sku_hint = 0
-    elif slice_data.purchase_list:
+    # The purchase list is the only emptiness fact. Every unit/SKU claim below is
+    # derived from it, so per-ref group_summaries can never become a purchase claim.
+    has_purchase = bool(slice_data.purchase_list)
+    if has_purchase:
         total_units = dash.recommended_units or sum(
             i.recommended_quantity for i in slice_data.purchase_list
         )
-        sku_hint = purchase_count or len(slice_data.purchase_list)
+        sku_hint = dash.purchase_skus or len(slice_data.purchase_list)
     else:
         total_units = 0
-        sku_hint = purchase_count or dash.skus
+        sku_hint = 0
 
     if labels:
         if interpretation.relation == "refinement":
@@ -73,7 +68,7 @@ def format_explore_answer(
     elif sku_hint:
         lines.append(f"Recorte · {sku_hint} SKUs · próximos {days} días.")
 
-    if empty_purchase:
+    if not has_purchase:
         if len(group_summaries) >= 2:
             lines.append(
                 "No hay productos que cumplan todos esos criterios a la vez "
@@ -84,13 +79,6 @@ def format_explore_answer(
                 "Con el stock y las ventas de los últimos 30 días, "
                 "no hay productos que requieran reposición en este recorte."
             )
-        return "\n".join(lines)
-
-    if not slice_data.purchase_list and not group_summaries:
-        lines.append(
-            "Con el stock y las ventas de los últimos 30 días, "
-            "no hay productos que requieran reposición en este recorte."
-        )
         return "\n".join(lines)
 
     header_parts: list[str] = []
@@ -106,28 +94,19 @@ def format_explore_answer(
         key=lambda i: i.recommended_quantity,
         reverse=True,
     )[:REPORT_TOP_N]
-    if ranked:
-        lines.append("")
-        lines.append("Prioridad de compra:")
-        for i, item in enumerate(ranked, 1):
-            lines.append(
-                f"{i}. {item.product_name} — {item.recommended_quantity} unidades"
-            )
-        remaining = max(0, (purchase_count or len(slice_data.purchase_list)) - len(ranked))
-        if remaining > 0:
-            lines.append(f"… y {remaining} más en el panel.")
-    elif group_summaries:
-        lines.append("")
-        for item in group_summaries:
-            lines.append(f"- {item.label} — {item.recommended_quantity} unidades")
+    lines.append("")
+    lines.append("Prioridad de compra:")
+    for i, item in enumerate(ranked, 1):
+        lines.append(
+            f"{i}. {item.product_name} — {item.recommended_quantity} unidades"
+        )
+    # purchase_skus past the listed lines is panel context, not a quantity to buy.
+    remaining = max(0, sku_hint - len(ranked))
+    if remaining > 0:
+        lines.append(f"… y {remaining} más en el panel.")
 
     guide = guidance
-    if (
-        guide
-        and guide.action == "draft_oc"
-        and guide.question
-        and slice_data.purchase_list
-    ):
+    if guide and guide.action == "draft_oc" and guide.question:
         lines.append("")
         lines.append(_strip_md(guide.question))
     else:

@@ -290,11 +290,13 @@ async def run_analyze(request: AnalyzeRequest) -> AnalyzeResponse:
 
 
 async def _run_top_categories() -> ChatResponse:
-    snap, _items = catalog_service.chat_dashboard(limit=1)
+    root = AnalyticalScope()
+    snap, _items = catalog_service.chat_dashboard(limit=1, scope=root)
     return ChatResponse(
         answer=catalog_service.format_sales_answer(snap),
         mode="sales",
         dashboard=snap,
+        scope=root,
     )
 
 
@@ -323,8 +325,10 @@ async def _run_explore(
     interpretation: ChatInterpretation | None = None,
     group_summaries=None,
     guidance: GuidanceDecision | None = None,
+    slice_data=None,
 ) -> ChatResponse:
-    slice_data = catalog_service.replenishment_slice(scope, limit=PURCHASE_LIST_LIMIT)
+    if slice_data is None:
+        slice_data = catalog_service.replenishment_slice(scope, limit=PURCHASE_LIST_LIMIT)
     chat_interp = interpretation or ChatInterpretation()
     summaries = group_summaries or []
     guide = guidance or slice_data.guidance or guidance_after_slice(slice_data)
@@ -645,7 +649,12 @@ async def run_supplymate(
             ]
             if interpretation.relation == "refinement" and previous:
                 labels = _labels_from_scope(resolution.scope) or labels
-            guide = guidance_for_resolution(resolved, resolution.scope)
+            slice_data = catalog_service.replenishment_slice(
+                resolution.scope, limit=PURCHASE_LIST_LIMIT
+            )
+            guide = guidance_for_resolution(
+                resolved, resolution.scope, slice_data=slice_data
+            )
             route = "explore"
             response = await _run_explore(
                 message,
@@ -657,6 +666,7 @@ async def run_supplymate(
                 ),
                 group_summaries=summaries,
                 guidance=guide,
+                slice_data=slice_data,
             )
             return _finalize_turn(
                 message, previous, interpretation, resolved, response, route, started

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import re
+
 import pytest
 
 import app.guidance.guidance_tokens as guidance_tokens_mod
 import app.pipeline.query_interpretation as query_interpretation_mod
 from app.agent import run_apply_chip, run_supplymate
+from app.agent.runner import PURCHASE_LIST_LIMIT
 from app.core.models import (
     AnalyticalScope,
     GuidanceChip,
@@ -13,12 +16,21 @@ from app.core.models import (
     ResolvedReference,
 )
 from app.guidance import pick_next_question
+from app.guidance.engine import _draft_oc_decision
 from app.guidance.guidance_chips import apply_guidance_chip, chip_for_subcategory
-from app.guidance.missions import is_complement_target, load_missions, mission_neighbors
-from app.guidance.slice_facets import list_slice_facets
+from app.guidance.missions import (
+    MissionEdge,
+    is_complement_target,
+    load_missions,
+    mission_neighbors,
+)
+from app.guidance.slice_facets import SliceFacets, list_slice_facets
 from app.pipeline.reference_resolver import SIZE_TOKEN_RE
 from app.pipeline.scope_builder import promote_new_query_if_needed
 from app.services import catalog_service
+from app.services import scope as scope_svc
+
+_UNIT_CLAIM_RE = re.compile(r"\d+\s*(?:unidades|u\.)", re.IGNORECASE)
 
 
 def test_missions_csv_loads():
@@ -126,6 +138,52 @@ def test_empty_purchase_list_never_draft_oc():
     facets = list_slice_facets(scope, dash, [])
     guide = pick_next_question(scope, facets, purchase_items=[], dashboard=dash)
     assert guide.action != "draft_oc"
+
+
+def _complement_scope() -> tuple[AnalyticalScope, MissionEdge]:
+    """A scope that sits on a mission edge, taken from the graph instead of a rubro."""
+    load_missions.cache_clear()
+    edge = next(
+        e
+        for e in load_missions()
+        if e.from_dimension in ("category", "subcategory", "name_token")
+    )
+    return scope_svc.add(AnalyticalScope(), edge.from_dimension, edge.from_group), edge
+
+
+def test_empty_slice_does_not_reach_mission_complement():
+    scope, edge = _complement_scope()
+    dash = InventoryDashboard(skus=0, recommended_units=0, purchase_skus=0)
+    facets = SliceFacets(sku_count=0, mission_neighbors=[edge])
+
+    guide = pick_next_question(scope, facets, purchase_items=[], dashboard=dash)
+
+    assert guide.reason == "empty_purchase_list"
+    assert guide.action != "draft_oc"
+    assert not [chip for chip in guide.chips if chip.action == "draft_oc"]
+    assert _UNIT_CLAIM_RE.findall(guide.question) == []
+
+
+def test_draft_oc_decision_refuses_an_empty_purchase_list():
+    with pytest.raises(AssertionError):
+        _draft_oc_decision(SliceFacets(), [], InventoryDashboard(), "Recorte", 4, 4)
+
+
+@pytest.mark.asyncio
+async def test_explore_turn_builds_a_single_slice(monkeypatch: pytest.MonkeyPatch):
+    """Guidance reads the turn's slice; it must not rebuild one at limit=25."""
+    builds: list[int] = []
+    build_slice = catalog_service.replenishment_slice
+
+    def counting(scope=None, *, limit=25):
+        builds.append(limit)
+        return build_slice(scope, limit=limit)
+
+    monkeypatch.setattr(catalog_service, "replenishment_slice", counting)
+    response = await run_supplymate("¿Cuántos pañales tengo que comprar?")
+
+    assert response.mode == "explore"
+    assert builds == [PURCHASE_LIST_LIMIT]
 
 
 def test_panales_facets_offer_baby_adult_first():

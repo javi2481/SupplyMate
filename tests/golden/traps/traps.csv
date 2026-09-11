@@ -1,0 +1,5 @@
+name,message,previous_scope,surface,assertion,issue
+avon_unresolved,avon,,reference,unresolved_supplier,Supplier token must not invent a group when the catalog has no Avon supplier row
+xxg_not_xxxg,xxg,,reference,size_token_not_xxxg,Size token xxg must not match product names containing xxxg
+empty_purchase_no_claim,,,explore_answer,empty_purchase_no_claim,Empty purchase_list must not render SKU/unit claims or draft OC copy from group summaries
+toallitas_sku_set,toallitas,,reference,toallitas_name_hit_set,Name-hit token with no taxonomy label match stays sku_set (see golden_reference_resolution row)

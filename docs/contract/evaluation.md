@@ -50,16 +50,36 @@ RUN_LLM_EVALS=1 pytest -m llm
 
 CSV fixtures under `tests/golden/`:
 
-| File | Covers |
-|------|--------|
-| `golden/intents/golden_intents.csv` | Intent routing |
-| `golden/multiturn/golden_multiturn.csv` | Multi-turn conversation |
-| `golden/query_interpretation/golden_query_interpretation.csv` | Query interpretation rules |
-| `golden/reference_resolution/golden_reference_resolution.csv` | SKU / name / barcode resolution |
+| File | Rows (frozen) | Covers |
+|------|---------------|--------|
+| `golden/intents/golden_intents.csv` | 35 | Intent routing |
+| `golden/multiturn/golden_multiturn.csv` | 4 | Multi-turn conversation |
+| `golden/query_interpretation/golden_query_interpretation.csv` | 10 | Query interpretation rules |
+| `golden/reference_resolution/golden_reference_resolution.csv` | 16 | SKU / name / barcode resolution |
 
-Tests: `golden/intents/test_golden_intents.py`, `golden/multiturn/test_golden_multiturn.py`, `golden/query_interpretation/test_golden_query_interpretation.py`, `golden/reference_resolution/test_golden_reference_resolution.py`.
+These four legacy CSVs are **frozen in row count**. `tests/golden/test_frozen_golden_counts.py` guards the counts (including the header row). Add new regression strings to `tests/golden/traps/traps.csv` or a generated recorte contract — do not grow the legacy files.
+
+Tests: `golden/intents/test_golden_intents.py`, `golden/multiturn/test_golden_multiturn.py`, `golden/query_interpretation/test_golden_query_interpretation.py`, `golden/reference_resolution/test_golden_reference_resolution.py`, `golden/traps/test_traps.py`, `golden/test_frozen_golden_counts.py`.
 
 Layout overview: [`tests/README.md`](../tests/README.md).
+
+## Recorte oracle and traps
+
+SupplyMate scores chat behavior with **Python oracle predicates**, not LLM judges. Groq may paraphrase inputs in opt-in `@pytest.mark.llm` runs; assertions always read structured surfaces (`ResolvedReference`, `AnalyticalScope`, `ReplenishmentSlice`, `ChatResponse`, frontend `applyChatScope`).
+
+| Surface | What we assert |
+|---------|----------------|
+| Reference resolution | `match_kind`, `scope_dimension`, containment vs name hits |
+| Scope build | Dimension exclusivity, refinement vs `new_query`, horizon echo |
+| Replenishment slice | Emptiness equivalence, no `draft_oc` on empty recorte |
+| Explore answer | Structural numeric-claim probe — never a stored sentence |
+| Thread cart (Vitest) | Multi-rubro merge, sales no-op, refinement drops only the refined category |
+
+**Traps** (`tests/golden/traps/traps.csv`): concrete strings frozen only for bugs we have seen (unresolved supplier token, size-token confusion, empty-purchase copy, documented name-hit sets). Columns: `name, message, previous_scope, surface, assertion, issue`. Trap tests call the same oracle helpers — no answer-text goldens.
+
+A full combinatorial recorte harness (catalog-driven axes, pairwise coverage, seed + cap, `combinatorial_full` opt-in, catalog-shape drift snapshot) lives under `tests/evals/recorte/` when enabled; CI runs traps and frozen goldens without outbound model requests.
+
+**Cart note:** the chat thread cart (Vitest in `frontend/src/lib/cart.test.ts` and `chatTurn.test.ts`) accumulates purchase turns across categories; sales turns and empty `purchase_list` responses do not add lines.
 
 ## Insight and analyze evals
 

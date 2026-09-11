@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ChatResponse } from "@/lib/api";
+import type { ChatResponse, InventoryDashboard, PurchaseListItem } from "@/lib/api";
 import { HttpError } from "@/lib/api";
 import {
   COPY_ASSISTANT_UNAVAILABLE,
@@ -31,6 +31,43 @@ function chat(overrides: Partial<ChatResponse> = {}): ChatResponse {
   };
 }
 
+function dashboard(overrides: Partial<InventoryDashboard> = {}): InventoryDashboard {
+  return {
+    skus: 100,
+    stockout_risk: 10,
+    understock: 5,
+    overstock: 5,
+    healthy: 80,
+    avg_coverage: 20,
+    estimated_purchase_value: 99999,
+    recommended_units: 17753,
+    purchase_skus: 50,
+    by_category: [{ category: "GrupoA", recommended_quantity: 10, sku_count: 2 }],
+    ...overrides,
+  };
+}
+
+function purchaseItem(): PurchaseListItem {
+  return {
+    product_id: "1",
+    barcode: "",
+    product_name: "A",
+    supplier: "",
+    category: "GrupoB",
+    subcategory: "",
+    current_stock: 0,
+    reorder_point: null,
+    below_reorder_point: true,
+    average_daily_demand: 1,
+    days_of_supply: null,
+    health_bucket: "stockout_risk",
+    recommended_quantity: 1,
+    operational_priority: "high",
+    purchase_cost: null,
+    estimated_purchase_value: null,
+  };
+}
+
 describe("applyChatScope", () => {
   it("replaces leftover category when Python only sends stockout_risk", () => {
     const result = applyChatScope(
@@ -55,6 +92,104 @@ describe("applyChatScope", () => {
     const result = applyChatScope(dirty, chat({ scope: null, product_id: "P-1" }));
     expect(result.slice).toEqual(dirty);
     expect(result.openProductId).toBe("P-1");
+  });
+
+  it("replaces leftover filters when dashboard is present without scope", () => {
+    const snap = dashboard();
+    const result = applyChatScope(
+      dirty,
+      chat({
+        mode: "explore",
+        scope: null,
+        dashboard: snap,
+      }),
+    );
+    expect(result.slice).toEqual(EMPTY_SLICE);
+    expect(result.slice.cats).toEqual([]);
+    expect(result.slice.health).toEqual([]);
+    expect(result.slice.coverage).toBeNull();
+    expect(result.slice.buyOnly).toBe(false);
+    expect(result.chatBoard).toEqual({ dashboard: snap, purchaseList: [] });
+    expect(result.replacedSurface).toBe(true);
+    expect(result.pushHistory).toBe(false);
+    expect(result.conversationSlice).toEqual(dirty);
+  });
+
+  it("replaces with the root recorte when scope is present but empty and there is no purchase list", () => {
+    const snap = dashboard({ recommended_units: 3436798 });
+    const result = applyChatScope(
+      dirty,
+      chat({
+        scope: {
+          categories: [],
+          health_buckets: [],
+          suppliers: [],
+          name_tokens: [],
+        },
+        dashboard: snap,
+        purchase_list: [],
+      }),
+    );
+    expect(result.slice.cats).toEqual([]);
+    expect(result.slice.health).toEqual([]);
+    expect(result.replacedSurface).toBe(true);
+    expect(result.conversationSlice).toEqual(dirty);
+    expect(result.chatBoard).toEqual({ dashboard: snap, purchaseList: [] });
+  });
+
+  it("keeps the panel when scope and dashboard are both absent", () => {
+    const result = applyChatScope(dirty, chat({ scope: null, dashboard: null }));
+    expect(result.slice).toEqual(dirty);
+    expect(result.chatBoard).toBe("keep");
+    expect(result.pushHistory).toBe(false);
+    expect(result.conversationSlice).toEqual(dirty);
+  });
+
+  it("keeps conversationSlice across a keep-panel turn after a replaced surface", () => {
+    const first = applyChatScope(dirty, chat({ scope: null, dashboard: dashboard() }));
+    const second = applyChatScope(
+      first.slice,
+      chat({ scope: null, dashboard: null, mode: "disambiguation" }),
+      first.conversationSlice,
+    );
+    expect(second.slice).toEqual(EMPTY_SLICE);
+    expect(second.chatBoard).toBe("keep");
+    expect(second.conversationSlice).toEqual(dirty);
+  });
+
+  it("maps a present non-root scope over previous UI state", () => {
+    const result = applyChatScope(
+      dirty,
+      chat({
+        scope: { categories: ["GrupoB"], health_buckets: ["stockout_risk"] },
+        dashboard: dashboard({ recommended_units: 12 }),
+        purchase_list: [purchaseItem()],
+      }),
+    );
+    expect(result.slice.cats).toEqual(["GrupoB"]);
+    expect(result.slice.health).toEqual(["riesgo_quiebre"]);
+    expect(result.replacedSurface).toBe(false);
+    expect(result.pushHistory).toBe(true);
+    expect(result.conversationSlice.cats).toEqual(["GrupoB"]);
+    expect(result.chatBoard).not.toBe("keep");
+    if (result.chatBoard === "keep" || result.chatBoard == null) {
+      throw new Error("scoped turn must replace chatBoard from the response dashboard");
+    }
+    expect(result.chatBoard.dashboard.recommended_units).toBe(12);
+  });
+
+  it("list mode with a purchase list still toggles buyOnly and is not a replaced surface", () => {
+    const items = [purchaseItem()];
+    const snap = dashboard();
+    const result = applyChatScope(
+      dirty,
+      chat({ mode: "list", scope: {}, dashboard: snap, purchase_list: items }),
+    );
+    expect(result.slice.buyOnly).toBe(true);
+    expect(result.replacedSurface).toBe(false);
+    expect(result.pushHistory).toBe(true);
+    expect(result.conversationSlice.buyOnly).toBe(true);
+    expect(result.chatBoard).toEqual({ dashboard: snap, purchaseList: items });
   });
 
   it("opens highlight_product_id from scope", () => {

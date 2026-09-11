@@ -50,16 +50,36 @@ RUN_LLM_EVALS=1 pytest -m llm
 
 CSVs bajo `tests/golden/`:
 
-| Archivo | Cubre |
-|---------|-------|
-| `golden/intents/golden_intents.csv` | Routing de intención |
-| `golden/multiturn/golden_multiturn.csv` | Conversación multiturn |
-| `golden/query_interpretation/golden_query_interpretation.csv` | Reglas de interpretación de consulta |
-| `golden/reference_resolution/golden_reference_resolution.csv` | Resolución SKU / nombre / barcode |
+| Archivo | Filas (congeladas) | Cubre |
+|---------|-------------------|-------|
+| `golden/intents/golden_intents.csv` | 35 | Routing de intención |
+| `golden/multiturn/golden_multiturn.csv` | 4 | Conversación multiturn |
+| `golden/query_interpretation/golden_query_interpretation.csv` | 10 | Reglas de interpretación de consulta |
+| `golden/reference_resolution/golden_reference_resolution.csv` | 16 | Resolución SKU / nombre / barcode |
 
-Tests: `golden/intents/test_golden_intents.py`, `golden/multiturn/test_golden_multiturn.py`, `golden/query_interpretation/test_golden_query_interpretation.py`, `golden/reference_resolution/test_golden_reference_resolution.py`.
+Estos cuatro CSVs legacy están **congelados en cantidad de filas**. `tests/golden/test_frozen_golden_counts.py` protege los conteos (incluido el header). Casos nuevos van en `tests/golden/traps/traps.csv` o en un contrato generado — no agrandar los archivos legacy.
+
+Tests: `golden/intents/test_golden_intents.py`, `golden/multiturn/test_golden_multiturn.py`, `golden/query_interpretation/test_golden_query_interpretation.py`, `golden/reference_resolution/test_golden_reference_resolution.py`, `golden/traps/test_traps.py`, `golden/test_frozen_golden_counts.py`.
 
 Layout: [`tests/README.md`](../tests/README.md).
+
+## Oráculo de recorte y traps
+
+SupplyMate puntúa el chat con **predicados oráculo en Python**, no con jueces LLM. Groq puede parafrasear entradas en corridas opt-in `@pytest.mark.llm`; las aserciones leen superficies estructuradas (`ResolvedReference`, `AnalyticalScope`, `ReplenishmentSlice`, `ChatResponse`, `applyChatScope` en frontend).
+
+| Superficie | Qué afirmamos |
+|------------|---------------|
+| Resolución de referencias | `match_kind`, `scope_dimension`, contención vs name hits |
+| Scope | Exclusividad de dimensión, refinement vs `new_query`, eco de horizonte |
+| Slice de reposición | Equivalencia de vacío, sin `draft_oc` en recorte vacío |
+| Respuesta explore | Sonda estructural de claims numéricos — nunca una frase golden |
+| Carrito del hilo (Vitest) | Merge multi-rubro, sales no-op, refinement solo en la categoría refinada |
+
+**Traps** (`tests/golden/traps/traps.csv`): strings concretos congelados solo para bugs vistos (token proveedor no resuelto, confusión de size token, copy con purchase vacío, conjuntos name-hit documentados). Columnas: `name, message, previous_scope, surface, assertion, issue`. Los tests de trap llaman los mismos helpers del oráculo — sin goldens de texto de respuesta.
+
+Un harness combinatorial completo (ejes driven por catálogo, cobertura pairwise, seed + cap, opt-in `combinatorial_full`, snapshot de forma del catálogo) vive en `tests/evals/recorte/` cuando está habilitado; CI corre traps y goldens congelados sin requests al modelo.
+
+**Nota carrito:** el carrito del hilo (Vitest en `frontend/src/lib/cart.test.ts` y `chatTurn.test.ts`) acumula turnos de compra entre categorías; turnos sales y `purchase_list` vacío no agregan líneas.
 
 ## Evals de insight y analyze
 

@@ -131,6 +131,25 @@ def test_cap_board_matches_spec_order():
     ]
 
 
+def test_draft_oc_gated_on_a_non_empty_recorte():
+    """The chip follows recorte_qty, so an empty recorte offers no purchase order."""
+    empty = InventoryDashboard(
+        skus=40,
+        recommended_units=0,
+        purchase_skus=0,
+        by_category=[],
+        coverage=[],
+    )
+    chips = suggested_filters.suggest_next_filters(empty, [], AnalyticalScope())
+    assert not any(c.action == suggested_filters.ACTION_DRAFT_OC for c in chips)
+
+    # Same board, one purchase line: the offer comes back from the line's quantity.
+    filled = suggested_filters.suggest_next_filters(
+        empty, [_item(recommended_quantity=7)], AnalyticalScope()
+    )
+    assert any(c.action == suggested_filters.ACTION_DRAFT_OC for c in filled)
+
+
 def test_draft_oc_only_when_no_other_slots():
     snap = InventoryDashboard(skus=3, recommended_units=40, by_category=[], coverage=[])
     chips = suggested_filters.suggest_next_filters(snap, [], AnalyticalScope())

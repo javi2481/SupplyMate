@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from app.agent.explore_answer import format_explore_answer
 from app.core.models import (
     AnalyticalScope,
@@ -12,6 +14,19 @@ from app.core.models import (
     PurchaseListItem,
     ReplenishmentSlice,
 )
+
+_CLAIM_RE = re.compile(r"\d+\s*(?:unidades|u\.)|\d+\s*SKUs\s+a\s+reponer", re.IGNORECASE)
+_UNITS_CLAIM_RE = re.compile(r"(\d+)\s+unidades a reponer")
+_SKUS_CLAIM_RE = re.compile(r"(\d+)\s+SKUs a reponer")
+
+
+def _replenishment_claims(text: str) -> list[str]:
+    """Every number the answer presents as a quantity to buy.
+
+    Structural probe: the recorte size ("N SKUs · próximos D días") and the panel
+    remainder ("y N más en el panel") are not claims and must not be reported here.
+    """
+    return _CLAIM_RE.findall(text)
 
 
 def _item(**kwargs) -> PurchaseListItem:
@@ -123,6 +138,49 @@ def test_explore_answer_empty_ignores_group_summaries_and_draft_oc():
     assert "242" not in text
     assert "Armamos la OC" not in text
     assert "no hay productos" in text.lower() or "no hay" in text.lower()
+
+
+def test_explore_answer_empty_purchase_list_makes_no_claim():
+    """An empty purchase list is the emptiness fact; dashboard counters cannot override it."""
+    text = format_explore_answer(
+        _slice([], skus=120, units=4200, purchase_skus=37),
+        ChatInterpretation(understood_labels=["Grupo A"]),
+        [GroupSummary(label="Grupo A", recommended_quantity=4200, sku_count=37)],
+    )
+    assert _replenishment_claims(text) == []
+    assert "no hay productos" in text.lower()
+
+
+def test_explore_answer_empty_never_renders_group_summary_totals():
+    text = format_explore_answer(
+        _slice([], skus=250, units=5042, purchase_skus=242),
+        ChatInterpretation(understood_labels=["Grupo A", "Grupo B"]),
+        [
+            GroupSummary(label="Grupo A", recommended_quantity=5000, sku_count=200),
+            GroupSummary(label="Grupo B", recommended_quantity=42, sku_count=42),
+        ],
+    )
+    assert _replenishment_claims(text) == []
+    assert "5000" not in text
+
+
+def test_explore_answer_claims_equal_dashboard_counters():
+    items = [
+        _item(product_id=str(i), product_name=f"SKU {i}", recommended_quantity=30 - i)
+        for i in range(1, 4)
+    ]
+    text = format_explore_answer(
+        _slice(items, skus=310, units=7400, purchase_skus=88),
+        ChatInterpretation(understood_labels=["Grupo A"]),
+        [GroupSummary(label="Grupo A", recommended_quantity=999, sku_count=999)],
+    )
+    units_claim = _UNITS_CLAIM_RE.search(text)
+    skus_claim = _SKUS_CLAIM_RE.search(text)
+    assert units_claim is not None and units_claim.group(1) == "7400"
+    assert skus_claim is not None and skus_claim.group(1) == "88"
+    # purchase_skus beyond the listed lines is only "how many more are in the panel".
+    assert "85 más en el panel" in text
+    assert "999" not in text
 
 
 def test_explore_answer_uses_purchase_skus_not_catalog_skus():

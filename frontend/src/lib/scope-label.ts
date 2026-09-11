@@ -1,4 +1,4 @@
-/** Compact recorte labels for Explore chrome (policy, not Streamlit copy). */
+/** Compact recorte labels for Explore chrome. */
 
 import { HEALTH_LABEL, HORIZON_DAYS } from "@/lib/supplymate";
 import type { UiSlice } from "@/lib/scope";

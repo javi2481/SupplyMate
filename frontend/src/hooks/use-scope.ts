@@ -1,9 +1,9 @@
 import { useCallback, useState } from "react";
 import { EMPTY_SLICE, type UiSlice } from "@/lib/scope";
 
-export function useScope(initial: UiSlice = EMPTY_SLICE) {
+export function useScope(initial: UiSlice = EMPTY_SLICE, initialHistory: UiSlice[] = []) {
   const [slice, setSlice] = useState<UiSlice>(initial);
-  const [history, setHistory] = useState<UiSlice[]>([]);
+  const [history, setHistory] = useState<UiSlice[]>(initialHistory);
 
   const pushSlice = useCallback((next: UiSlice | ((previous: UiSlice) => UiSlice)) => {
     setSlice((previous) => {
@@ -25,5 +25,10 @@ export function useScope(initial: UiSlice = EMPTY_SLICE) {
     pushSlice(EMPTY_SLICE);
   }, [pushSlice]);
 
-  return { slice, setSlice, history, pushSlice, goBack, clearSlice };
+  const restoreScope = useCallback((next: UiSlice, nextHistory: UiSlice[] = []) => {
+    setSlice(next);
+    setHistory(nextHistory);
+  }, []);
+
+  return { slice, setSlice, history, pushSlice, goBack, clearSlice, restoreScope };
 }

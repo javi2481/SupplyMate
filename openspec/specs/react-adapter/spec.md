@@ -62,12 +62,15 @@ for the ops table without inventing replenishment intermediates
 
 ### Requirement: Offline fallback hides API URL
 
+The previous demo-catalog fallback is removed.
+
 #### Scenario: API down
 
 - **GIVEN** the slice fetch fails
-- **WHEN** the UI shows the demo catalog
-- **THEN** product chrome MUST say `Catálogo demo` (or equivalent)
+- **WHEN** chrome shows status
+- **THEN** it MUST say `Sin catálogo`
 - **AND** MUST NOT display localhost / API host strings
+- **AND** MUST NOT say Catálogo demo
 
 ### Requirement: Coverage chips match COVERAGE_ORDER
 
@@ -171,3 +174,92 @@ CSV endpoint max, at least 10_000). The Explore table MAY remain at limit 50.
 - **WHEN** Exportar orden is clicked
 - **THEN** the CSV URL `limit` MUST be `5395` (or the CSV max if lower)
 - **AND** MUST NOT be capped at 100
+
+### Requirement: Explore uses only the live catalog
+
+Explore MUST render purchase rows and dashboard from FastAPI `/data`. It MUST NOT render Lovable `CATALOG` / `ROWS` / `compute()` / `answerFor()`.
+
+#### Scenario: Slice fetch fails
+
+- **GIVEN** the slice request fails
+- **WHEN** Explore paints
+- **THEN** the table MUST be empty
+- **AND** chrome MUST say `Sin catálogo`
+- **AND** MUST NOT say `Catálogo demo`
+- **AND** MUST NOT show Pañales / Mamaderas demo SKUs
+
+### Requirement: Chat drives the recorte
+
+After a successful `/chat`, Explore MUST apply `ChatResponse.scope` and refetch the slice. It MUST NOT call `sliceFromText`.
+
+#### Scenario: Operator types quiebre
+
+- **GIVEN** a live catalog
+- **WHEN** the operator sends `quiebre`
+- **THEN** UiSlice health MUST follow Python `stockout_risk`
+- **AND** the board MUST update from the new slice
+
+### Requirement: Empty and missing copy
+
+#### Scenario: Table search miss
+
+- **GIVEN** no rows match the table search `X`
+- **THEN** copy MUST include `No encontramos productos para “X”`
+
+#### Scenario: Empty recorte
+
+- **GIVEN** a loaded slice with zero table rows
+- **THEN** copy MUST be `No hay productos en este recorte. Probá quitar un filtro.`
+
+#### Scenario: Chart load failure
+
+- **GIVEN** slice error and no category bars
+- **THEN** copy MUST be `No pude cargar las categorías. Intentá de nuevo en un momento.`
+
+### Requirement: Explore prompt chips from slice suggested_filters
+
+With FastAPI up, Explore MUST show slice `suggested_filters` in a 3×2 grid (max 6), hide the strip when empty, and MUST NOT pad dummy or hardcoded default chips.
+
+#### Scenario: Live chips
+
+- **GIVEN** a live slice with four `suggested_filters`
+- **WHEN** chips render
+- **THEN** four chips MUST show those labels in order
+
+#### Scenario: Empty hides
+
+- **GIVEN** zero live `suggested_filters` or no applicable mock slots
+- **WHEN** chips would render
+- **THEN** the strip MUST be hidden
+
+### Requirement: Chip click applies the action, not chat
+
+Click MUST apply `action`/`args` and MUST NOT send chip text to chat. `filter_*` MUST update UiSlice. `open_sku` MUST open the SKU drawer. `draft_oc` MUST open the PO flow.
+
+#### Scenario: Filter
+
+- **GIVEN** a `filter_category` chip for `Cuidado`
+- **WHEN** clicked
+- **THEN** UiSlice MUST include `Cuidado` and chat MUST NOT receive the label
+
+#### Scenario: Open SKU
+
+- **GIVEN** an `open_sku` chip
+- **WHEN** clicked
+- **THEN** the SKU drawer MUST open for that product
+
+#### Scenario: Draft OC
+
+- **GIVEN** a `draft_oc` chip
+- **WHEN** clicked
+- **THEN** the PO surface MUST open
+
+### Requirement: Offline mock equivalent chips
+
+Catálogo demo chips MUST use the same ranking and skip-active rules on mock rows. Qty MUST still come from mock `compute()`. MUST NOT invent a second formula.
+
+#### Scenario: Mock ranking
+
+- **GIVEN** demo rows with unused categories
+- **WHEN** chips render
+- **THEN** order MUST match live ranking and qty MUST still come from mock `compute()`

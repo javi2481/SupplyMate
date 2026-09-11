@@ -19,6 +19,7 @@ import {
   Loader2,
   SlidersHorizontal,
   Timer,
+  Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -33,20 +34,35 @@ import {
   postChat,
   purchaseListCsvUrl,
   scopeQueryToPayload,
-  type InventoryDashboard,
-  type PurchaseListItem,
 } from "@/lib/api";
 import { factsFromRecommendation, rowFromPurchaseItem } from "@/lib/adapter";
 import { applyChatScope, chatFailureMessage } from "@/lib/applyChatScope";
+import {
+  cartCategoryLabels,
+  cartFooterText,
+  cartTotals,
+  downloadCartCsv,
+  resolvePoRows,
+} from "@/lib/cart";
 import { buildClientTurnTrace, emitClientTurnTrace } from "@/lib/turnLog";
 import { applySuggestedFilter, type SuggestedChip } from "@/lib/applySuggestedFilter";
 import { categoryColor } from "@/lib/chart-colors";
 import {
   completeTurn,
+  emptyPanel,
   loadThreads,
   nextMsgId,
+  panelAfterChat,
+  panelAfterPurchase,
+  panelOf,
   saveThreads,
+  switchThread,
+  deleteThread,
+  isSameTurn,
+  withPanel,
   type PendingTurn,
+  type ThreadPanel,
+  type ThreadState,
 } from "@/lib/chatTurn";
 import {
   COPY_CATEGORIES_LOAD_FAILED,
@@ -58,10 +74,10 @@ import {
   dataSourceLabel,
   kpisFromDashboard,
 } from "@/lib/data-source";
-import { toggleBuyOnly, toggleHealthTag } from "@/lib/kpi-actions";
+import { purchaseActionsAllowed, purchaseKpiTotals, toggleBuyOnly, toggleHealthTag, visibleExploreKpiKinds } from "@/lib/kpi-actions";
 import { calcFromApiRow } from "@/lib/ops-row";
 import { filterChipsCoveredByCharts } from "@/lib/nextStepChips";
-import { COVERAGE_ORDER, sliceToScopeQuery, type UiSlice } from "@/lib/scope";
+import { COVERAGE_ORDER, EMPTY_SLICE, sliceToScopeQuery, type UiSlice } from "@/lib/scope";
 import { sliceLabels } from "@/lib/scope-label";
 import {
   HEALTH_FILTERS,
@@ -92,8 +108,7 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-type Msg = { id: number; role: "user" | "assistant" | "thinking"; text: string };
-type Thread = { id: string; title: string; messages: Msg[] };
+type Thread = ThreadState;
 type MobileView = "chat" | "explore" | "po";
 
 const BUY_QUERY = "¿Qué productos debería comprar?";
@@ -130,25 +145,34 @@ function applyClientFilters(rows: Calc[], slice: UiSlice): Calc[] {
 
 function Index() {
   const boot = useMemo(() => loadThreads(SEED), []);
+  const bootPanel = useMemo(
+    () => panelOf(boot.threads.find((thread) => thread.id === boot.activeId), emptyPanel(HORIZON_DAYS)),
+    [boot],
+  );
   const [threads, setThreads] = useState<Thread[]>(boot.threads);
   const [activeId, setActiveId] = useState(boot.activeId);
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<"explore" | "po">("explore");
   const [mobileView, setMobileView] = useState<MobileView>("explore");
-  const { slice, history, pushSlice, goBack, clearSlice } = useScope();
+  const { slice, history, pushSlice, goBack, clearSlice, restoreScope } = useScope(
+    bootPanel.slice,
+    bootPanel.history,
+  );
   const [open, setOpen] = useState<Calc | null>(null);
   const [frozen, setFrozen] = useState<UiSlice | null>(null);
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [chatBusy, setChatBusy] = useState(false);
-  const [horizonDays, setHorizonDays] = useState(HORIZON_DAYS);
+  const [horizonDays, setHorizonDays] = useState(bootPanel.horizonDays);
   const pendingTurn = useRef<PendingTurn | null>(null);
+  const activeIdRef = useRef(activeId);
+  activeIdRef.current = activeId;
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   /** Panel snapshot from last /chat so KPIs/chart match the answer even if scope queryKey is unchanged. */
-  const [chatBoard, setChatBoard] = useState<{
-    dashboard: InventoryDashboard;
-    purchaseList: PurchaseListItem[];
-  } | null>(null);
+  const [chatBoard, setChatBoard] = useState(bootPanel.chatBoard);
+  const [replacedSurface, setReplacedSurface] = useState(bootPanel.replacedSurface);
+  const [conversationSlice, setConversationSlice] = useState(bootPanel.conversationSlice);
+  const [cart, setCart] = useState(bootPanel.cart);
 
   useEffect(() => {
     saveThreads(threads, activeId);
@@ -186,8 +210,69 @@ function Index() {
 
   /** User-driven recorte changes drop the chat snapshot so /slice owns the panel again. */
   function mutateSlice(next: UiSlice | ((previous: UiSlice) => UiSlice)) {
+    const value = typeof next === "function" ? next(slice) : next;
     setChatBoard(null);
-    pushSlice(next);
+    setReplacedSurface(false);
+    setConversationSlice(value);
+    pushSlice(value);
+  }
+
+  function applyLivePanel(panel: ThreadPanel) {
+    restoreScope(panel.slice, panel.history);
+    setHorizonDays(panel.horizonDays);
+    setChatBoard(panel.chatBoard);
+    setReplacedSurface(panel.replacedSurface);
+    setConversationSlice(panel.conversationSlice);
+    setCart(panel.cart);
+  }
+
+  function livePanel(): ThreadPanel {
+    return { slice, history, horizonDays, chatBoard, replacedSurface, conversationSlice, cart };
+  }
+
+  function activateThread(nextId: string) {
+    if (nextId === activeId) {
+      setMobileMenu(false);
+      setMobileView("chat");
+      return;
+    }
+    const result = switchThread(threads, activeId, nextId, livePanel(), emptyPanel(HORIZON_DAYS));
+    setThreads(result.threads);
+    setActiveId(nextId);
+    applyLivePanel(result.panel);
+    setMobileMenu(false);
+    setMobileView("chat");
+  }
+
+  function removeThread(removeId: string) {
+    const target = threads.find((thread) => thread.id === removeId);
+    const worthConfirm = (target?.messages.length ?? 0) > 0;
+    if (
+      worthConfirm &&
+      !window.confirm("¿Borrar esta conversación? Se pierde el recorte y el gráfico de este chat.")
+    ) {
+      return;
+    }
+    const result = deleteThread(
+      threads,
+      activeId,
+      removeId,
+      livePanel(),
+      emptyPanel(HORIZON_DAYS),
+      () => ({ id: `t${Date.now()}`, title: "Nueva conversación", messages: [] }),
+    );
+    if (pendingTurn.current?.threadId === removeId) {
+      pendingTurn.current = null;
+      setChatBusy(false);
+    }
+    setThreads(result.threads);
+    setActiveId(result.activeId);
+    if (result.deletedActive) {
+      applyLivePanel(result.panel);
+      setFrozen(null);
+      setOpen(null);
+      setMode("explore");
+    }
   }
 
   function toggleHealth(tag: "riesgo_quiebre" | "sin_stock" | "sobrestock") {
@@ -197,20 +282,26 @@ function Index() {
   const listUnits = rows.reduce((sum, row) => sum + row.recommended_quantity, 0);
   const listOutOfStock = rows.filter((row) => row.sku.stock === 0).length;
   const kpisDash = kpisFromDashboard(dash, listUnits, listOutOfStock);
-  const kpis = [
-    {
+  const allowPurchase = purchaseActionsAllowed(replacedSurface);
+  const canReviewPo = cart.length > 0 || allowPurchase;
+  const pedidoFooter = cartFooterText(cart);
+  const cartSummary = cartTotals(cart);
+  const kpiByKind = {
+    products: {
+      kind: "products" as const,
       label: "Productos",
       value: nf.format(
-        slice.buyOnly
+        slice.buyOnly && allowPurchase
           ? (dash?.purchase_skus ?? rows.length)
           : (dash?.skus ?? rows.length),
       ),
-      detail: slice.buyOnly ? "a reponer" : "en este recorte",
+      detail: slice.buyOnly && allowPurchase ? "a reponer" : "en este recorte",
       icon: Box,
-      active: slice.buyOnly,
+      active: slice.buyOnly && allowPurchase,
       onClick: () => mutateSlice((previous) => toggleBuyOnly(previous)),
     },
-    {
+    stockout_risk: {
+      kind: "stockout_risk" as const,
       label: "Riesgo de quiebre",
       value: nf.format(
         dash?.stockout_risk ?? rows.filter((row) => row.health.includes("riesgo_quiebre")).length,
@@ -220,7 +311,8 @@ function Index() {
       active: slice.health.includes("riesgo_quiebre"),
       onClick: () => toggleHealth("riesgo_quiebre"),
     },
-    {
+    out_of_stock: {
+      kind: "out_of_stock" as const,
       label: "Falta de stock",
       value: nf.format(kpisDash.out_of_stock),
       detail: "reposición urgente",
@@ -228,7 +320,8 @@ function Index() {
       active: slice.health.includes("sin_stock"),
       onClick: () => toggleHealth("sin_stock"),
     },
-    {
+    units_to_order: {
+      kind: "units_to_order" as const,
       label: "Unidades a pedir",
       value: nf.format(kpisDash.units),
       detail: `para ${horizonDays} días`,
@@ -236,7 +329,8 @@ function Index() {
       active: slice.buyOnly,
       onClick: () => mutateSlice((previous) => toggleBuyOnly(previous)),
     },
-  ];
+  };
+  const kpis = visibleExploreKpiKinds(replacedSurface).map((kind) => kpiByKind[kind]);
 
   const purchaseForChart = chatBoard?.purchaseList ?? api.purchaseList;
   const chartHints = useMemo(
@@ -264,19 +358,28 @@ function Index() {
   const chartMode = useMemo(() => chartBarMode(dash, chartHints), [dash, chartHints]);
   const chartKey = `${chartMode}:${chartData.map((b) => `${b.productId ?? b.category}:${b.units}`).join("|")}`;
 
-  const nextStepChips = useMemo(
-    () =>
-      filterChipsCoveredByCharts((api.suggestedFilters ?? []).slice(0, 6), chartMode),
-    [api.suggestedFilters, chartMode],
-  );
+  const nextStepChips = useMemo(() => {
+    const chips = filterChipsCoveredByCharts((api.suggestedFilters ?? []).slice(0, 6), chartMode);
+    if (canReviewPo) return chips;
+    return chips.filter((chip) => chip.action !== "draft_oc");
+  }, [api.suggestedFilters, chartMode, canReviewPo]);
 
-  const poRows = useMemo(() => {
+  const focusPoRows = useMemo(() => {
     const scope: UiSlice = { ...(frozen ?? slice), buyOnly: true };
     return applyClientFilters(api.rows.map(calcFromApiRow), scope);
   }, [frozen, slice, api.rows]);
-  const units = dash?.recommended_units ?? poRows.reduce((sum, row) => sum + row.recommended_quantity, 0);
-  const value = dash?.estimated_purchase_value ?? poRows.reduce((sum, row) => sum + row.estimated_purchase_value, 0);
-  const poSkuCount = dash?.purchase_skus ?? poRows.length;
+  const poRows = useMemo(
+    () => resolvePoRows(cart, chatBoard?.purchaseList ?? [], focusPoRows),
+    [cart, chatBoard?.purchaseList, focusPoRows],
+  );
+  const purchaseTotals = purchaseKpiTotals(replacedSurface, {
+    recommendedUnits: dash?.recommended_units ?? focusPoRows.reduce((sum, row) => sum + row.recommended_quantity, 0),
+    estimatedValue: dash?.estimated_purchase_value ?? focusPoRows.reduce((sum, row) => sum + row.estimated_purchase_value, 0),
+    purchaseSkus: dash?.purchase_skus ?? focusPoRows.length,
+  });
+  const units = cart.length > 0 ? cartSummary.units : (purchaseTotals?.recommendedUnits ?? 0);
+  const value = cart.length > 0 ? cartSummary.value : (purchaseTotals?.estimatedValue ?? 0);
+  const poSkuCount = cart.length > 0 ? cartSummary.lines : (purchaseTotals?.purchaseSkus ?? 0);
 
   async function send(text: string) {
     const query = text.trim();
@@ -314,37 +417,43 @@ function Index() {
     setMode("explore");
     setMobileView("chat");
     setChatBusy(true);
+    const originPanel = livePanel();
+    let ownsBusy = true;
     try {
       const res = await postChat(
         query,
-        scopeQueryToPayload({ ...sliceToScopeQuery(slice), horizon_days: horizonDays }),
+        scopeQueryToPayload({
+          ...sliceToScopeQuery(originPanel.conversationSlice),
+          horizon_days: originPanel.horizonDays,
+        }),
       );
-      const applied = applyChatScope(slice, res);
+      const stillThisTurn = isSameTurn(pendingTurn.current, pending);
+      if (!stillThisTurn) {
+        ownsBusy = false;
+        return;
+      }
+      const applied = applyChatScope(originPanel.slice, res, originPanel.conversationSlice);
       const nextHorizon =
         typeof res.horizon_days === "number" && res.horizon_days > 0
           ? res.horizon_days
-          : horizonDays;
-      setHorizonDays(nextHorizon);
-      if (res.dashboard) {
-        setChatBoard({
-          dashboard: res.dashboard,
-          purchaseList: res.purchase_list ?? [],
-        });
+          : originPanel.horizonDays;
+      const nextPanel = panelAfterPurchase(panelAfterChat(originPanel, applied, nextHorizon), res);
+      if (pending.threadId === activeIdRef.current) {
+        applyLivePanel(nextPanel);
       }
-      if (res.scope != null) pushSlice(applied.slice);
-      const uiChartMode = chartBarMode(res.dashboard, {
-        health: applied.slice.health,
-        coverage: applied.slice.coverage,
-        suppliers: applied.slice.suppliers,
-        nameTokens: applied.slice.nameTokens,
-        outOfStockOnly: applied.slice.outOfStockOnly,
-        purchaseList: res.purchase_list ?? [],
+      const uiChartMode = chartBarMode(nextPanel.chatBoard?.dashboard ?? res.dashboard, {
+        health: nextPanel.slice.health,
+        coverage: nextPanel.slice.coverage,
+        suppliers: nextPanel.slice.suppliers,
+        nameTokens: nextPanel.slice.nameTokens,
+        outOfStockOnly: nextPanel.slice.outOfStockOnly,
+        purchaseList: nextPanel.chatBoard?.purchaseList ?? res.purchase_list ?? [],
       });
       emitClientTurnTrace(
         buildClientTurnTrace({
           message: query,
           res,
-          slice: applied.slice,
+          slice: nextPanel.slice,
           chartMode: uiChartMode,
         }),
       );
@@ -353,7 +462,7 @@ function Index() {
           thread.id !== pending.threadId
             ? thread
             : {
-                ...thread,
+                ...withPanel(thread, nextPanel),
                 messages: completeTurn(
                   thread.messages,
                   pending,
@@ -363,26 +472,31 @@ function Index() {
         ),
       );
       pendingTurn.current = null;
-      setMobileView("chat");
-      window.setTimeout(() => setMobileView("explore"), 1200);
-      if (applied.openProductId) {
-        const fromRes = res.purchase_list.find((item) => item.product_id === applied.openProductId);
-        const row = fromRes
-          ? calcFromApiRow(rowFromPurchaseItem(fromRes))
-          : findRowForProduct(applied.openProductId);
-        if (row) void openDetail(row);
+      if (pending.threadId === activeIdRef.current) {
+        setMobileView("chat");
+        window.setTimeout(() => setMobileView("explore"), 1200);
+        if (applied.openProductId) {
+          const fromRes = res.purchase_list.find((item) => item.product_id === applied.openProductId);
+          const row = fromRes
+            ? calcFromApiRow(rowFromPurchaseItem(fromRes))
+            : findRowForProduct(applied.openProductId);
+          if (row) void openDetail(row);
+        }
       }
     } catch (error) {
-      const pendingErr = pendingTurn.current ?? pending;
+      if (!isSameTurn(pendingTurn.current, pending)) {
+        ownsBusy = false;
+        return;
+      }
       setThreads((previous) =>
         previous.map((thread) =>
-          thread.id !== pendingErr.threadId
+          thread.id !== pending.threadId
             ? thread
             : {
                 ...thread,
                 messages: completeTurn(
                   thread.messages,
-                  pendingErr,
+                  pending,
                   chatFailureMessage(query, error),
                 ),
               },
@@ -390,17 +504,21 @@ function Index() {
       );
       pendingTurn.current = null;
     } finally {
-      setChatBusy(false);
+      if (ownsBusy) setChatBusy(false);
     }
   }
 
   function newThread() {
     const id = `t${Date.now()}`;
-    setThreads((previous) => [{ id, title: "Nueva conversación", messages: [] }, ...previous]);
+    const live = livePanel();
+    setThreads((previous) => {
+      const saved = previous.map((thread) =>
+        thread.id === activeId ? withPanel(thread, live) : thread,
+      );
+      return [{ id, title: "Nueva conversación", messages: [] }, ...saved];
+    });
     setActiveId(id);
-    setChatBoard(null);
-    setHorizonDays(HORIZON_DAYS);
-    clearSlice();
+    applyLivePanel(emptyPanel(HORIZON_DAYS));
     setFrozen(null);
     setMode("explore");
     setOpen(null);
@@ -409,6 +527,7 @@ function Index() {
   }
 
   function openPo() {
+    if (!canReviewPo) return;
     setFrozen(slice);
     setMode("po");
     setMobileView("po");
@@ -421,7 +540,11 @@ function Index() {
   }
 
   function exportOrder() {
-    if (!online) return;
+    if (cart.length > 0) {
+      downloadCartCsv(cart);
+      return;
+    }
+    if (!online || !purchaseActionsAllowed(replacedSurface)) return;
     const purchaseSkus = dash?.purchase_skus ?? poRows.length;
     window.open(
       purchaseListCsvUrl(sliceToScopeQuery(frozen ?? slice, csvExportLimit(purchaseSkus))),
@@ -483,13 +606,18 @@ function Index() {
   }
 
   function handleGoBack() {
+    const previous = history[history.length - 1] ?? EMPTY_SLICE;
     setChatBoard(null);
+    setReplacedSurface(false);
+    setConversationSlice(previous);
     goBack();
   }
 
   function handleClearSlice() {
     setChatBoard(null);
     setHorizonDays(HORIZON_DAYS);
+    setReplacedSurface(false);
+    setConversationSlice(EMPTY_SLICE);
     clearSlice();
   }
 
@@ -513,14 +641,31 @@ function Index() {
         {!railCollapsed && <div className="mb-2 hidden px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground xl:block">Ejemplos</div>}
         <div className="space-y-1">
           {threads.map((thread) => (
-            <button key={thread.id} type="button" title={thread.title} onClick={() => { setActiveId(thread.id); setMobileMenu(false); setMobileView("chat"); }} className={`flex h-10 w-full items-center gap-3 rounded-md px-3 text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-ops-accent ${thread.id === activeId ? "bg-ops-row text-foreground" : "text-muted-foreground hover:bg-ops-row hover:text-foreground"}`}>
-              <MessageSquareText className={`h-4 w-4 shrink-0 ${thread.id === activeId ? "text-ops-accent" : ""}`} />
-              {!railCollapsed && (
-                <span className="hidden min-w-0 flex-1 items-center gap-2 xl:flex">
-                  <span className="truncate">{thread.title}</span>
-                </span>
-              )}
-            </button>
+            <div
+              key={thread.id}
+              className={`group flex h-10 w-full items-center rounded-md ${thread.id === activeId ? "bg-ops-row text-foreground" : "text-muted-foreground hover:bg-ops-row hover:text-foreground"}`}
+            >
+              <button
+                type="button"
+                title={thread.title}
+                onClick={() => activateThread(thread.id)}
+                className="flex min-w-0 flex-1 items-center gap-3 rounded-md px-3 text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-ops-accent"
+              >
+                <MessageSquareText className={`h-4 w-4 shrink-0 ${thread.id === activeId ? "text-ops-accent" : ""}`} />
+                {!railCollapsed && (
+                  <span className="hidden min-w-0 flex-1 truncate xl:inline">{thread.title}</span>
+                )}
+              </button>
+              <button
+                type="button"
+                aria-label={`Borrar ${thread.title}`}
+                title="Borrar conversación"
+                onClick={() => removeThread(thread.id)}
+                className={`mr-1 grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground outline-none hover:bg-ops-accent-soft hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-accent ${railCollapsed ? "hidden" : "opacity-80 xl:opacity-0 xl:group-hover:opacity-100 xl:focus-visible:opacity-100"}`}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           ))}
         </div>
       </nav>
@@ -546,7 +691,7 @@ function Index() {
           </header>
 
           <div className="grid h-12 shrink-0 grid-cols-3 border-b border-ops-border bg-ops-panel md:hidden">
-            {(["chat", "explore", "po"] as MobileView[]).map((item) => <button key={item} type="button" onClick={() => { if (item === "po") { openPo(); return; } setMobileView(item); if (item === "explore") { setMode("explore"); setFrozen(null); } }} className={`border-b-2 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ops-accent ${mobileView === item ? "border-ops-accent text-foreground" : "border-transparent text-muted-foreground"}`}>{item === "chat" ? "Consulta" : item === "explore" ? "Explorar" : "Revisar OC"}</button>)}
+            {(["chat", "explore", "po"] as MobileView[]).map((item) => <button key={item} type="button" disabled={item === "po" && !canReviewPo} onClick={() => { if (item === "po") { openPo(); return; } setMobileView(item); if (item === "explore") { setMode("explore"); setFrozen(null); } }} className={`border-b-2 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ops-accent disabled:opacity-40 ${mobileView === item ? "border-ops-accent text-foreground" : "border-transparent text-muted-foreground"}`}>{item === "chat" ? "Consulta" : item === "explore" ? "Explorar" : "Revisar OC"}</button>)}
           </div>
 
           <div className="grid min-h-0 flex-1 md:grid-cols-[minmax(280px,38%)_minmax(420px,62%)] xl:grid-cols-[minmax(340px,34%)_minmax(560px,66%)]">
@@ -598,6 +743,7 @@ function Index() {
               </div>
               <div className="border-t border-ops-border bg-ops-panel p-4">
                 {labels.length > 0 && <p className="mb-2 text-[11px] text-muted-foreground">Recorte actual: <span className="text-foreground">{labels.join(" · ")}</span></p>}
+                {pedidoFooter ? <p className="mb-2 text-[11px] text-muted-foreground">{pedidoFooter}</p> : null}
                 {nextStepChips.length > 0 && (
                   <div className="mb-2 grid grid-cols-3 gap-1.5">
                     {nextStepChips.map((chip) => (
@@ -623,11 +769,11 @@ function Index() {
             <section className={`${mobileView !== "chat" ? "flex" : "hidden"} min-h-0 min-w-0 flex-col bg-background md:flex`}>
               <div className="hidden h-12 shrink-0 grid-cols-2 border-b border-ops-border bg-ops-panel md:grid">
                 <button type="button" onClick={backToExplore} className={`border-b-2 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ops-accent ${mode === "explore" ? "border-ops-accent text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Explorar</button>
-                <button type="button" onClick={openPo} className={`border-b-2 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ops-accent ${mode === "po" ? "border-ops-accent text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Revisar OC</button>
+                <button type="button" onClick={openPo} disabled={!canReviewPo} className={`border-b-2 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ops-accent disabled:opacity-40 ${mode === "po" ? "border-ops-accent text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Revisar OC</button>
               </div>
 
               {mode === "po" ? (
-                <PurchaseOrder rows={poRows} labels={sliceLabels(frozen ?? slice, horizonDays)} units={units} value={value} skuCount={poSkuCount} onExport={exportOrder} onBack={backToExplore} />
+                <PurchaseOrder rows={poRows} labels={cart.length > 0 ? cartCategoryLabels(cart) : sliceLabels(frozen ?? slice, horizonDays)} units={units} value={value} skuCount={poSkuCount} onExport={exportOrder} onBack={backToExplore} />
               ) : (
                 <div className="min-h-0 flex-1 overflow-y-auto">
                   <div className="flex flex-wrap items-center gap-2 border-b border-ops-border bg-ops-panel px-4 py-2.5 lg:px-5">
@@ -784,7 +930,7 @@ function Index() {
                     <div className="mt-2 flex flex-wrap gap-1.5">{categoryNames.map((category) => <button key={category} type="button" onClick={() => mutateSlice((previous) => ({ ...previous, cats: toggleList(previous.cats, category) }))} className={`rounded-md border px-2.5 py-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ops-focus ${slice.cats.includes(category) ? "border-ops-accent text-ops-accent" : "border-ops-border text-muted-foreground hover:border-ops-accent"}`}>{category}</button>)}</div>
                   </div>
 
-                  <SkuTable rows={rows} recorteToBuy={dash?.purchase_skus ?? rows.length} onOpen={(row) => void openDetail(row)} />
+                  <SkuTable rows={rows} recorteToBuy={allowPurchase ? (dash?.purchase_skus ?? rows.length) : rows.length} onOpen={(row) => void openDetail(row)} />
                 </div>
               )}
             </section>

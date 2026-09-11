@@ -74,6 +74,18 @@ def _human_subcategory_label(name: str) -> str:
     return mapping.get(name, name)
 
 
+def _empty_purchase(
+    purchase_items: list[PurchaseListItem],
+    dashboard: InventoryDashboard,
+) -> bool:
+    """One emptiness fact for the whole engine.
+
+    `purchase_items` and `dashboard.purchase_skus` both count rows with a positive
+    recommended quantity, so they agree by construction; reading either is enough.
+    """
+    return not purchase_items or dashboard.purchase_skus == 0
+
+
 def _subcategory_candidates(
     facets: SliceFacets,
     scope: AnalyticalScope,
@@ -171,6 +183,23 @@ def pick_next_question(
             progress_total=progress_total,
         )
 
+    # Above the complement branch: an empty recorte must not be offered a union
+    # whose preview quotes units, and must never reach _draft_oc_decision.
+    if _empty_purchase(purchase_items, dashboard):
+        return GuidanceDecision(
+            action="ask_clarification",
+            reason="empty_purchase_list",
+            question=(
+                "No hay líneas a reponer con este recorte. "
+                "Probá aflojar un filtro o cambiar de rubro."
+            ),
+            options=[],
+            chips=[],
+            progress_label=progress_label,
+            progress_step=progress_step,
+            progress_total=progress_total,
+        )
+
     if facets.mission_neighbors and FACET_COMPLEMENT not in scope.guidance_dismissed:
         edge = facets.mission_neighbors[0]
         preview = preview_union(scope, edge)
@@ -197,21 +226,6 @@ def pick_next_question(
             question=_complement_question(edge, preview),
             options=[edge.label, "No, seguir así"],
             chips=chips,
-            progress_label=progress_label,
-            progress_step=progress_step,
-            progress_total=progress_total,
-        )
-
-    if not purchase_items or dashboard.purchase_skus == 0:
-        return GuidanceDecision(
-            action="ask_clarification",
-            reason="empty_purchase_list",
-            question=(
-                "No hay líneas a reponer con este recorte. "
-                "Probá aflojar un filtro o cambiar de rubro."
-            ),
-            options=[],
-            chips=[],
             progress_label=progress_label,
             progress_step=progress_step,
             progress_total=progress_total,
@@ -277,6 +291,7 @@ def _draft_oc_decision(
     progress_step: int,
     progress_total: int,
 ) -> GuidanceDecision:
+    assert purchase_items, "draft_oc must never be offered for an empty recorte"
     total_qty = sum(i.recommended_quantity for i in purchase_items)
     value = dashboard.estimated_purchase_value
     value_txt = f" · **${value:,.0f}** estimado" if value else ""
@@ -313,11 +328,19 @@ def guidance_after_slice(slice_data: ReplenishmentSlice) -> GuidanceDecision:
 def guidance_for_resolution(
     resolved: list[ResolvedReference],
     scope: AnalyticalScope,
+    *,
+    slice_data: ReplenishmentSlice | None = None,
 ) -> GuidanceDecision:
-    from app.services import catalog_service
+    """Guidance for a resolved turn.
 
-    slice_data = catalog_service.replenishment_slice(scope, limit=25)
-    return guidance_after_slice(slice_data)
+    Callers holding only a scope get the slice built here; callers that already
+    built the turn's slice pass it in so the turn computes one slice, not two.
+    """
+    if slice_data is None:
+        from app.services import catalog_service
+
+        slice_data = catalog_service.replenishment_slice(scope, limit=25)
+    return slice_data.guidance or guidance_after_slice(slice_data)
 
 
 def is_valid_guidance_option(option: str, sku_ids: list[str]) -> bool:

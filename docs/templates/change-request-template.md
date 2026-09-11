@@ -15,7 +15,6 @@
 | Área | Impacto esperado |
 |------|------------------|
 | API | |
-| Streamlit | |
 | Catálogo CSV | |
 | Agente LLM | |
 | Tests | |

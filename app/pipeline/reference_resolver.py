@@ -127,6 +127,10 @@ MIN_CLOSE_SECOND_SCORE = SCORE_PREFIX_OR_TOKEN
 SKU_COUNT_NEAR_TIE = 5
 SUBCATEGORY_OVER_CATEGORY_MARGIN = 10
 
+# Share of a token's name hits that must sit inside one taxonomy node before the
+# node wins over the raw hit set.
+FAMILY_CONTAINMENT = 0.9
+
 
 def _match_score(token: str, label: str) -> int:
     label_norm = normalize_text(label)
@@ -395,6 +399,42 @@ def _group_from_name_hits(user_text: str, token: str, pids: list[str]) -> Resolv
     )
 
 
+def _family_from_name_hits(
+    user_text: str,
+    token: str,
+    name_hits: list[str],
+    categories: dict[str, list[str]],
+    subcategories: dict[str, list[str]],
+) -> ResolvedReference | None:
+    """Return the taxonomy node the token's name hits live in, or None.
+
+    `categories` / `subcategories` come from `_collect_entity_indexes`, so they
+    already only hold nodes whose label matches the token. Label match and
+    containment are both required: containment alone promotes any token, since
+    almost every small hit set happens to sit inside some large node, and the
+    promoted node would then swallow SKUs the token never named. Subcategory is
+    tried before category so the tightest containing family wins.
+    """
+    hits = set(name_hits)
+    if len(hits) < 2:
+        return None
+    needed = len(hits) * FAMILY_CONTAINMENT
+    for dim, index in (("subcategory", subcategories), ("category", categories)):
+        contained = [
+            (label, pids)
+            for label, pids in index.items()
+            if len(pids) >= 2 and len(hits.intersection(pids)) >= needed
+        ]
+        if len(contained) != 1:
+            continue
+        label, pids = contained[0]
+        resolved = _resolved_taxonomy(user_text, dim, label, list(dict.fromkeys(pids)))
+        # The token stays a scope filter, so the recorte is the family narrowed
+        # by the user's word: the dimension changes, the intent does not.
+        return resolved.model_copy(update={"name_tokens": [token]})
+    return None
+
+
 def _collect_entity_indexes(token: str) -> tuple[
     dict[str, list[str]],
     dict[str, list[str]],
@@ -502,6 +542,10 @@ def _resolve_conjunction(user_text: str, tokens: list[str]) -> ResolvedReference
             group_dim, group_val, _ = pick
         elif not pick:
             name_tokens.append(piece)
+            if not group_val:
+                family = _family_from_name_hits(user_text, piece, pids, cats, subs)
+                if family is not None:
+                    group_dim, group_val = family.scope_dimension, family.scope_value
 
     label_parts: list[str] = []
     if group_val:
@@ -633,6 +677,11 @@ def resolve_single_reference(ref: Reference) -> ResolvedReference:
         )
 
     if len(name_hits) >= 2:
+        family = _family_from_name_hits(
+            user_text, token, name_hits, categories, subcategories
+        )
+        if family is not None:
+            return family
         return _group_from_name_hits(user_text, token, name_hits)
 
     return ResolvedReference(user_text=user_text, match_kind="unresolved", confidence="low")
