@@ -393,22 +393,32 @@ def enrich_interpretation_from_message(
         if hint in COVERAGE_ORDER and hint != py_bucket:
             continue
         cleaned_llm.append(hint)
-    merged = list(dict.fromkeys([*cleaned_llm, *py_hints]))[:5]
-    intent = interpretation.intent
-    if _has_risk_intent(message) and intent in ("replenishment", "unknown"):
-        intent = "inventory_risk"
 
-    # Drop risk-only / stopword refs so they never become unresolved product_groups.
+    # Demote filter_hint references into filter_hints; never resolve against catalog.
+    demoted_hints: list[str] = []
     cleaned_refs: list[Reference] = []
     for ref in interpretation.references:
         token = normalize_text(ref.text)
         if not token:
+            continue
+        if ref.kind == "filter_hint":
+            demoted_hints.extend(_extract_filter_hints(ref.text))
+            if token in _RISK_HINTS and token not in demoted_hints:
+                demoted_hints.append(token)
             continue
         if token in _RISK_HINTS or token in _FILTER_STOPWORDS:
             continue
         if _RISK_PHRASE_RE.fullmatch(token):
             continue
         cleaned_refs.append(ref)
+
+    merged = list(dict.fromkeys([*cleaned_llm, *py_hints, *demoted_hints]))[:5]
+    intent = interpretation.intent
+    if _has_risk_intent(message) and intent in ("replenishment", "unknown"):
+        intent = "inventory_risk"
+    if demoted_hints and intent in ("replenishment", "unknown"):
+        if any(h in _RISK_HINTS for h in demoted_hints) or _has_risk_intent(message):
+            intent = "inventory_risk"
 
     updates: dict = {}
     if merged != list(interpretation.filter_hints or []):

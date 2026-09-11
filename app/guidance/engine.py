@@ -202,6 +202,21 @@ def pick_next_question(
             progress_total=progress_total,
         )
 
+    if not purchase_items or dashboard.purchase_skus == 0:
+        return GuidanceDecision(
+            action="ask_clarification",
+            reason="empty_purchase_list",
+            question=(
+                "No hay líneas a reponer con este recorte. "
+                "Probá aflojar un filtro o cambiar de rubro."
+            ),
+            options=[],
+            chips=[],
+            progress_label=progress_label,
+            progress_step=progress_step,
+            progress_total=progress_total,
+        )
+
     return _draft_oc_decision(
         facets,
         purchase_items,

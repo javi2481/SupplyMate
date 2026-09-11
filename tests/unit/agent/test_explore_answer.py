@@ -103,6 +103,28 @@ def test_explore_answer_empty_slice_plain():
     assert "no hay productos" in text.lower()
 
 
+def test_explore_answer_empty_ignores_group_summaries_and_draft_oc():
+    """Intersected scope empty must not invent totals from per-ref summaries."""
+    text = format_explore_answer(
+        _slice([], skus=0, units=0, purchase_skus=0),
+        ChatInterpretation(understood_labels=["UNILEVER", "Cosmetica"]),
+        [
+            GroupSummary(label="UNILEVER", recommended_quantity=5000, sku_count=200),
+            GroupSummary(label="Cosmetica", recommended_quantity=300, sku_count=42),
+        ],
+        GuidanceDecision(
+            action="draft_oc",
+            question="Con este recorte hay 0 líneas a reponer (0 u.). ¿Armamos la OC?",
+            options=["Armar OC"],
+        ),
+    )
+    assert "5000" not in text
+    assert "200" not in text
+    assert "242" not in text
+    assert "Armamos la OC" not in text
+    assert "no hay productos" in text.lower() or "no hay" in text.lower()
+
+
 def test_explore_answer_uses_purchase_skus_not_catalog_skus():
     items = [_item(product_id="1", product_name="A", recommended_quantity=50)]
     text = format_explore_answer(

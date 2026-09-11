@@ -472,3 +472,52 @@ async def test_productos_sin_stock_explores_without_404(monkeypatch):
     assert response.mode == "explore"
     assert response.scope is not None
     assert "stockout_risk" in response.scope.health_buckets
+
+
+@pytest.mark.asyncio
+async def test_two_name_tokens_union_in_scope(monkeypatch):
+    from app.core.models import QueryInterpretation, Reference
+
+    llm_interp = QueryInterpretation(
+        intent="replenishment",
+        references=[
+            Reference(text="dove", kind="product_group"),
+            Reference(text="rexona", kind="product_group"),
+        ],
+        confidence="high",
+        source="llm",
+        relation="new_query",
+    )
+    monkeypatch.setattr(
+        "app.pipeline.query_interpreter_agent.interpret_query_llm",
+        AsyncMock(return_value=llm_interp),
+    )
+    response = await run_supplymate("cuanto comprar de dove y rexona")
+    assert response.mode == "explore"
+    assert response.scope is not None
+    assert "dove" in response.scope.name_tokens
+    assert "rexona" in response.scope.name_tokens
+    assert (response.dashboard and response.dashboard.purchase_skus or 0) > 0 or (
+        response.purchase_list and len(response.purchase_list) > 0
+    )
+
+
+@pytest.mark.asyncio
+async def test_filter_hint_ref_does_not_404(monkeypatch):
+    from app.core.models import QueryInterpretation, Reference
+
+    llm_interp = QueryInterpretation(
+        intent="replenishment",
+        references=[Reference(text="cobertura baja", kind="filter_hint")],
+        filter_hints=[],
+        confidence="high",
+        source="llm",
+        relation="new_query",
+    )
+    monkeypatch.setattr(
+        "app.pipeline.query_interpreter_agent.interpret_query_llm",
+        AsyncMock(return_value=llm_interp),
+    )
+    response = await run_supplymate("mostrame lo crítico con cobertura baja")
+    assert response.mode == "explore"
+    assert "No encontré" not in response.answer

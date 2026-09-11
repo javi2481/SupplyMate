@@ -527,6 +527,13 @@ def resolve_single_reference(ref: Reference) -> ResolvedReference:
     user_text = raw
     store = get_store()
 
+    if ref.kind == "filter_hint":
+        return ResolvedReference(
+            user_text=user_text,
+            match_kind="unresolved",
+            confidence="low",
+        )
+
     if ref.kind == "sku_hint" or NUMERIC_CODE_RE.fullmatch(raw):
         try:
             product_id = resolve_product_id(raw)
@@ -634,7 +641,11 @@ def resolve_single_reference(ref: Reference) -> ResolvedReference:
 def resolve_references(interpretation: QueryInterpretation) -> list[ResolvedReference]:
     if not interpretation.references:
         return []
-    return [resolve_single_reference(ref) for ref in interpretation.references]
+    return [
+        resolve_single_reference(ref)
+        for ref in interpretation.references
+        if ref.kind != "filter_hint"
+    ]
 
 
 def disambiguation_options(resolved: list[ResolvedReference]) -> list[str]:

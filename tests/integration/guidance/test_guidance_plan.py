@@ -5,7 +5,13 @@ import pytest
 import app.guidance.guidance_tokens as guidance_tokens_mod
 import app.pipeline.query_interpretation as query_interpretation_mod
 from app.agent import run_apply_chip, run_supplymate
-from app.core.models import AnalyticalScope, GuidanceChip, QueryInterpretation, ResolvedReference
+from app.core.models import (
+    AnalyticalScope,
+    GuidanceChip,
+    InventoryDashboard,
+    QueryInterpretation,
+    ResolvedReference,
+)
 from app.guidance import pick_next_question
 from app.guidance.guidance_chips import apply_guidance_chip, chip_for_subcategory
 from app.guidance.missions import is_complement_target, load_missions, mission_neighbors
@@ -112,6 +118,14 @@ def test_apply_chip_draft_oc():
     chip = GuidanceChip(label="Armar OC", action="draft_oc", args={})
     _, commit = apply_guidance_chip(scope, chip)
     assert commit
+
+
+def test_empty_purchase_list_never_draft_oc():
+    scope = AnalyticalScope(categories=["Cosmetica"], suppliers=["UNILEVER"])
+    dash = InventoryDashboard(skus=0, recommended_units=0, purchase_skus=0)
+    facets = list_slice_facets(scope, dash, [])
+    guide = pick_next_question(scope, facets, purchase_items=[], dashboard=dash)
+    assert guide.action != "draft_oc"
 
 
 def test_panales_facets_offer_baby_adult_first():

@@ -118,3 +118,26 @@ def test_build_scope_applies_coverage_and_criticos():
     assert scope.categories == ["Cosmetica"]
     assert metrics.BUCKET_STOCKOUT_RISK in scope.health_buckets
     assert "0–3 días" in scope.coverage_buckets
+
+
+def test_enrich_demotes_filter_hint_refs_to_hints():
+    from app.core.models import QueryInterpretation, Reference
+    from app.pipeline.query_interpretation import enrich_interpretation_from_message
+
+    poisoned = QueryInterpretation(
+        intent="replenishment",
+        references=[
+            Reference(text="cobertura baja", kind="filter_hint"),
+            Reference(text="críticos", kind="filter_hint"),
+        ],
+        filter_hints=[],
+        source="llm",
+    )
+    cleaned = enrich_interpretation_from_message(
+        poisoned, "mostrame lo crítico con cobertura baja"
+    )
+    assert cleaned.references == []
+    assert cleaned.intent == "inventory_risk"
+    assert any(h in cleaned.filter_hints for h in ("criticos", "critico", "0–3 días")) or any(
+        "critico" in h for h in cleaned.filter_hints
+    )

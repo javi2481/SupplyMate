@@ -103,7 +103,7 @@ def filter_rows(rows: list[dict], scope: AnalyticalScope | None) -> list[dict]:
         filtered = [
             row
             for row in filtered
-            if all(
+            if any(
                 name_has_token(str(row.get("product_name") or ""), token)
                 for token in scope.name_tokens
             )

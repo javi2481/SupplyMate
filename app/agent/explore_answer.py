@@ -51,9 +51,11 @@ def format_explore_answer(
     purchase_count = dash.purchase_skus or (
         len(slice_data.purchase_list) if slice_data.purchase_list else 0
     )
-    if group_summaries and not slice_data.purchase_list:
-        total_units = sum(item.recommended_quantity for item in group_summaries)
-        sku_hint = purchase_count or sum(item.sku_count for item in group_summaries)
+    empty_purchase = not slice_data.purchase_list and purchase_count == 0
+    # Never invent totals from per-ref group_summaries when the applied slice is empty.
+    if empty_purchase:
+        total_units = 0
+        sku_hint = 0
     elif slice_data.purchase_list:
         total_units = dash.recommended_units or sum(
             i.recommended_quantity for i in slice_data.purchase_list
@@ -70,6 +72,19 @@ def format_explore_answer(
             lines.append(f"{labels} · próximos {days} días.")
     elif sku_hint:
         lines.append(f"Recorte · {sku_hint} SKUs · próximos {days} días.")
+
+    if empty_purchase:
+        if len(group_summaries) >= 2:
+            lines.append(
+                "No hay productos que cumplan todos esos criterios a la vez "
+                "en este recorte."
+            )
+        else:
+            lines.append(
+                "Con el stock y las ventas de los últimos 30 días, "
+                "no hay productos que requieran reposición en este recorte."
+            )
+        return "\n".join(lines)
 
     if not slice_data.purchase_list and not group_summaries:
         lines.append(
@@ -107,7 +122,12 @@ def format_explore_answer(
             lines.append(f"- {item.label} — {item.recommended_quantity} unidades")
 
     guide = guidance
-    if guide and guide.action == "draft_oc" and guide.question:
+    if (
+        guide
+        and guide.action == "draft_oc"
+        and guide.question
+        and slice_data.purchase_list
+    ):
         lines.append("")
         lines.append(_strip_md(guide.question))
     else:

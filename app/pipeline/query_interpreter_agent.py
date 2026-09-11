@@ -29,6 +29,7 @@ Reglas:
 - Un talle o variante (xxg, xxxg) es product_group, no single_sku.
 - «para N días / próximos N días / a N días» es el horizonte del operador: IGNORALO en references y filter_hints (no pegues «dias» a una marca). Python extrae N y recalcula cantidades con ese horizonte (default 7).
 - «críticos / crítica / riesgo / quiebre / sin stock / me falta» y «menos de N días de cobertura / cobertura 0-3» van a filter_hints (ej. "criticos", "me falta", "0–3 días"), NO a references. Python aplica health/coverage al recorte.
+- NUNCA pongas filter_hint dentro de references; usá solo el campo filter_hints.
 - relation=refinement si el usuario recorta el análisis actual (me refiero a, sólo, los de, un talle).
 - relation=new_query si cambia de rubro (pañales → shampoo).
 - Si no hay suficiente contexto para responder bien, igual extraé la referencia y usá replenishment + refinement; Python guía las opciones.

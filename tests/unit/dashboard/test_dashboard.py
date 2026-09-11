@@ -293,3 +293,15 @@ def test_filter_rows_name_token_whole_word():
     out = dashboard.filter_rows(rows, scope)
     assert [row["product_id"] for row in out] == ["a"]
 
+
+def test_filter_rows_or_two_name_tokens():
+    """Peer brand tokens union within the axis (dove ∪ rexona), not intersection."""
+    rows = [
+        _row(product_id="a", product_name="DOVE ORIGINAL X 90G"),
+        _row(product_id="b", product_name="REXONA CLINICAL X 50"),
+        _row(product_id="c", product_name="NIVEA SOFT X 100"),
+    ]
+    scope = AnalyticalScope(name_tokens=["dove", "rexona"])
+    out = dashboard.filter_rows(rows, scope)
+    assert {row["product_id"] for row in out} == {"a", "b"}
+
