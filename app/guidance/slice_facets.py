@@ -5,12 +5,11 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 
-from app.guidance.guidance_tokens import GUIDE_SKU_THRESHOLD, size_tokens_from_skus
-from app.core.models import AnalyticalScope, InventoryDashboard, PurchaseListItem
-from app.guidance.missions import MissionEdge, mission_neighbors
-from app.services.analytics import metrics
-from app.services.analytics import catalog_service
 from app.catalog.store import get_store
+from app.core.models import AnalyticalScope, InventoryDashboard, PurchaseListItem
+from app.guidance.guidance_tokens import size_tokens_from_skus
+from app.guidance.missions import MissionEdge, mission_neighbors
+from app.services.analytics import catalog_service, metrics
 
 
 @dataclass

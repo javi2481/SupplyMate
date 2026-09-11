@@ -55,11 +55,12 @@ def test_acceptance_panales_xxg_slice_and_csv_match():
 
 
 def test_acceptance_scope_add_xxg_matches_pipeline():
-    scope = scope_svc.add(
+    _scope = scope_svc.add(
         scope_svc.add(AnalyticalScope(), "category", "Pañales"),
         "name_token",
         "xxg",
     )
+    assert "xxg" in (_scope.name_tokens or [])
     params = {"category": "Pañales", "name_token": "xxg", "limit": 10}
     json_items = client.get("/replenishment/purchase-list", params=params).json()
     csv_rows = list(

@@ -13,13 +13,14 @@ export type Sku = {
 
 export const HORIZON_DAYS = 7;
 
-export type HealthTag = "riesgo_quiebre" | "sin_stock" | "sobrestock" | "cobertura_baja";
+/** Canonical filter tags — re-export from scope (single source of truth). */
+export type { HealthTag } from "@/lib/scope";
+import type { HealthTag } from "@/lib/scope";
 
 export const HEALTH_LABEL: Record<HealthTag, string> = {
   riesgo_quiebre: "Riesgo de quiebre",
   sin_stock: "Falta de stock",
   sobrestock: "Sobrestock",
-  cobertura_baja: "Cobertura baja",
 };
 
 /** Health chips shown in the UI. Coverage is a separate filter, not a health state. */

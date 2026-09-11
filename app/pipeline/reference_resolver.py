@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from typing import Literal
 
-from app.core.models import QueryInterpretation, Reference, ResolvedReference
-from app.catalog.products import NUMERIC_CODE_RE, message_looks_like_sku, resolve_product_id
-from app.core.replenishment import calculate_replenishment
+from app.catalog.products import NUMERIC_CODE_RE, resolve_product_id
 from app.catalog.store import get_store
+from app.core.models import QueryInterpretation, Reference, ResolvedReference
+from app.core.replenishment import calculate_replenishment
 
 _QUERY_STOPWORDS = {
     "cuanto",
@@ -149,6 +150,97 @@ def _label_for_group(scope_dimension: str, scope_value: str) -> str:
     return scope_value
 
 
+def _supplier_match_score(token: str, label: str) -> int:
+    """Stricter than _match_score: ignore mid-label tokens (cuidado ≠ NEWSAN CUIDADO…)."""
+    label_norm = normalize_text(label)
+    if not label_norm or not token:
+        return 0
+    if token == label_norm:
+        return SCORE_EXACT
+    stem = _stem(token)
+    first = label_norm.split()[0]
+    if token == first:
+        return SCORE_EXACT
+    if stem and stem == _stem(first):
+        return SCORE_STEM
+    if label_norm.startswith(stem) or first.startswith(stem):
+        return SCORE_PREFIX_OR_TOKEN
+    return 0
+
+
+def _index_label_hit(
+    bucket: dict[str, list[str]],
+    label: str,
+    pid: str,
+    token: str,
+    *,
+    min_score: int = MIN_GROUP_SCORE,
+    score_fn=_match_score,
+) -> None:
+    label = (label or "").strip()
+    if not label:
+        return
+    if score_fn(token, label) >= min_score:
+        bucket.setdefault(label, []).append(pid)
+
+
+def _supplier_family(token: str, labels: list[str]) -> bool:
+    """True when every label shares the query stem as a prefix/first-token family."""
+    stem = _stem(token)
+    if len(stem) < 3:
+        return False
+    for label in labels:
+        norm = normalize_text(label)
+        if not norm:
+            return False
+        first = norm.split()[0]
+        if norm.startswith(stem) or first.startswith(stem) or _stem(first) == stem:
+            continue
+        if token in norm.split():
+            continue
+        return False
+    return True
+
+
+def _pick_suppliers(
+    token: str,
+    suppliers: dict[str, list[str]],
+) -> tuple[str, list[str], list[str]] | None | Literal["ambiguous"]:
+    """Return (best_label, scope_values, sku_ids), None, or 'ambiguous'.
+
+    Union related reasons sociales (UNILEVER + UNILEVER HOME CARE). Unrelated
+    high-scoring suppliers → ambiguous. Requires score >= SCORE_PREFIX_OR_TOKEN.
+    """
+    candidates: list[tuple[int, int, str, list[str]]] = []
+    for label, pids in suppliers.items():
+        if not pids:
+            continue
+        score = _supplier_match_score(token, label)
+        if score >= SCORE_PREFIX_OR_TOKEN:
+            candidates.append((score, len(pids), label, pids))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (-item[0], -item[1], item[2]))
+    if len(candidates) == 1:
+        score, _n, label, pids = candidates[0]
+        return label, [label], list(dict.fromkeys(pids))
+
+    labels = [c[2] for c in candidates]
+    if _supplier_family(token, labels):
+        all_pids: list[str] = []
+        scope_values = [c[2] for c in candidates]
+        for _s, _n, _lab, pids in candidates:
+            all_pids.extend(pids)
+        best_label = candidates[0][2]
+        return best_label, scope_values, list(dict.fromkeys(all_pids))
+
+    best, second = candidates[0], candidates[1]
+    if best[0] - second[0] < CLOSE_SECOND_SCORE_GAP and second[0] >= MIN_CLOSE_SECOND_SCORE:
+        return "ambiguous"
+    label, pids = best[2], best[3]
+    return label, [label], list(dict.fromkeys(pids))
+
+
 def _pick_best_group(
     token: str,
     categories: dict[str, list[str]],
@@ -223,6 +315,45 @@ def _pick_best_group(
     return best[2], best[3], best[4]
 
 
+def _resolved_supplier(
+    user_text: str,
+    best_label: str,
+    scope_values: list[str],
+    pids: list[str],
+) -> ResolvedReference:
+    return ResolvedReference(
+        label=best_label,
+        user_text=user_text,
+        match_kind="group",
+        sku_ids=pids,
+        scope_dimension="supplier",
+        scope_value=best_label,
+        scope_values=scope_values,
+        sku_count=len(pids),
+        recommended_quantity=_qty_for_skus(pids),
+        confidence="high",
+    )
+
+
+def _resolved_taxonomy(
+    user_text: str,
+    dim: str,
+    value: str,
+    pids: list[str],
+) -> ResolvedReference:
+    return ResolvedReference(
+        label=_label_for_group(dim, value),
+        user_text=user_text,
+        match_kind="group",
+        sku_ids=pids,
+        scope_dimension=dim,  # type: ignore[arg-type]
+        scope_value=value,
+        sku_count=len(pids),
+        recommended_quantity=_qty_for_skus(pids),
+        confidence="high",
+    )
+
+
 def _display_token(token: str) -> str:
     if SIZE_TOKEN_RE.fullmatch(token):
         return token.upper()
@@ -233,12 +364,17 @@ def _product_matches_tokens(master, tokens: list[str]) -> bool:
     name_norm = normalize_text(master.product_name)
     cat_norm = normalize_text(master.category or "")
     sub_norm = normalize_text(master.subcategory or "")
+    sup_norm = normalize_text(master.supplier or "")
     for piece in tokens:
         if _token_matches_name(piece, name_norm):
             continue
         if cat_norm and _token_matches_name(piece, cat_norm):
             continue
         if sub_norm and _token_matches_name(piece, sub_norm):
+            continue
+        if master.supplier and _supplier_match_score(piece, master.supplier) >= SCORE_PREFIX_OR_TOKEN:
+            continue
+        if sup_norm and _token_matches_name(piece, sup_norm):
             continue
         return False
     return True
@@ -259,7 +395,65 @@ def _group_from_name_hits(user_text: str, token: str, pids: list[str]) -> Resolv
     )
 
 
+def _collect_entity_indexes(token: str) -> tuple[
+    dict[str, list[str]],
+    dict[str, list[str]],
+    dict[str, list[str]],
+    list[str],
+]:
+    store = get_store()
+    categories: dict[str, list[str]] = {}
+    subcategories: dict[str, list[str]] = {}
+    suppliers: dict[str, list[str]] = {}
+    name_hits: list[str] = []
+
+    for master in store.products.values():
+        pid = master.product_id
+        cat = (master.category or "").strip()
+        sub = (master.subcategory or "").strip()
+        supplier = (master.supplier or "").strip()
+        name_norm = normalize_text(master.product_name)
+
+        _index_label_hit(categories, cat, pid, token)
+        _index_label_hit(subcategories, sub, pid, token)
+        _index_label_hit(
+            suppliers,
+            supplier,
+            pid,
+            token,
+            min_score=SCORE_PREFIX_OR_TOKEN,
+            score_fn=_supplier_match_score,
+        )
+        if _token_matches_name(token, name_norm):
+            name_hits.append(pid)
+
+    return categories, subcategories, suppliers, list(dict.fromkeys(name_hits))
+
+
+def _resolve_phrase_as_entity(user_text: str, phrase: str) -> ResolvedReference | None:
+    """Resolve a full phrase against taxonomy then suppliers (before conjunction)."""
+    categories, subcategories, suppliers, _name_hits = _collect_entity_indexes(phrase)
+    group_pick = _pick_best_group(phrase, categories, subcategories)
+    if group_pick:
+        dim, value, pids = group_pick
+        return _resolved_taxonomy(user_text, dim, value, pids)
+    supplier_pick = _pick_suppliers(phrase, suppliers)
+    if supplier_pick == "ambiguous":
+        return ResolvedReference(
+            user_text=user_text, match_kind="ambiguous", confidence="low"
+        )
+    if supplier_pick:
+        best_label, scope_values, pids = supplier_pick
+        return _resolved_supplier(user_text, best_label, scope_values, pids)
+    return None
+
+
 def _resolve_conjunction(user_text: str, tokens: list[str]) -> ResolvedReference:
+    phrase = " ".join(tokens)
+    phrase_hit = _resolve_phrase_as_entity(user_text, phrase)
+    if phrase_hit is not None:
+        return phrase_hit
+
     store = get_store()
     pids = [
         master.product_id
@@ -301,10 +495,8 @@ def _resolve_conjunction(user_text: str, tokens: list[str]) -> ResolvedReference
             master = store.get_master(pid)
             cat = (master.category or "").strip()
             sub = (master.subcategory or "").strip()
-            if cat and _token_matches_name(piece, normalize_text(cat)):
-                cats.setdefault(cat, []).append(pid)
-            if sub and _token_matches_name(piece, normalize_text(sub)):
-                subs.setdefault(sub, []).append(pid)
+            _index_label_hit(cats, cat, pid, piece)
+            _index_label_hit(subs, sub, pid, piece)
         pick = _pick_best_group(piece, cats, subs)
         if pick and not group_val:
             group_dim, group_val, _ = pick
@@ -373,41 +565,23 @@ def resolve_single_reference(ref: Reference) -> ResolvedReference:
     if len(tokens) > 1:
         return _resolve_conjunction(user_text, tokens)
 
-    categories: dict[str, list[str]] = {}
-    subcategories: dict[str, list[str]] = {}
-    name_hits: list[str] = []
+    categories, subcategories, suppliers, name_hits = _collect_entity_indexes(token)
 
-    for master in store.products.values():
-        pid = master.product_id
-        cat = (master.category or "").strip()
-        sub = (master.subcategory or "").strip()
-        name_norm = normalize_text(master.product_name)
-
-        if _token_matches_name(token, normalize_text(cat)):
-            categories.setdefault(cat, []).append(pid)
-        if sub and _token_matches_name(token, normalize_text(sub)):
-            subcategories.setdefault(sub, []).append(pid)
-        if _token_matches_name(token, name_norm):
-            name_hits.append(pid)
-
-    name_hits = list(dict.fromkeys(name_hits))
-
-    # Prefer category/subcategory over a unique product-name hit so tokens like
-    # «cosmética» resolve to Cosmetica, not BASICCARE BOTELLAS COSMETICAS.
+    # Prefer category/subcategory over supplier and over a unique product-name hit
+    # so tokens like «cosmética» resolve to Cosmetica, not a supplier or SKU name.
     group_pick = _pick_best_group(token, categories, subcategories)
     if group_pick:
         dim, value, pids = group_pick
+        return _resolved_taxonomy(user_text, dim, value, pids)
+
+    supplier_pick = _pick_suppliers(token, suppliers)
+    if supplier_pick == "ambiguous":
         return ResolvedReference(
-            label=_label_for_group(dim, value),
-            user_text=user_text,
-            match_kind="group",
-            sku_ids=pids,
-            scope_dimension=dim,  # type: ignore[arg-type]
-            scope_value=value,
-            sku_count=len(pids),
-            recommended_quantity=_qty_for_skus(pids),
-            confidence="high",
+            user_text=user_text, match_kind="ambiguous", confidence="low"
         )
+    if supplier_pick:
+        best_label, scope_values, pids = supplier_pick
+        return _resolved_supplier(user_text, best_label, scope_values, pids)
 
     if len(name_hits) == 1:
         pid = name_hits[0]
@@ -442,20 +616,9 @@ def resolve_single_reference(ref: Reference) -> ResolvedReference:
 
     if len(group_candidates) == 1:
         dim, value, pids = group_candidates[0]
-        return ResolvedReference(
-            label=_label_for_group(dim, value),
-            user_text=user_text,
-            match_kind="group",
-            sku_ids=pids,
-            scope_dimension=dim,  # type: ignore[arg-type]
-            scope_value=value,
-            sku_count=len(pids),
-            recommended_quantity=_qty_for_skus(pids),
-            confidence="high",
-        )
+        return _resolved_taxonomy(user_text, dim, value, pids)
 
     if len(group_candidates) > 1:
-        options = [f"{dim}: {val}" for dim, val, _ in group_candidates[:5]]
         return ResolvedReference(
             user_text=user_text,
             match_kind="ambiguous",

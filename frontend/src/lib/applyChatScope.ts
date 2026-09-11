@@ -5,10 +5,20 @@ import { HttpError } from "@/lib/api";
 import { EMPTY_SLICE, scopePayloadToUiSlice, type UiSlice } from "@/lib/scope";
 
 export const COPY_CATALOG_LOAD_FAILED = "No pude cargar el catálogo. Intentá de nuevo en un momento.";
+export const COPY_ASSISTANT_UNAVAILABLE = "El asistente no está disponible. Intentá de nuevo en un momento.";
+
+const PRODUCT_NOT_FOUND_RE = /Product not found:\s*([^"}\n]+)/i;
 
 export function chatFailureMessage(query: string, error: unknown): string {
-  if (error instanceof HttpError && error.status === 404) {
-    return `No encontré «${query}» en el catálogo.`;
+  if (error instanceof HttpError) {
+    if (error.status === 404) {
+      const fromDetail = PRODUCT_NOT_FOUND_RE.exec(error.message)?.[1]?.trim();
+      const token = fromDetail || query.trim() || "ese producto";
+      return `No encontré «${token}» en el catálogo.`;
+    }
+    if (error.status >= 500) {
+      return COPY_ASSISTANT_UNAVAILABLE;
+    }
   }
   return COPY_CATALOG_LOAD_FAILED;
 }

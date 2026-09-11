@@ -11,34 +11,10 @@ from app.agent.explore_answer import (
     format_explore_answer,
     group_summaries_from_resolved,
 )
-from app.guidance import guidance_after_slice, guidance_for_resolution
 from app.agent.intent_classifier import classify_intent
 from app.agent.intents import is_purchase_list_query, is_top_categories_query, match_rule_intent
 from app.agent.llm_log import emit
-from app.agent.turn_log import attach_trace, build_turn_trace, emit_turn
 from app.agent.model import get_model
-from app.core.models import (
-    AnalyticalScope,
-    AnalyzeRequest,
-    AnalyzeResponse,
-    ChatInterpretation,
-    ChatResponse,
-    CommitSummary,
-    DashboardInsight,
-    GuidanceDecision,
-    GuidanceChip,
-    ProductNotFoundError,
-    SupplyContext,
-)
-from app.core.replenishment import HORIZON_DAYS
-from app.catalog.products import NUMERIC_CODE_RE, message_looks_like_sku, resolve_from_message, resolve_product_id
-from app.pipeline.query_interpretation import _scope_empty, interpret_query
-from app.pipeline.reference_resolver import resolve_references
-from app.pipeline.scope_builder import build_resolution_result, promote_new_query_if_needed
-from app.services import catalog_service, insight_cache, prompt_compiler
-from app.services import insight_validator
-from app.services import panel_modes
-from app.services import scope as scope_svc
 from app.agent.tools import (
     get_inventory,
     get_replenishment_params,
@@ -47,6 +23,39 @@ from app.agent.tools import (
     load_replenishment_params,
     load_sales_history,
 )
+from app.agent.turn_log import attach_trace, build_turn_trace, emit_turn
+from app.catalog.products import (
+    NUMERIC_CODE_RE,
+    message_looks_like_sku,
+    resolve_from_message,
+    resolve_product_id,
+)
+from app.core.models import (
+    AnalyticalScope,
+    AnalyzeRequest,
+    AnalyzeResponse,
+    ChatInterpretation,
+    ChatResponse,
+    CommitSummary,
+    DashboardInsight,
+    GuidanceChip,
+    GuidanceDecision,
+    ProductNotFoundError,
+    SupplyContext,
+)
+from app.core.replenishment import HORIZON_DAYS
+from app.guidance import guidance_after_slice, guidance_for_resolution
+from app.pipeline.query_interpretation import _scope_empty, interpret_query
+from app.pipeline.reference_resolver import resolve_references
+from app.pipeline.scope_builder import build_resolution_result, promote_new_query_if_needed
+from app.services import (
+    catalog_service,
+    insight_cache,
+    insight_validator,
+    panel_modes,
+    prompt_compiler,
+)
+from app.services import scope as scope_svc
 
 SUPPLY_INSTRUCTIONS = """
 You are SupplyMate, a replenishment assistant for SME distributors.
@@ -264,7 +273,9 @@ async def run_analyze(request: AnalyzeRequest) -> AnalyzeResponse:
                     insight_source="llm",
                     compiled_prompt_hash=phash,
                 )
-    except (json.JSONDecodeError, ValueError, TypeError, RuntimeError):
+    except Exception:
+        # Incluye fallos de transporte del proveedor LLM (auth, rate limit, red):
+        # el panel se arma con números de Python en vez de devolver un 500.
         response = _fallback_analyze_response(request, slice_data, prompt_hash=phash)
 
     insight_cache.set(cache_key, response)
@@ -372,9 +383,17 @@ async def _run_single_product(
     days = clamp_horizon_days(horizon_days)
     product_id = _extract_product_id(message)
     context = SupplyContext(product_id=product_id)
-    supply_agent = build_supply_agent()
 
-    await _run_logged(supply_agent, message, context=context)
+    llm_up = True
+    try:
+        supply_agent = build_supply_agent()
+        await _run_logged(supply_agent, message, context=context)
+    except ProductNotFoundError:
+        raise
+    except Exception:
+        # Sin LLM el producto se resuelve igual desde el catálogo.
+        llm_up = False
+        emit(event="runner.error", agent="SupplyMate", latency_ms=0, fallback_used=True)
 
     if not context.ready():
         product_id = context.product_id or _extract_product_id(message)
@@ -394,7 +413,6 @@ async def _run_single_product(
     context.result = recommendation.calculation
     context.recommendation = recommendation
 
-    explain_agent = build_explain_agent()
     explain_payload = {
         "product_id": recommendation.product_id,
         "product_name": recommendation.product_name,
@@ -406,16 +424,24 @@ async def _run_single_product(
         "Explica esta recomendación de reabastecimiento al usuario:\n"
         f"{json.dumps(explain_payload, ensure_ascii=False)}"
     )
-    explain_run, _latency = await _run_logged(explain_agent, explain_prompt)
-    answer = str(explain_run.final_output)
-    orphan_errors = insight_validator.validate_explanation_text(answer, explain_payload)
-    fallback_used = bool(orphan_errors)
+    answer = ""
+    latency = 0
+    if llm_up:
+        try:
+            explain_agent = build_explain_agent()
+            explain_run, latency = await _run_logged(explain_agent, explain_prompt)
+            answer = str(explain_run.final_output)
+        except Exception:
+            llm_up = False
+    fallback_used = not llm_up or bool(
+        insight_validator.validate_explanation_text(answer, explain_payload)
+    )
     if fallback_used:
         answer = catalog_service.format_single_product_answer(recommendation)
     emit(
         event="explain.complete",
         agent="SupplyMateExplainer",
-        latency_ms=_latency,
+        latency_ms=latency,
         fallback_used=fallback_used,
         insight_source="fallback" if fallback_used else "llm",
     )
@@ -541,6 +567,23 @@ async def run_supplymate(
                 )
                 raise ProductNotFoundError(sku)
             if unresolved_all:
+                scoped = resolution.scope
+                has_risk_scope = bool(
+                    scoped.health_buckets
+                    or scoped.coverage_buckets
+                    or scoped.out_of_stock_only
+                )
+                if has_risk_scope and interpretation.intent in (
+                    "inventory_risk",
+                    "replenishment",
+                ):
+                    # Junk/unresolved refs must not block explore when Python already
+                    # applied health/coverage from filter_hints.
+                    route = "explore_risk_unresolved_fallback"
+                    response = await _run_explore(message, scoped)
+                    return _finalize_turn(
+                        message, previous, interpretation, resolved, response, route, started
+                    )
                 token = next((r.user_text for r in resolved if r.user_text), message)
                 raise ProductNotFoundError(token)
             route = "disambiguation"
@@ -660,8 +703,22 @@ async def run_supplymate(
                 message, previous, interpretation, resolved, response, route, started
             )
         if intent is None:
-            route = "single_sku_fallback"
-            response = await _run_single_product(message, horizon_days=horizon)
+            # Clasificador caído: nunca forzar un SKU. Si las reglas ya armaron un
+            # recorte usable lo mostramos; si no, respondemos sin inventar.
+            if not _scope_empty(resolution.scope):
+                route = "explore_classifier_unavailable"
+                response = await _run_explore(message, resolution.scope)
+            else:
+                route = "assistant_unavailable"
+                response = ChatResponse(
+                    answer=(
+                        "No pude interpretar tu pregunta en este momento. "
+                        "Probá de nuevo en unos segundos, o escribí el nombre o "
+                        "código de un producto, o «qué productos tengo que comprar»."
+                    ),
+                    mode="unknown",
+                    horizon_days=horizon,
+                )
             return _finalize_turn(
                 message, previous, interpretation, resolved, response, route, started
             )

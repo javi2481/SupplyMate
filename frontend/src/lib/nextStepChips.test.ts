@@ -53,8 +53,8 @@ describe("mockNextStepChips", () => {
       "filter_health",
       "filter_supplier",
     ]);
-    expect(chips[0]?.args.category).toBe("A");
-    expect(chips[1]?.args.category).toBe("B");
+    expect(chips[0]?.args["category"]).toBe("A");
+    expect(chips[1]?.args["category"]).toBe("B");
     expect(chips.some((c) => c.action === "open_sku")).toBe(false);
     expect(chips.some((c) => c.action === "draft_oc")).toBe(false);
   });
@@ -90,7 +90,7 @@ describe("mockNextStepChips", () => {
     const chips = mockNextStepChips([row], EMPTY);
     const skuChip = chips.find((c) => c.action === "open_sku");
     if (skuChip) {
-      expect(skuChip.args.product_id).toBe("1");
+      expect(skuChip.args["product_id"]).toBe("1");
     }
   });
 });

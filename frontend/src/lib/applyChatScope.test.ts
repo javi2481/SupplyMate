@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ChatResponse } from "@/lib/api";
 import { HttpError } from "@/lib/api";
 import {
+  COPY_ASSISTANT_UNAVAILABLE,
   COPY_CATALOG_LOAD_FAILED,
   applyChatScope,
   chatFailureMessage,
@@ -75,8 +76,36 @@ describe("chatFailureMessage", () => {
     );
   });
 
+  it("prefers Product not found token over the full user query", () => {
+    expect(
+      chatFailureMessage(
+        "que me falta de unilever?",
+        new HttpError(404, "/chat", "Product not found: unilever"),
+      ),
+    ).toBe("No encontré «unilever» en el catálogo.");
+  });
+
+  it("falls back to the query when detail has no token", () => {
+    expect(chatFailureMessage("SKU999", new HttpError(404, "/chat", "Not found"))).toBe(
+      "No encontré «SKU999» en el catálogo.",
+    );
+  });
+
+  it("uses assistant-unavailable copy for server failures", () => {
+    expect(chatFailureMessage("quiebre", new HttpError(503, "/chat", "Assistant unavailable"))).toBe(
+      COPY_ASSISTANT_UNAVAILABLE,
+    );
+    expect(chatFailureMessage("quiebre", new HttpError(500, "/chat", "Internal Server Error"))).toBe(
+      COPY_ASSISTANT_UNAVAILABLE,
+    );
+    expect(COPY_ASSISTANT_UNAVAILABLE).not.toMatch(/motor|API|localhost|levantad|127\.0\.0\.1/i);
+  });
+
   it("uses catalog load copy for other failures", () => {
     expect(chatFailureMessage("quiebre", new Error("Failed to fetch"))).toBe(COPY_CATALOG_LOAD_FAILED);
+    expect(chatFailureMessage("quiebre", new HttpError(422, "/chat", "Unprocessable"))).toBe(
+      COPY_CATALOG_LOAD_FAILED,
+    );
     expect(COPY_CATALOG_LOAD_FAILED).not.toMatch(/motor|API|localhost|levantad/i);
   });
 });

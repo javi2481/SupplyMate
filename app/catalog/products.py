@@ -5,8 +5,8 @@ import unicodedata
 from pathlib import Path
 
 from app.agent.intents import is_purchase_list_query, is_top_categories_query
-from app.core.models import ProductNotFoundError
 from app.catalog.store import get_store, reset_store_cache
+from app.core.models import ProductNotFoundError
 
 NUMERIC_CODE_RE = re.compile(r"\d{5,}")
 

@@ -85,3 +85,75 @@ def test_cosmetica_prefers_category_over_unique_name_hit():
     assert resolved.scope_value == "Cosmetica"
     assert resolved.product_id != "8112743"
     assert "8112743" not in resolved.sku_ids or resolved.sku_count > 1
+
+
+def test_unilever_resolves_supplier_union():
+    resolved = resolve_single_reference(Reference(text="unilever", kind="product_group"))
+    assert resolved.match_kind == "group"
+    assert resolved.scope_dimension == "supplier"
+    assert "UNILEVER" in resolved.scope_value
+    assert "UNILEVER" in resolved.scope_values
+    assert "UNILEVER (HOME CARE)" in resolved.scope_values
+    assert resolved.sku_count >= 400
+
+
+def test_loreal_prefers_supplier_over_name_token():
+    resolved = resolve_single_reference(Reference(text="loreal", kind="product_group"))
+    assert resolved.match_kind == "group"
+    assert resolved.scope_dimension == "supplier"
+    assert "LOREAL" in resolved.scope_value.upper()
+    # Name-token proxy was ~181; supplier coverage is ~1000.
+    assert resolved.sku_count >= 500
+    assert not resolved.name_tokens
+
+
+def test_cosmetica_prefers_category_over_supplier_collision():
+    resolved = resolve_single_reference(Reference(text="cosmetica", kind="product_group"))
+    assert resolved.match_kind == "group"
+    assert resolved.scope_dimension == "category"
+    assert resolved.scope_value == "Cosmetica"
+
+
+def test_desodorante_singular_resolves_category():
+    resolved = resolve_single_reference(Reference(text="desodorante", kind="product_group"))
+    assert resolved.match_kind == "group"
+    assert resolved.scope_dimension == "category"
+    assert "Desodorante" in resolved.scope_value
+    assert resolved.sku_count >= 100
+
+
+def test_build_scope_applies_supplier_values():
+    from app.core.models import QueryInterpretation
+    from app.pipeline.scope_builder import build_scope
+
+    resolved = resolve_single_reference(Reference(text="unilever", kind="product_group"))
+    scope = build_scope(
+        QueryInterpretation(intent="inventory_risk", references=[Reference(text="unilever")]),
+        [resolved],
+    )
+    assert "UNILEVER" in scope.suppliers
+    assert "UNILEVER (HOME CARE)" in scope.suppliers
+
+
+def test_sin_stock_rules_have_hint_no_junk_ref():
+    from app.pipeline.query_interpretation import enrich_interpretation_from_message
+
+    interp = interpret_query_rules("productos sin stock")
+    assert interp is not None
+    interp = enrich_interpretation_from_message(interp, "productos sin stock")
+    assert interp.intent == "inventory_risk"
+    assert "sin stock" in interp.filter_hints
+    assert interp.references == []
+
+
+def test_me_falta_de_unilever_rules():
+    from app.pipeline.query_interpretation import enrich_interpretation_from_message
+
+    msg = "que me falta de unilever?"
+    interp = interpret_query_rules(msg)
+    assert interp is not None
+    interp = enrich_interpretation_from_message(interp, msg)
+    assert interp.intent == "inventory_risk"
+    assert "me falta" in interp.filter_hints
+    assert any(r.text.lower() == "unilever" for r in interp.references)
+    assert not any("falta" in r.text.lower() and r.text.lower() != "unilever" for r in interp.references)

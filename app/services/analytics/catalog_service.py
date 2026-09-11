@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import date
 
+from app.catalog.products import resolve_product_id
+from app.catalog.store import SALES_AS_OF, get_store
 from app.core.models import (
     AnalyticalScope,
     InventoryDashboard,
@@ -13,11 +15,9 @@ from app.core.models import (
     ReplenishmentSlice,
     SalesHistory,
 )
-from app.catalog.products import resolve_product_id
 from app.core.replenishment import HORIZON_DAYS, calculate_replenishment, clamp_horizon_days
 from app.services.analytics import dashboard, metrics
 from app.services.scoping import suggested_filters
-from app.catalog.store import SALES_AS_OF, get_store
 
 _sku_rows_cache: dict[int, list[dict]] = {}
 

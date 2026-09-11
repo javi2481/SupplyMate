@@ -1,13 +1,22 @@
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.api import app
-from app.core.models import ChatResponse, ProductContext, ProductNotFoundError, ReplenishmentResult
+from app.core.models import ChatResponse, ProductNotFoundError
+from app.middleware.rate_limit import reset_rate_limits
 from app.services import catalog_service
 from tests.catalog_ids import SKU_HIGH_QTY, SKU_UNKNOWN, SKU_ZERO_QTY
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    reset_rate_limits()
+    yield
+    reset_rate_limits()
 
 
 def _sample_chat_response() -> ChatResponse:
@@ -153,6 +162,40 @@ def test_chat_not_found():
             json={"message": f"¿Cuánto pedir de {SKU_UNKNOWN}?"},
         )
     assert response.status_code == 404
+
+
+class LLMTransportError(Exception):
+    """Stands in for provider transport failures (auth, rate limit, network)."""
+
+
+def test_chat_ambiguous_message_returns_200_when_llm_is_down():
+    with patch("agents.Runner.run", new=AsyncMock(side_effect=LLMTransportError("401"))):
+        response = client.post("/chat", json={"message": "hola"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["mode"] == "unknown"
+    assert body["answer"]
+    assert body["product_id"] == ""
+
+
+def test_chat_sku_returns_200_with_python_quantity_when_llm_is_down():
+    expected = catalog_service.get_replenishment_recommendation(SKU_HIGH_QTY)
+    with patch("agents.Runner.run", new=AsyncMock(side_effect=LLMTransportError("429"))):
+        response = client.post("/chat", json={"message": f"cuanto pedir de {SKU_HIGH_QTY}"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["recommended_quantity"] == expected.recommended_quantity
+    assert str(expected.recommended_quantity) in body["answer"]
+
+
+def test_chat_unexpected_runner_error_returns_503():
+    with patch(
+        "app.api.run_supplymate",
+        new=AsyncMock(side_effect=LLMTransportError("boom")),
+    ):
+        response = client.post("/chat", json={"message": "hola"})
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Assistant unavailable"
 
 
 def test_purchase_list_endpoint():

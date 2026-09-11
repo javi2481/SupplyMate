@@ -3,9 +3,15 @@ from __future__ import annotations
 import re
 
 from app.agent.intents import is_purchase_list_query, is_top_categories_query
-from app.core.models import AnalyticalScope, BusinessIntent, QueryInterpretation, QueryRelation, Reference
 from app.catalog.products import NUMERIC_CODE_RE, message_looks_like_sku
-from app.pipeline.reference_resolver import normalize_text, _QUERY_STOPWORDS, SIZE_TOKEN_RE
+from app.core.models import (
+    AnalyticalScope,
+    BusinessIntent,
+    QueryInterpretation,
+    QueryRelation,
+    Reference,
+)
+from app.pipeline.reference_resolver import _QUERY_STOPWORDS, SIZE_TOKEN_RE, normalize_text
 from app.services.analytics.dashboard import COVERAGE_ORDER
 
 _PURCHASE_VERB_RE = re.compile(r"\b(compr\w*|ped\w*|repon\w*)\b")
@@ -22,6 +28,8 @@ _RISK_HINTS = (
     "sin stock",
     "en falta",
     "faltante",
+    "me falta",
+    "me faltan",
     "critico",
     "criticos",
     "critica",
@@ -47,9 +55,20 @@ _FILTER_STOPWORDS = frozenset(
         "riesgo",
         "quiebre",
         "faltante",
+        "falta",
+        "faltan",
+        "stock",
         "pedir",
         "pedido",
     }
+)
+# Risk phrases stripped so they never become product_group refs.
+_RISK_PHRASE_RE = re.compile(
+    r"\b("
+    r"sin\s+stock|en\s+falta|estan\s+en\s+falta|est[aá]n\s+en\s+falta|"
+    r"me\s+faltan?|faltantes?"
+    r")\b",
+    re.IGNORECASE,
 )
 _SPLIT_RE = re.compile(r"\s+y\s+|\s*,\s*")
 # Coverage: «menos de 3 días», «0-3», «0–3», «cobertura 3»
@@ -135,6 +154,7 @@ def extract_coverage_bucket(message: str) -> str | None:
 def _extract_filter_hints(message: str) -> list[str]:
     msg = normalize_text(message)
     hints: list[str] = [hint for hint in _RISK_HINTS if hint in msg]
+    # Phrase forms already covered by substring checks on normalized text.
     bucket = extract_coverage_bucket(message)
     if bucket and bucket not in hints:
         hints.append(bucket)
@@ -220,6 +240,7 @@ def _split_reference_phrases(message: str) -> list[str]:
     msg = _COVERAGE_RANGE_RE.sub(" ", msg)
     msg = _COVERAGE_N_RE.sub(" ", msg)
     msg = re.sub(r"\bcobertura\b", " ", msg)
+    msg = _RISK_PHRASE_RE.sub(" ", msg)
     msg = " ".join(msg.split())
     for prefix in (
         r"^cuant[oa]s?\s+",
@@ -376,9 +397,29 @@ def enrich_interpretation_from_message(
     intent = interpretation.intent
     if _has_risk_intent(message) and intent in ("replenishment", "unknown"):
         intent = "inventory_risk"
-    if merged == list(interpretation.filter_hints or []) and intent == interpretation.intent:
+
+    # Drop risk-only / stopword refs so they never become unresolved product_groups.
+    cleaned_refs: list[Reference] = []
+    for ref in interpretation.references:
+        token = normalize_text(ref.text)
+        if not token:
+            continue
+        if token in _RISK_HINTS or token in _FILTER_STOPWORDS:
+            continue
+        if _RISK_PHRASE_RE.fullmatch(token):
+            continue
+        cleaned_refs.append(ref)
+
+    updates: dict = {}
+    if merged != list(interpretation.filter_hints or []):
+        updates["filter_hints"] = merged
+    if intent != interpretation.intent:
+        updates["intent"] = intent
+    if cleaned_refs != list(interpretation.references):
+        updates["references"] = cleaned_refs
+    if not updates:
         return interpretation
-    return interpretation.model_copy(update={"filter_hints": merged, "intent": intent})
+    return interpretation.model_copy(update=updates)
 
 
 async def interpret_query(

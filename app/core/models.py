@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, computed_field
 
@@ -22,7 +22,7 @@ GuidanceAction = Literal[
 ]
 ReferenceKind = Literal["product_group", "sku_hint", "filter_hint"]
 MatchKind = Literal["exact_sku", "group", "ambiguous", "unresolved"]
-ScopeDimension = Literal["category", "subcategory", "sku_set"]
+ScopeDimension = Literal["category", "subcategory", "sku_set", "supplier"]
 ConfidenceLevel = Literal["high", "low"]
 
 
@@ -38,8 +38,8 @@ class GuidanceChip(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str = Field(default="", max_length=2000)
-    scope: Optional["AnalyticalScope"] = None
-    chip: Optional[GuidanceChip] = None
+    scope: AnalyticalScope | None = None
+    chip: GuidanceChip | None = None
     confirm_union: bool = False
 
 
@@ -256,6 +256,7 @@ class ResolvedReference(BaseModel):
     sku_ids: list[str] = Field(default_factory=list)
     scope_dimension: ScopeDimension = "category"
     scope_value: str = ""
+    scope_values: list[str] = Field(default_factory=list)
     name_tokens: list[str] = Field(default_factory=list)
     sku_count: int = 0
     recommended_quantity: int = 0
@@ -414,12 +415,12 @@ class ProductNotFoundError(Exception):
 
 @dataclass
 class SupplyContext:
-    product_id: Optional[str] = None
-    inventory: Optional[Inventory] = None
-    sales: Optional[SalesHistory] = None
-    params: Optional[ReplenishmentParams] = None
-    result: Optional[ReplenishmentResult] = None
-    recommendation: Optional[ReplenishmentRecommendation] = None
+    product_id: str | None = None
+    inventory: Inventory | None = None
+    sales: SalesHistory | None = None
+    params: ReplenishmentParams | None = None
+    result: ReplenishmentResult | None = None
+    recommendation: ReplenishmentRecommendation | None = None
     errors: list[str] = field(default_factory=list)
 
     def ready(self) -> bool:

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from app.catalog.store import SALES_AS_OF
 from app.core.models import AnalyticalScope
 from app.services import scope as scope_svc
-from app.catalog.store import SALES_AS_OF
 
 
 def test_add_idempotent():

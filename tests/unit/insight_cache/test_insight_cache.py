@@ -1,4 +1,4 @@
-from app.core.models import AnalyzeResponse, AnalyticalScope
+from app.core.models import AnalyticalScope, AnalyzeResponse
 from app.services import insight_cache
 
 

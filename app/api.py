@@ -13,13 +13,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.agent import run_analyze, run_supplymate
 from app.core.config import MAX_SCOPE_VALUE_LENGTH
-from app.middleware.chat_rate_limit import ChatRateLimitMiddleware
-from app.middleware.safe_errors import SafeErrorMiddleware
-from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.core.models import (
+    AnalyticalScope,
     AnalyzeRequest,
     AnalyzeResponse,
-    AnalyticalScope,
     ChatRequest,
     ChatResponse,
     InventoryDashboard,
@@ -30,8 +27,10 @@ from app.core.models import (
     ReplenishmentRecommendation,
     ReplenishmentSlice,
 )
-from app.services import catalog_service
-from app.services import panel_modes
+from app.middleware.chat_rate_limit import ChatRateLimitMiddleware
+from app.middleware.safe_errors import SafeErrorMiddleware
+from app.middleware.security_headers import SecurityHeadersMiddleware
+from app.services import catalog_service, panel_modes
 from app.services import scope as scope_svc
 from app.services.scoping.scope_sanitize import sanitize_value, sanitize_values
 
@@ -601,6 +600,12 @@ async def chat(request: ChatRequest) -> ChatResponse:
         )
     except ProductNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        # Red de seguridad: el runner degrada solo, pero un fallo inesperado debe
+        # distinguirse de "no encontré el producto" en el frontend.
+        raise HTTPException(status_code=503, detail="Assistant unavailable") from exc
 
 
 @app.get(

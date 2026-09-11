@@ -1,12 +1,12 @@
 import pytest
 
-from app.core.models import ProductNotFoundError
-from app.catalog.products import resolve_from_message, resolve_product_id
 from app.agent.tools import (
     load_inventory,
     load_replenishment_params,
     load_sales_history,
 )
+from app.catalog.products import resolve_from_message, resolve_product_id
+from app.core.models import ProductNotFoundError
 from tests.catalog_ids import SKU_HIGH_QTY, SKU_SAMPLE, SKU_UNKNOWN, SKU_ZERO_QTY
 
 

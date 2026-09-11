@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from collections import Counter
 
-from app.pipeline.reference_resolver import SIZE_TOKEN_RE, normalize_text
 from app.catalog.store import get_store
+from app.pipeline.reference_resolver import SIZE_TOKEN_RE, normalize_text
 
 GUIDE_SKU_THRESHOLD = 12
 

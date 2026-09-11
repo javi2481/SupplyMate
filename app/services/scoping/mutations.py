@@ -5,8 +5,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from app.core.models import AnalyticalScope
 from app.catalog.store import SALES_AS_OF
+from app.core.models import AnalyticalScope
 from app.services.scoping import history as _history
 
 

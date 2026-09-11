@@ -5,8 +5,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api import app
-from app.middleware.rate_limit import reset_rate_limits
 from app.core.models import AnalyticalScope
+from app.middleware.rate_limit import reset_rate_limits
 from app.services import catalog_service
 
 client = TestClient(app)
@@ -139,6 +139,28 @@ def test_analyze_invalid_llm_json_fallback():
         )
     assert response.status_code == 200
     assert response.json()["insight_source"] == "fallback"
+
+
+class LLMTransportError(Exception):
+    """Stands in for provider transport failures (auth, rate limit, network)."""
+
+
+def test_analyze_llm_transport_error_falls_back():
+    scope = AnalyticalScope()
+
+    with patch(
+        "app.agent.runner.Runner.run",
+        new=AsyncMock(side_effect=LLMTransportError("401 invalid api key")),
+    ):
+        response = client.post(
+            "/replenishment/analyze",
+            json={"mode": "explore", "scope": scope.model_dump(), "events": []},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["insight_source"] == "fallback"
+    assert body["insight"] is None
+    assert body["dashboard"] is not None
 
 
 def test_analyze_rate_limit_429(monkeypatch):

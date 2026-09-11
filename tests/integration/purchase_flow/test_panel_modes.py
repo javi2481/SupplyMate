@@ -11,7 +11,7 @@ def test_effective_scope_commit_requires_frozen():
     scope = AnalyticalScope(categories=["Perfumería"])
     try:
         panel_modes.effective_scope("commit", scope, None)
-        assert False, "expected ValueError"
+        raise AssertionError("expected ValueError")
     except ValueError as exc:
         assert "frozen_scope" in str(exc)
 
@@ -28,6 +28,6 @@ def test_validate_commit_mismatch_filters():
     frozen = AnalyticalScope(categories=["B"])
     try:
         panel_modes.validate_commit_request("commit", scope, frozen)
-        assert False
+        raise AssertionError("expected ValueError")
     except ValueError as exc:
         assert "must match" in str(exc)

@@ -14,8 +14,8 @@ from app.core.models import (
     PurchaseListItem,
 )
 from app.core.replenishment import HORIZON_DAYS, calculate_replenishment, clamp_horizon_days
-from app.services.analytics import metrics
 from app.pipeline.reference_resolver import name_has_token
+from app.services.analytics import metrics
 
 COVERAGE_ORDER = ("0–3 días", "3–7 días", "7–14 días", "14–30 días", "30+ días")
 MISSING_CATEGORY = "Sin categoría"

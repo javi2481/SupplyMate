@@ -3,8 +3,8 @@ import { CATEGORY_COLOR, categoryColor } from "@/lib/chart-colors";
 
 describe("categoryColor", () => {
   it("keeps Lovable colors for the demo catalog", () => {
-    expect(categoryColor("Mamaderas")).toBe(CATEGORY_COLOR.Mamaderas);
-    expect(categoryColor("Pañales")).toBe(CATEGORY_COLOR.Pañales);
+    expect(categoryColor("Mamaderas")).toBe(CATEGORY_COLOR["Mamaderas"]);
+    expect(categoryColor("Pañales")).toBe(CATEGORY_COLOR["Pañales"]);
   });
 
   it("assigns a palette color to live catalog names instead of the accent blue", () => {

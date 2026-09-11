@@ -1,9 +1,14 @@
 /** Bridge SkuListRow (API) → Calc shape used by table/drawer (display only). */
 
-import type { SkuListRow } from "@/lib/adapter";
-import type { Calc, HealthTag, Sku } from "@/lib/supplymate";
+import type { HealthChipId, SkuListRow } from "@/lib/adapter";
+import type { HealthTag } from "@/lib/scope";
+import type { Calc, Sku } from "@/lib/supplymate";
 
-const HEALTH_TAG_IDS: HealthTag[] = ["riesgo_quiebre", "sin_stock", "sobrestock"];
+const HEALTH_TAG_IDS: readonly HealthTag[] = ["riesgo_quiebre", "sin_stock", "sobrestock"];
+
+function isFilterHealthTag(id: HealthChipId): id is HealthTag {
+  return (HEALTH_TAG_IDS as readonly string[]).includes(id);
+}
 
 export function calcFromApiRow(row: SkuListRow): Calc {
   const sku: Sku = {
@@ -18,9 +23,7 @@ export function calcFromApiRow(row: SkuListRow): Calc {
     safety_stock: 0,
     list_price: 0,
   };
-  const health = row.health
-    .map((chip) => chip.id)
-    .filter((id): id is HealthTag => (HEALTH_TAG_IDS as string[]).includes(id));
+  const health = row.health.map((chip) => chip.id).filter(isFilterHealthTag);
 
   const priority: Calc["priority"] =
     row.priority === "critical" ? "Alta" : row.priority === "high" ? "Media" : "Baja";

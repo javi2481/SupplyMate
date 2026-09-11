@@ -1,9 +1,14 @@
 from __future__ import annotations
 
-from app.core.models import AnalyticalScope, QueryInterpretation, ResolutionResult, ResolvedReference
+from app.core.models import (
+    AnalyticalScope,
+    QueryInterpretation,
+    ResolutionResult,
+    ResolvedReference,
+)
+from app.pipeline.query_interpretation import _scope_empty
 from app.services.analytics import metrics
 from app.services.scoping import scope as scope_svc
-from app.pipeline.query_interpretation import _scope_empty
 
 
 def promote_new_query_if_needed(
@@ -30,6 +35,12 @@ def promote_new_query_if_needed(
                 ):
                     continue
                 return interpretation.model_copy(update={"relation": "new_query"})
+        if ref.scope_dimension == "supplier":
+            values = list(ref.scope_values) if ref.scope_values else (
+                [ref.scope_value] if ref.scope_value else []
+            )
+            if any(v not in prev.suppliers for v in values):
+                return interpretation.model_copy(update={"relation": "new_query"})
         for token in ref.name_tokens:
             if token not in prev.name_tokens:
                 if is_complement_target(prev, dimension="name_token", value=token):
@@ -55,6 +66,12 @@ def build_scope(
             scope = scope_svc.add(scope, "category", ref.scope_value)
         elif ref.scope_dimension == "subcategory" and ref.scope_value:
             scope = scope_svc.add(scope, "subcategory", ref.scope_value)
+        elif ref.scope_dimension == "supplier":
+            values = list(ref.scope_values) if ref.scope_values else (
+                [ref.scope_value] if ref.scope_value else []
+            )
+            for value in values:
+                scope = scope_svc.add(scope, "supplier", value)
         for token in ref.name_tokens:
             scope = scope_svc.add(scope, "name_token", token)
 
@@ -67,6 +84,8 @@ def build_scope(
         "sin stock",
         "en falta",
         "faltante",
+        "me falta",
+        "me faltan",
         "critico",
         "criticos",
         "critica",

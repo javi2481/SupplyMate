@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
 from app.api import app
-from app.middleware.rate_limit import reset_rate_limits
 from app.core.models import AnalyticalScope, ChatResponse
+from app.middleware.rate_limit import reset_rate_limits
 
 client = TestClient(app)
 

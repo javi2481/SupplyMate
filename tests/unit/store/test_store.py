@@ -1,8 +1,7 @@
-import pytest
 
+from app.catalog.store import get_store
 from app.core.replenishment import calculate_replenishment
 from app.services import catalog_service
-from app.catalog.store import get_store
 from tests.catalog_ids import SKU_HIGH_QTY, SKU_SAMPLE, SKU_ZERO_QTY
 
 

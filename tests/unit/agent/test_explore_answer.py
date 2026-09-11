@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.agent.explore_answer import format_disambiguation_answer, format_explore_answer
+from app.agent.explore_answer import format_explore_answer
 from app.core.models import (
     AnalyticalScope,
     ChatInterpretation,
@@ -130,8 +130,8 @@ def test_explore_answer_uses_purchase_skus_not_catalog_skus():
 
 
 def test_format_single_product_uses_calc_horizon():
-    from app.services.analytics.catalog_service import format_single_product_answer
     from app.services import catalog_service
+    from app.services.analytics.catalog_service import format_single_product_answer
     from tests.catalog_ids import SKU_HIGH_QTY
 
     rec = catalog_service.get_replenishment_recommendation(SKU_HIGH_QTY, horizon_days=14)

@@ -56,7 +56,7 @@ def test_short_refinement_without_entity_tokens():
 
 
 def test_criticos_and_coverage_hints():
-    from app.pipeline.query_interpretation import extract_coverage_bucket, _extract_filter_hints
+    from app.pipeline.query_interpretation import _extract_filter_hints, extract_coverage_bucket
 
     msg = (
         "mostrame los productos críticos de cosmética que tengan "
@@ -76,9 +76,9 @@ def test_criticos_and_coverage_hints():
 def test_horizon_days_not_confused_with_coverage_band():
     from app.core.models import QueryInterpretation
     from app.pipeline.query_interpretation import (
+        _extract_filter_hints,
         enrich_interpretation_from_message,
         extract_coverage_bucket,
-        _extract_filter_hints,
     )
 
     msg = "¿Qué tengo que comprar para los próximos 30 días?"

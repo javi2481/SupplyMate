@@ -13,7 +13,6 @@ from app.core.models import (
     SalesHistory,
     SupplyContext,
 )
-from app.core.replenishment import calculate_replenishment
 from app.services import catalog_service
 from tests.catalog_ids import SKU_HIGH_QTY, SKU_UNKNOWN, SKU_ZERO_QTY
 
@@ -139,6 +138,56 @@ async def test_run_supplymate_unknown_product():
     with patch("app.agent.runner.Runner.run", new=AsyncMock(side_effect=fake_runner)):
         with pytest.raises(ProductNotFoundError):
             await run_supplymate(f"¿Cuánto pedir de {SKU_UNKNOWN}?")
+
+
+class LLMTransportError(Exception):
+    """Stands in for provider transport failures (auth, rate limit, network)."""
+
+
+@pytest.mark.asyncio
+async def test_single_sku_answers_with_python_numbers_when_llm_is_down():
+    expected = catalog_service.get_replenishment_recommendation(SKU_HIGH_QTY)
+
+    with patch("agents.Runner.run", new=AsyncMock(side_effect=LLMTransportError("401"))):
+        response = await run_supplymate(f"cuanto pedir de {SKU_HIGH_QTY}")
+
+    assert response.mode == "single"
+    assert response.product_id == SKU_HIGH_QTY
+    assert response.recommended_quantity == expected.recommended_quantity
+    assert str(expected.recommended_quantity) in response.answer
+    assert "order-up-to" in response.answer.lower()
+
+
+@pytest.mark.asyncio
+async def test_unknown_product_still_raises_when_llm_is_down():
+    with patch("agents.Runner.run", new=AsyncMock(side_effect=LLMTransportError("401"))):
+        with pytest.raises(ProductNotFoundError):
+            await run_supplymate(f"cuanto pedir de {SKU_UNKNOWN}")
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_message_answers_honestly_when_classifier_is_down():
+    with patch("agents.Runner.run", new=AsyncMock(side_effect=LLMTransportError("429"))):
+        response = await run_supplymate("hola")
+
+    assert isinstance(response, ChatResponse)
+    assert response.mode == "unknown"
+    assert response.answer
+    assert response.product_id == ""
+    assert response.recommended_quantity == 0
+
+
+@pytest.mark.asyncio
+async def test_classifier_down_keeps_the_scope_rules_already_built():
+    from app.core.models import AnalyticalScope
+
+    previous = AnalyticalScope(categories=["Jabon de Tocador"])
+    with patch("app.agent.runner.classify_intent", new=AsyncMock(return_value=None)):
+        response = await run_supplymate("dale", previous)
+
+    assert response.mode == "explore"
+    assert response.scope is not None
+    assert "Jabon de Tocador" in response.scope.categories
 
 
 @pytest.mark.asyncio
@@ -334,7 +383,7 @@ async def test_run_analyze_priorities_subset_of_purchase_list():
     import json
 
     from app.agent import run_analyze
-    from app.core.models import AnalyzeRequest, AnalyticalScope
+    from app.core.models import AnalyticalScope, AnalyzeRequest
     from app.services.insight import insight_cache
 
     insight_cache.reset()
@@ -376,3 +425,50 @@ async def test_run_analyze_priorities_subset_of_purchase_list():
     assert response.insight is not None
     ids = {p.product_id for p in response.insight.purchase_priorities}
     assert ids <= {i.product_id for i in response.purchase_list}
+
+
+@pytest.mark.asyncio
+async def test_unilever_supplier_explore(monkeypatch):
+    from app.core.models import QueryInterpretation, Reference
+
+    llm_interp = QueryInterpretation(
+        intent="inventory_risk",
+        references=[Reference(text="unilever", kind="product_group")],
+        filter_hints=["me falta"],
+        confidence="high",
+        source="llm",
+        relation="new_query",
+    )
+    monkeypatch.setattr(
+        "app.pipeline.query_interpreter_agent.interpret_query_llm",
+        AsyncMock(return_value=llm_interp),
+    )
+    response = await run_supplymate("que me falta de unilever?")
+    assert response.mode == "explore"
+    assert response.scope is not None
+    assert "UNILEVER" in response.scope.suppliers
+    assert "UNILEVER (HOME CARE)" in response.scope.suppliers
+    assert "stockout_risk" in response.scope.health_buckets
+    assert response.purchase_list
+
+
+@pytest.mark.asyncio
+async def test_productos_sin_stock_explores_without_404(monkeypatch):
+    from app.core.models import QueryInterpretation
+
+    llm_interp = QueryInterpretation(
+        intent="inventory_risk",
+        references=[],
+        filter_hints=["sin stock"],
+        confidence="high",
+        source="llm",
+        relation="new_query",
+    )
+    monkeypatch.setattr(
+        "app.pipeline.query_interpreter_agent.interpret_query_llm",
+        AsyncMock(return_value=llm_interp),
+    )
+    response = await run_supplymate("productos sin stock")
+    assert response.mode == "explore"
+    assert response.scope is not None
+    assert "stockout_risk" in response.scope.health_buckets

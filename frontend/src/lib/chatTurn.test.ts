@@ -17,8 +17,8 @@ describe("completeTurn", () => {
     ];
     const next = completeTurn(messages, pending, "lista ok");
     expect(next.map((m) => m.role)).toEqual(["assistant", "user", "assistant"]);
-    expect(next[1].text).toBe(pending.userText);
-    expect(next[2].text).toBe("lista ok");
+    expect(next[1]?.text).toBe(pending.userText);
+    expect(next[2]?.text).toBe("lista ok");
   });
 
   it("reinserts user when thread was reset to seed", () => {

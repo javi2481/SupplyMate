@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.core.models import ProductMaster
 from app.catalog.store import (
     CatalogStore,
     _as_float,
@@ -13,6 +12,7 @@ from app.catalog.store import (
     _index_barcodes,
     _validate_store,
 )
+from app.core.models import ProductMaster
 
 
 def load_store_from_xlsx(path: Path) -> CatalogStore:

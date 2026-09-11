@@ -5,14 +5,6 @@ The LLM may phrase the question; Python owns which options exist.
 
 from __future__ import annotations
 
-from app.guidance.guidance_chips import (
-    chip_for_draft_oc,
-    chip_for_name_token,
-    chip_for_stockout,
-    chip_for_subcategory,
-    chip_for_todos,
-)
-from app.guidance.guidance_tokens import GUIDE_SKU_THRESHOLD, size_tokens_from_skus
 from app.core.models import (
     AnalyticalScope,
     GuidanceChip,
@@ -22,9 +14,17 @@ from app.core.models import (
     ReplenishmentSlice,
     ResolvedReference,
 )
+from app.guidance.guidance_chips import (
+    chip_for_draft_oc,
+    chip_for_name_token,
+    chip_for_stockout,
+    chip_for_subcategory,
+    chip_for_todos,
+)
+from app.guidance.guidance_tokens import GUIDE_SKU_THRESHOLD, size_tokens_from_skus
 from app.guidance.missions import MissionEdge
-from app.pipeline.reference_resolver import normalize_text
 from app.guidance.slice_facets import SliceFacets, list_slice_facets
+from app.pipeline.reference_resolver import normalize_text
 
 FACET_SUBCATEGORY = "subcategory"
 FACET_SIZE = "size"

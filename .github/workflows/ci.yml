@@ -15,6 +15,8 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: pip install -e ".[dev]"
+      - name: Ruff
+        run: ruff check app tests
       - name: Run pytest with coverage
         env:
           SUPPLYMATE_ENV: test
@@ -46,7 +48,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Install
@@ -55,12 +57,11 @@ jobs:
         run: npm run test
       - name: Build
         run: npm run build
-      # lint/tsc: CRLF prettier + strict index-signature debt; gate later
+      # lint: CRLF prettier friction; typecheck is blocking
       - name: Lint (advisory)
         continue-on-error: true
         run: npm run lint
-      - name: Typecheck (advisory)
-        continue-on-error: true
+      - name: Typecheck
         run: npx tsc --noEmit
 
   docker-smoke:

@@ -1,9 +1,10 @@
+import pytest
+
+from app.agent import run_supplymate
 from app.core.models import AnalyticalScope, Reference
 from app.pipeline.query_interpretation import classify_relation, interpret_query_rules
 from app.pipeline.reference_resolver import resolve_single_reference
 from app.pipeline.scope_builder import build_scope, promote_new_query_if_needed
-from app.agent import run_supplymate
-import pytest
 
 
 def test_classify_xxg_as_refinement_when_scope_exists():

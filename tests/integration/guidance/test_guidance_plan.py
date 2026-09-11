@@ -2,18 +2,17 @@ from __future__ import annotations
 
 import pytest
 
-from app.guidance import pick_next_question
-from app.guidance.guidance_chips import apply_guidance_chip, chip_for_subcategory
-from app.core.models import AnalyticalScope, GuidanceChip
-from app.guidance.missions import is_complement_target, load_missions, mission_neighbors
-from app.pipeline.reference_resolver import SIZE_TOKEN_RE
-from app.pipeline.scope_builder import promote_new_query_if_needed
-from app.guidance.slice_facets import list_slice_facets
-from app.core.models import QueryInterpretation, ResolvedReference
-from app.services import catalog_service
-from app.agent import run_supplymate, run_apply_chip
 import app.guidance.guidance_tokens as guidance_tokens_mod
 import app.pipeline.query_interpretation as query_interpretation_mod
+from app.agent import run_apply_chip, run_supplymate
+from app.core.models import AnalyticalScope, GuidanceChip, QueryInterpretation, ResolvedReference
+from app.guidance import pick_next_question
+from app.guidance.guidance_chips import apply_guidance_chip, chip_for_subcategory
+from app.guidance.missions import is_complement_target, load_missions, mission_neighbors
+from app.guidance.slice_facets import list_slice_facets
+from app.pipeline.reference_resolver import SIZE_TOKEN_RE
+from app.pipeline.scope_builder import promote_new_query_if_needed
+from app.services import catalog_service
 
 
 def test_missions_csv_loads():

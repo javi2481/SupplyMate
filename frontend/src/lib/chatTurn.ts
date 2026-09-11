@@ -64,10 +64,11 @@ export function loadThreads(seed: ThreadState[]): { threads: ThreadState[]; acti
     if (!Array.isArray(parsed.threads) || parsed.threads.length === 0) {
       return { threads: seed, activeId: seed[0]?.id ?? "t1" };
     }
+    const first = parsed.threads[0];
     const activeId =
       parsed.activeId && parsed.threads.some((t) => t.id === parsed.activeId)
         ? parsed.activeId
-        : parsed.threads[0].id;
+        : (first?.id ?? seed[0]?.id ?? "t1");
     return { threads: parsed.threads, activeId };
   } catch {
     return { threads: seed, activeId: seed[0]?.id ?? "t1" };
