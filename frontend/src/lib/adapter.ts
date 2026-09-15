@@ -19,7 +19,8 @@ export const HEALTH_BUCKET_LABEL = {
   healthy: "Saludable",
 } as const;
 
-export type HealthChipId = "riesgo_quiebre" | "sin_stock" | "sobrestock" | "falta_stock" | "saludable";
+export type HealthChipId =
+  "riesgo_quiebre" | "sin_stock" | "sobrestock" | "falta_stock" | "saludable";
 
 export type HealthChip = { id: HealthChipId; label: string };
 

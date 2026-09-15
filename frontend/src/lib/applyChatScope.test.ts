@@ -194,22 +194,19 @@ describe("applyChatScope", () => {
   });
 
   it("opens highlight_product_id from scope", () => {
-    const result = applyChatScope(
-      EMPTY_SLICE,
-      chat({ scope: { highlight_product_id: "P-9" } }),
-    );
+    const result = applyChatScope(EMPTY_SLICE, chat({ scope: { highlight_product_id: "P-9" } }));
     expect(result.openProductId).toBe("P-9");
   });
 });
 
 describe("chatFailureMessage", () => {
   it("translates 404 into operator not-found copy", () => {
-    expect(chatFailureMessage("SKU999", new HttpError(404, "/chat", "Product not found: SKU999"))).toBe(
-      "No encontré «SKU999» en el catálogo.",
-    );
-    expect(chatFailureMessage("SKU999", new HttpError(404, "/chat", "Product not found: SKU999"))).not.toMatch(
-      /Product not found|Pañales|Mamaderas/i,
-    );
+    expect(
+      chatFailureMessage("SKU999", new HttpError(404, "/chat", "Product not found: SKU999")),
+    ).toBe("No encontré «SKU999» en el catálogo.");
+    expect(
+      chatFailureMessage("SKU999", new HttpError(404, "/chat", "Product not found: SKU999")),
+    ).not.toMatch(/Product not found|Pañales|Mamaderas/i);
   });
 
   it("prefers Product not found token over the full user query", () => {
@@ -228,17 +225,19 @@ describe("chatFailureMessage", () => {
   });
 
   it("uses assistant-unavailable copy for server failures", () => {
-    expect(chatFailureMessage("quiebre", new HttpError(503, "/chat", "Assistant unavailable"))).toBe(
-      COPY_ASSISTANT_UNAVAILABLE,
-    );
-    expect(chatFailureMessage("quiebre", new HttpError(500, "/chat", "Internal Server Error"))).toBe(
-      COPY_ASSISTANT_UNAVAILABLE,
-    );
+    expect(
+      chatFailureMessage("quiebre", new HttpError(503, "/chat", "Assistant unavailable")),
+    ).toBe(COPY_ASSISTANT_UNAVAILABLE);
+    expect(
+      chatFailureMessage("quiebre", new HttpError(500, "/chat", "Internal Server Error")),
+    ).toBe(COPY_ASSISTANT_UNAVAILABLE);
     expect(COPY_ASSISTANT_UNAVAILABLE).not.toMatch(/motor|API|localhost|levantad|127\.0\.0\.1/i);
   });
 
   it("uses catalog load copy for other failures", () => {
-    expect(chatFailureMessage("quiebre", new Error("Failed to fetch"))).toBe(COPY_CATALOG_LOAD_FAILED);
+    expect(chatFailureMessage("quiebre", new Error("Failed to fetch"))).toBe(
+      COPY_CATALOG_LOAD_FAILED,
+    );
     expect(chatFailureMessage("quiebre", new HttpError(422, "/chat", "Unprocessable"))).toBe(
       COPY_CATALOG_LOAD_FAILED,
     );

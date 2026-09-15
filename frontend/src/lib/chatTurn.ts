@@ -106,7 +106,9 @@ export function switchThread(
   if (fromId === toId) {
     return { threads, panel: live };
   }
-  const nextThreads = threads.map((thread) => (thread.id === fromId ? withPanel(thread, live) : thread));
+  const nextThreads = threads.map((thread) =>
+    thread.id === fromId ? withPanel(thread, live) : thread,
+  );
   const target = nextThreads.find((thread) => thread.id === toId);
   return { threads: nextThreads, panel: panelOf(target, fallback) };
 }

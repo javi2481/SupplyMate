@@ -75,7 +75,9 @@ export function SkuDrawer({ row, onClose }: { row: Calc; onClose: () => void }) 
             ] as const
           ).map(([label, amount]) => (
             <div key={label} className="rounded-lg border border-ops-border bg-ops-panel p-3">
-              <div className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">{label}</div>
+              <div className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                {label}
+              </div>
               <div className="mt-1 font-display text-base font-semibold tabular-nums">{amount}</div>
             </div>
           ))}
@@ -91,7 +93,10 @@ export function SkuDrawer({ row, onClose }: { row: Calc; onClose: () => void }) 
           </div>
           <dl className="divide-y divide-ops-border">
             {facts.map(([label, formula]) => (
-              <div key={label} className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 px-4 py-3 text-xs">
+              <div
+                key={label}
+                className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 px-4 py-3 text-xs"
+              >
                 <dt className="min-w-0 text-muted-foreground">{label}</dt>
                 <dd className="text-right tabular-nums text-foreground">{formula}</dd>
               </div>

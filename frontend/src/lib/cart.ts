@@ -36,7 +36,10 @@ export function emptyCart(): CartLine[] {
 }
 
 export function hydrateCartLine(raw: LegacyCartLine): CartLine {
-  const suggested = Math.max(1, Math.floor(Number(raw.suggested_quantity ?? raw.recommended_quantity ?? 1)) || 1);
+  const suggested = Math.max(
+    1,
+    Math.floor(Number(raw.suggested_quantity ?? raw.recommended_quantity ?? 1)) || 1,
+  );
   const orderRaw = raw.order_quantity ?? suggested;
   const order = clampOrderQuantity(orderRaw) ?? suggested;
   return {
@@ -171,7 +174,9 @@ export function addLineToCart(
 export function setOrderQuantity(cart: CartLine[], productId: string, qty: unknown): CartLine[] {
   const nextQty = clampOrderQuantity(qty);
   if (nextQty == null) return cart;
-  return cart.map((line) => (line.product_id === productId ? { ...line, order_quantity: nextQty } : line));
+  return cart.map((line) =>
+    line.product_id === productId ? { ...line, order_quantity: nextQty } : line,
+  );
 }
 
 export function removeCartLine(cart: CartLine[], productId: string): CartLine[] {
@@ -209,14 +214,18 @@ const CSV_COLUMNS_STORAGE_KEY = "supplymate.ocCsvColumns";
 export function normalizeCartCsvColumns(raw: unknown): CartCsvColumnId[] {
   const allowed = new Set<string>(ALL_CART_CSV_COLUMNS);
   if (!Array.isArray(raw)) return [...DEFAULT_CART_CSV_COLUMNS];
-  const picked = raw.filter((id): id is CartCsvColumnId => typeof id === "string" && allowed.has(id));
+  const picked = raw.filter(
+    (id): id is CartCsvColumnId => typeof id === "string" && allowed.has(id),
+  );
   return picked.length > 0 ? picked : [...DEFAULT_CART_CSV_COLUMNS];
 }
 
 export function loadCartCsvColumns(): CartCsvColumnId[] {
   if (typeof localStorage === "undefined") return [...DEFAULT_CART_CSV_COLUMNS];
   try {
-    return normalizeCartCsvColumns(JSON.parse(localStorage.getItem(CSV_COLUMNS_STORAGE_KEY) ?? "null"));
+    return normalizeCartCsvColumns(
+      JSON.parse(localStorage.getItem(CSV_COLUMNS_STORAGE_KEY) ?? "null"),
+    );
   } catch {
     return [...DEFAULT_CART_CSV_COLUMNS];
   }
@@ -262,7 +271,9 @@ export function csvTextFromCart(
   const picked = new Set(normalizeCartCsvColumns(columns));
   const selected = ALL_CART_CSV_COLUMNS.filter((id) => picked.has(id));
   const header = selected.join(",");
-  const rows = cart.map((line) => selected.map((col) => csvCell(csvValueForColumn(line, col))).join(","));
+  const rows = cart.map((line) =>
+    selected.map((col) => csvCell(csvValueForColumn(line, col))).join(","),
+  );
   return [header, ...rows].join("\n");
 }
 
@@ -342,7 +353,9 @@ function maxMergePreserveOrder(cart: CartLine[], incoming: CartLine[]): CartLine
       continue;
     }
     const suggested =
-      item.suggested_quantity > prev.suggested_quantity ? item.suggested_quantity : prev.suggested_quantity;
+      item.suggested_quantity > prev.suggested_quantity
+        ? item.suggested_quantity
+        : prev.suggested_quantity;
     const winner = item.suggested_quantity >= prev.suggested_quantity ? item : prev;
     const edited = wasEdited(prev);
     byId.set(item.product_id, {

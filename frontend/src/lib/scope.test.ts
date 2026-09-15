@@ -12,13 +12,7 @@ import {
 
 describe("COVERAGE_ORDER", () => {
   it("matches the five backend bands with an en-dash", () => {
-    expect(COVERAGE_ORDER).toEqual([
-      "0–3 días",
-      "3–7 días",
-      "7–14 días",
-      "14–30 días",
-      "30+ días",
-    ]);
+    expect(COVERAGE_ORDER).toEqual(["0–3 días", "3–7 días", "7–14 días", "14–30 días", "30+ días"]);
     expect(COVERAGE_ORDER[0]).toContain("\u2013");
     expect(COVERAGE_ORDER[0]).not.toContain("-");
   });

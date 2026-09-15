@@ -1,6 +1,11 @@
 /** Next-step chips ranking helper (tests). Live Explore uses slice suggested_filters. */
 
-import { coverageBandFromDays, COVERAGE_ORDER, type CoverageBand, type HealthTag } from "@/lib/scope";
+import {
+  coverageBandFromDays,
+  COVERAGE_ORDER,
+  type CoverageBand,
+  type HealthTag,
+} from "@/lib/scope";
 import type { Calc } from "@/lib/supplymate";
 import type { SuggestedChip } from "@/lib/applySuggestedFilter";
 import type { ChartBarMode } from "@/lib/data-source";
@@ -36,7 +41,8 @@ export function filterChipsCoveredByCharts(
 function unionPush(list: SuggestedChip[], chip: SuggestedChip | null): void {
   if (!chip) return;
   const key = `${chip.action}:${JSON.stringify(Object.entries(chip.args).sort())}`;
-  if (list.some((c) => `${c.action}:${JSON.stringify(Object.entries(c.args).sort())}` === key)) return;
+  if (list.some((c) => `${c.action}:${JSON.stringify(Object.entries(c.args).sort())}` === key))
+    return;
   if (list.length >= MAX_CHIPS) return;
   list.push(chip);
 }

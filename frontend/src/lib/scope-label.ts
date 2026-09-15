@@ -20,14 +20,14 @@ function tokenLabel(token: string): string {
 export function sliceHasFilters(slice: UiSlice): boolean {
   return Boolean(
     slice.cats.length ||
-      slice.subcategories.length ||
-      slice.coverage ||
-      slice.health.length ||
-      slice.suppliers.length ||
-      slice.nameTokens.length ||
-      slice.highlightProductId ||
-      slice.outOfStockOnly ||
-      slice.buyOnly,
+    slice.subcategories.length ||
+    slice.coverage ||
+    slice.health.length ||
+    slice.suppliers.length ||
+    slice.nameTokens.length ||
+    slice.highlightProductId ||
+    slice.outOfStockOnly ||
+    slice.buyOnly,
   );
 }
 

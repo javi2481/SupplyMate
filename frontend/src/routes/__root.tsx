@@ -78,7 +78,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "SupplyMate · Operación de reposición" },
-      { name: "description", content: "Consola operativa para planificar compras y anticipar quiebres de stock." },
+      {
+        name: "description",
+        content: "Consola operativa para planificar compras y anticipar quiebres de stock.",
+      },
       { name: "author", content: "SupplyMate" },
       { property: "og:title", content: "SupplyMate · Operación de reposición" },
       { property: "og:description", content: "Planificá compras y anticipá quiebres de stock." },

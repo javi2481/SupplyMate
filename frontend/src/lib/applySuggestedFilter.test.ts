@@ -16,7 +16,11 @@ describe("applySuggestedFilter", () => {
 
   it("sets coverage to the chip band", () => {
     const result = applySuggestedFilter(
-      { action: "filter_coverage", args: { coverage_bucket: "0–3 días" }, label: "¿Cobertura 0–3 días?" },
+      {
+        action: "filter_coverage",
+        args: { coverage_bucket: "0–3 días" },
+        label: "¿Cobertura 0–3 días?",
+      },
       EMPTY_SLICE,
     );
     expect(result).toEqual({
@@ -27,7 +31,11 @@ describe("applySuggestedFilter", () => {
 
   it("maps stockout_risk to riesgo_quiebre and overstock to sobrestock", () => {
     const risk = applySuggestedFilter(
-      { action: "filter_health", args: { health_bucket: "stockout_risk" }, label: "¿Riesgo de quiebre?" },
+      {
+        action: "filter_health",
+        args: { health_bucket: "stockout_risk" },
+        label: "¿Riesgo de quiebre?",
+      },
       EMPTY_SLICE,
     );
     expect(risk).toEqual({
@@ -46,7 +54,11 @@ describe("applySuggestedFilter", () => {
 
   it("unions supplier", () => {
     const result = applySuggestedFilter(
-      { action: "filter_supplier", args: { supplier: "Higiene Sur" }, label: "¿Qué pide Higiene Sur?" },
+      {
+        action: "filter_supplier",
+        args: { supplier: "Higiene Sur" },
+        label: "¿Qué pide Higiene Sur?",
+      },
       EMPTY_SLICE,
     );
     expect(result).toEqual({

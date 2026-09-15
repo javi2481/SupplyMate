@@ -127,7 +127,10 @@ export function SkuTable({
     if (vocabulary.some((entry) => singular(entry.word) === singular(token))) return null;
     const match = vocabulary
       .map((entry) => ({ ...entry, distance: distance(singular(token), singular(entry.word)) }))
-      .filter((entry) => entry.distance > 0 && entry.distance <= Math.max(1, Math.floor(token.length * 0.34)))
+      .filter(
+        (entry) =>
+          entry.distance > 0 && entry.distance <= Math.max(1, Math.floor(token.length * 0.34)),
+      )
       .sort((a, b) => a.distance - b.distance)[0];
     return match?.label ?? null;
   }, [queryTokens, vocabulary]);

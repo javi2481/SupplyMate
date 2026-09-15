@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { EMPTY_SLICE, type UiSlice } from "@/lib/scope";
-import { toggleBuyOnly, toggleHealthTag, purchaseActionsAllowed, purchaseKpiTotals, visibleExploreKpiKinds } from "@/lib/kpi-actions";
+import {
+  toggleBuyOnly,
+  toggleHealthTag,
+  purchaseActionsAllowed,
+  purchaseKpiTotals,
+  visibleExploreKpiKinds,
+} from "@/lib/kpi-actions";
 
 function slice(partial: Partial<UiSlice>): UiSlice {
   return { ...EMPTY_SLICE, ...partial };

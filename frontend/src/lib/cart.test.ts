@@ -31,7 +31,9 @@ function line(partial: Partial<CartLine> & Pick<CartLine, "product_id">): CartLi
   };
 }
 
-function purchaseItem(partial: Partial<PurchaseListItem> & Pick<PurchaseListItem, "product_id">): PurchaseListItem {
+function purchaseItem(
+  partial: Partial<PurchaseListItem> & Pick<PurchaseListItem, "product_id">,
+): PurchaseListItem {
   return {
     barcode: partial.barcode ?? partial.product_id,
     product_name: partial.product_name ?? partial.product_id,
@@ -54,7 +56,9 @@ function purchaseItem(partial: Partial<PurchaseListItem> & Pick<PurchaseListItem
 
 describe("hydrateCartLine / hydrateCart", () => {
   it("maps legacy recommended_quantity into suggested and order", () => {
-    expect(hydrateCartLine({ product_id: "A", product_name: "A", recommended_quantity: 20 })).toEqual({
+    expect(
+      hydrateCartLine({ product_id: "A", product_name: "A", recommended_quantity: 20 }),
+    ).toEqual({
       product_id: "A",
       product_name: "A",
       suggested_quantity: 20,
@@ -79,8 +83,18 @@ describe("emptyCart / cartTotals", () => {
 
   it("counts lines, order units, and value scaled from suggested", () => {
     const cart = [
-      line({ product_id: "A", suggested_quantity: 10, order_quantity: 20, estimated_purchase_value: 40 }),
-      line({ product_id: "B", suggested_quantity: 5, order_quantity: 5, estimated_purchase_value: 15 }),
+      line({
+        product_id: "A",
+        suggested_quantity: 10,
+        order_quantity: 20,
+        estimated_purchase_value: 40,
+      }),
+      line({
+        product_id: "B",
+        suggested_quantity: 5,
+        order_quantity: 5,
+        estimated_purchase_value: 15,
+      }),
     ];
     expect(cartTotals(cart)).toEqual({ lines: 2, units: 25, value: 95 });
   });
@@ -90,7 +104,12 @@ describe("addFocusToCart", () => {
   it("adds focus SKUs without touching other lines", () => {
     const cart = [line({ product_id: "A", category: "Pañales", suggested_quantity: 10 })];
     const next = addFocusToCart(cart, [
-      purchaseItem({ product_id: "B", category: "Shampoo", recommended_quantity: 3, estimated_purchase_value: 30 }),
+      purchaseItem({
+        product_id: "B",
+        category: "Shampoo",
+        recommended_quantity: 3,
+        estimated_purchase_value: 30,
+      }),
     ]);
     expect(next.map((row) => row.product_id)).toEqual(["A", "B"]);
     expect(next.find((row) => row.product_id === "B")?.order_quantity).toBe(3);
@@ -98,7 +117,14 @@ describe("addFocusToCart", () => {
   });
 
   it("keeps max suggested for the same product_id and never sums", () => {
-    const cart = [line({ product_id: "A", suggested_quantity: 10, order_quantity: 10, estimated_purchase_value: 100 })];
+    const cart = [
+      line({
+        product_id: "A",
+        suggested_quantity: 10,
+        order_quantity: 10,
+        estimated_purchase_value: 100,
+      }),
+    ];
     const lower = addFocusToCart(cart, [
       purchaseItem({ product_id: "A", recommended_quantity: 7, estimated_purchase_value: 70 }),
     ]);
@@ -115,7 +141,14 @@ describe("addFocusToCart", () => {
   });
 
   it("does not overwrite an edited order_quantity on re-add", () => {
-    const cart = [line({ product_id: "A", suggested_quantity: 20, order_quantity: 50, estimated_purchase_value: 200 })];
+    const cart = [
+      line({
+        product_id: "A",
+        suggested_quantity: 20,
+        order_quantity: 50,
+        estimated_purchase_value: 200,
+      }),
+    ];
     const next = addFocusToCart(cart, [
       purchaseItem({ product_id: "A", recommended_quantity: 25, estimated_purchase_value: 250 }),
     ]);
@@ -139,9 +172,13 @@ describe("addFocusToCart", () => {
   it("no-ops on empty focus or zero qty", () => {
     const cart = [line({ product_id: "A", suggested_quantity: 2 })];
     expect(addFocusToCart(cart, [])).toEqual(cart);
-    expect(addFocusToCart(cart, [purchaseItem({ product_id: "B", recommended_quantity: 0 })])).toEqual(cart);
+    expect(
+      addFocusToCart(cart, [purchaseItem({ product_id: "B", recommended_quantity: 0 })]),
+    ).toEqual(cart);
     expect(focusHasPurchase([])).toBe(false);
-    expect(focusHasPurchase([purchaseItem({ product_id: "B", recommended_quantity: 3 })])).toBe(true);
+    expect(focusHasPurchase([purchaseItem({ product_id: "B", recommended_quantity: 3 })])).toBe(
+      true,
+    );
   });
 });
 
@@ -261,8 +298,12 @@ describe("cartLinesFromPurchaseItems", () => {
 describe("multi-turn opt-in scenario", () => {
   it("accumulates two categories only after addFocusToCart", () => {
     let cart = emptyCart();
-    const cosmetics = [purchaseItem({ product_id: "C1", category: "Cosmetica", recommended_quantity: 6 })];
-    const shampoo = [purchaseItem({ product_id: "S1", category: "Shampoo", recommended_quantity: 4 })];
+    const cosmetics = [
+      purchaseItem({ product_id: "C1", category: "Cosmetica", recommended_quantity: 6 }),
+    ];
+    const shampoo = [
+      purchaseItem({ product_id: "S1", category: "Shampoo", recommended_quantity: 4 }),
+    ];
 
     expect(cart).toEqual([]);
     cart = addFocusToCart(cart, cosmetics);
@@ -375,9 +416,19 @@ describe("cartFooterText / csv / resolvePoRows", () => {
       },
     ];
     const cart = [
-      line({ product_id: "C1", product_name: "Cart SKU", suggested_quantity: 8, order_quantity: 50, category: "A" }),
+      line({
+        product_id: "C1",
+        product_name: "Cart SKU",
+        suggested_quantity: 8,
+        order_quantity: 50,
+        category: "A",
+      }),
     ];
-    const fromCart = resolvePoRows(cart, [purchaseItem({ product_id: "F1", recommended_quantity: 1 })], fallback);
+    const fromCart = resolvePoRows(
+      cart,
+      [purchaseItem({ product_id: "F1", recommended_quantity: 1 })],
+      fallback,
+    );
     expect(fromCart[0]?.sku.product_id).toBe("C1");
     expect(fromCart[0]?.recommended_quantity).toBe(50);
     expect(fromCart[0]?.suggested_quantity).toBe(8);

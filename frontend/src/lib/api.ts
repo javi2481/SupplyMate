@@ -1,8 +1,7 @@
 /** SupplyMate FastAPI client — real catalog / replenishment data. */
 
 export const API_URL = (
-  (import.meta.env["VITE_SUPPLYMATE_API_URL"] as string | undefined) ??
-  "http://127.0.0.1:8000"
+  (import.meta.env["VITE_SUPPLYMATE_API_URL"] as string | undefined) ?? "http://127.0.0.1:8000"
 ).replace(/\/$/, "");
 
 export type ApiHealthBucket = "stockout_risk" | "understock" | "overstock" | "healthy";

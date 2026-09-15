@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   completeTurn,
   emptyPanel,
@@ -34,26 +34,6 @@ function panel(partial: Partial<ThreadPanel>): ThreadPanel {
   return { ...fallback, ...partial };
 }
 
-function stubSessionStorage() {
-  const store = new Map<string, string>();
-  vi.stubGlobal("sessionStorage", {
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => {
-      store.set(key, value);
-    },
-    removeItem: (key: string) => {
-      store.delete(key);
-    },
-    clear: () => {
-      store.clear();
-    },
-    key: (index: number) => [...store.keys()][index] ?? null,
-    get length() {
-      return store.size;
-    },
-  });
-}
-
 describe("isSameTurn", () => {
   it("does not treat a cancelled turn as current", () => {
     expect(isSameTurn(null, pending)).toBe(false);
@@ -85,14 +65,6 @@ describe("completeTurn", () => {
 });
 
 describe("stripThinkingMessages / loadThreads", () => {
-  beforeEach(() => {
-    stubSessionStorage();
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
   it("drops thinking bubbles from a message list", () => {
     const messages: ChatMsg[] = [
       { id: 1, role: "assistant", text: "hola" },
@@ -241,10 +213,20 @@ describe("deleteThread", () => {
 
 describe("thread cart persistence", () => {
   const panales: CartLine[] = [
-    hydrateCartLine({ product_id: "P1", product_name: "Pañal", recommended_quantity: 10, category: "Pañales" }),
+    hydrateCartLine({
+      product_id: "P1",
+      product_name: "Pañal",
+      recommended_quantity: 10,
+      category: "Pañales",
+    }),
   ];
   const shampoo: CartLine[] = [
-    hydrateCartLine({ product_id: "S1", product_name: "Shampoo", recommended_quantity: 4, category: "Shampoo" }),
+    hydrateCartLine({
+      product_id: "S1",
+      product_name: "Shampoo",
+      recommended_quantity: 4,
+      category: "Shampoo",
+    }),
   ];
 
   it("emptyPanel and missing thread cart start empty", () => {
@@ -258,7 +240,9 @@ describe("thread cart persistence", () => {
         id: "t",
         title: "x",
         messages: [],
-        cart: [{ product_id: "A", product_name: "A", recommended_quantity: 12 } as unknown as CartLine],
+        cart: [
+          { product_id: "A", product_name: "A", recommended_quantity: 12 } as unknown as CartLine,
+        ],
       },
       fallback,
     );
@@ -279,7 +263,9 @@ describe("thread cart persistence", () => {
   });
 
   it("deleting the last thread yields an empty cart", () => {
-    const only: ThreadState[] = [{ id: "b", title: "90d", messages: [], ...panel({ cart: panales }) }];
+    const only: ThreadState[] = [
+      { id: "b", title: "90d", messages: [], ...panel({ cart: panales }) },
+    ];
     const result = deleteThread(only, "b", "b", panel({ cart: panales }), fallback, () => ({
       id: "blank",
       title: "Nueva conversación",
@@ -377,7 +363,11 @@ describe("panelAfterChat", () => {
   });
 
   it("keeps the current chatBoard when applyChatScope says keep", () => {
-    const withBoard = panel({ ...live, chatBoard: { dashboard: snap, purchaseList: [] }, replacedSurface: true });
+    const withBoard = panel({
+      ...live,
+      chatBoard: { dashboard: snap, purchaseList: [] },
+      replacedSurface: true,
+    });
     const applied: AppliedChatScope = {
       slice: withBoard.slice,
       openProductId: null,

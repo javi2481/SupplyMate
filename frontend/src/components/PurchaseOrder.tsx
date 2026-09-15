@@ -196,7 +196,10 @@ export function PurchaseOrder({
             })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={editable ? 5 : 4} className="px-3 py-10 text-center text-muted-foreground">
+                <td
+                  colSpan={editable ? 5 : 4}
+                  className="px-3 py-10 text-center text-muted-foreground"
+                >
                   {editable
                     ? "El pedido está vacío. Agregá productos desde Explorar."
                     : "No hay productos en este recorte. Probá quitar un filtro."}
@@ -275,7 +278,9 @@ export function PurchaseOrder({
                     className="h-4 w-4 accent-[hsl(var(--ops-accent))]"
                   />
                   <span>{col.label}</span>
-                  <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">{col.header}</span>
+                  <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">
+                    {col.header}
+                  </span>
                 </label>
               ))}
             </fieldset>

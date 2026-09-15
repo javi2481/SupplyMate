@@ -50,5 +50,9 @@ export type Calc = {
 
 export const nf = new Intl.NumberFormat("es-AR");
 export const money = (v: number) =>
-  new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(v);
+  new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    maximumFractionDigits: 0,
+  }).format(v);
 export const dec = (v: number) => v.toFixed(2).replace(".", ",");

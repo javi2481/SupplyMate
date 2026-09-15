@@ -75,12 +75,16 @@ describe("slice data source helpers", () => {
   });
 
   it("table caption uses purchase_skus when the page is truncated", () => {
-    expect(tableScopeCaption({ displayed: 50, pageRows: 50, recorteToBuy: 1059, searching: false })).toEqual({
+    expect(
+      tableScopeCaption({ displayed: 50, pageRows: 50, recorteToBuy: 1059, searching: false }),
+    ).toEqual({
       shown: 50,
       total: 1059,
       noun: "a reponer",
     });
-    expect(tableScopeCaption({ displayed: 12, pageRows: 50, recorteToBuy: 1059, searching: true })).toEqual({
+    expect(
+      tableScopeCaption({ displayed: 12, pageRows: 50, recorteToBuy: 1059, searching: true }),
+    ).toEqual({
       shown: 12,
       total: 50,
       noun: "productos",
@@ -272,7 +276,10 @@ describe("slice data source helpers", () => {
     expect(preferLiveApi({ VITE_SUPPLYMATE_API_URL: "http://127.0.0.1:8000" })).toBe(true);
     expect(preferLiveApi({ VITE_SUPPLYMATE_API_URL: "" })).toBe(false);
     expect(
-      preferLiveApi({ VITE_SUPPLYMATE_API_URL: "http://127.0.0.1:8000", VITE_SUPPLYMATE_USE_MOCK: "1" }),
+      preferLiveApi({
+        VITE_SUPPLYMATE_API_URL: "http://127.0.0.1:8000",
+        VITE_SUPPLYMATE_USE_MOCK: "1",
+      }),
     ).toBe(true);
   });
 

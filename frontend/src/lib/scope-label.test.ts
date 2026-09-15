@@ -39,10 +39,7 @@ describe("sliceLabels", () => {
   });
 
   it("includes buyOnly and non-default horizon", () => {
-    expect(sliceLabels(slice({ buyOnly: true }), 30)).toEqual([
-      "A comprar",
-      "Horizonte 30 días",
-    ]);
+    expect(sliceLabels(slice({ buyOnly: true }), 30)).toEqual(["A comprar", "Horizonte 30 días"]);
   });
 
   it("uppercases lowercase name tokens and shows health labels", () => {
@@ -56,13 +53,7 @@ describe("sliceLabels", () => {
           highlightProductId: "6033436",
         }),
       ),
-    ).toEqual([
-      "Cosmetica",
-      "Desodorantes",
-      "Riesgo de quiebre",
-      "REXONA",
-      "SKU 6033436",
-    ]);
+    ).toEqual(["Cosmetica", "Desodorantes", "Riesgo de quiebre", "REXONA", "SKU 6033436"]);
   });
 
   it("does not add horizon when it matches the default", () => {
@@ -115,8 +106,8 @@ describe("chipRecorteNote", () => {
   });
 
   it("names the recorte without the empty line when units remain", () => {
-    expect(
-      chipRecorteNote(slice({ cats: ["Fragancias"] }), dash({ recommended_units: 900 })),
-    ).toBe("Recorte: Fragancias.");
+    expect(chipRecorteNote(slice({ cats: ["Fragancias"] }), dash({ recommended_units: 900 }))).toBe(
+      "Recorte: Fragancias.",
+    );
   });
 });

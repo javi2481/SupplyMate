@@ -3,37 +3,13 @@ import { buildClientTurnTrace, emitClientTurnTrace, readClientTurnTraces } from 
 import type { ChatResponse } from "@/lib/api";
 import { EMPTY_SLICE } from "@/lib/scope";
 
-function stubSessionStorage() {
-  const store = new Map<string, string>();
-  const mock = {
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => {
-      store.set(key, value);
-    },
-    removeItem: (key: string) => {
-      store.delete(key);
-    },
-    clear: () => {
-      store.clear();
-    },
-    key: (index: number) => [...store.keys()][index] ?? null,
-    get length() {
-      return store.size;
-    },
-  };
-  vi.stubGlobal("sessionStorage", mock);
-  return mock;
-}
-
 describe("turnLog", () => {
   beforeEach(() => {
-    stubSessionStorage();
-    sessionStorage.clear();
     vi.spyOn(console, "info").mockImplementation(() => undefined);
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it("builds a client trace with server trace and chart mode", () => {

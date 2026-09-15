@@ -4,7 +4,10 @@ import { filterChipsCoveredByCharts, mockNextStepChips, type ChipSlice } from "@
 
 const EMPTY: ChipSlice = { cats: [], health: [], coverage: null, suppliers: [] };
 
-function calc(partial: Partial<Sku> & Pick<Sku, "product_id" | "product_name" | "category">, extra?: Partial<Calc>): Calc {
+function calc(
+  partial: Partial<Sku> & Pick<Sku, "product_id" | "product_name" | "category">,
+  extra?: Partial<Calc>,
+): Calc {
   const sku: Sku = {
     barcode: partial.barcode ?? partial.product_id,
     supplier: "ProvX",
@@ -39,9 +42,30 @@ function calc(partial: Partial<Sku> & Pick<Sku, "product_id" | "product_name" | 
 describe("mockNextStepChips", () => {
   it("ranks unused categories then coverage, health, supplier; caps at 6; drops open_sku and draft_oc", () => {
     const rows: Calc[] = [
-      calc({ product_id: "1", product_name: "Top", category: "A", supplier: "ProvX", stock: 0, sales_30: 600 }),
-      calc({ product_id: "2", product_name: "B-item", category: "B", supplier: "ProvX", stock: 0, sales_30: 300 }),
-      calc({ product_id: "3", product_name: "Over", category: "A", supplier: "ProvX", stock: 9000, sales_30: 30 }),
+      calc({
+        product_id: "1",
+        product_name: "Top",
+        category: "A",
+        supplier: "ProvX",
+        stock: 0,
+        sales_30: 600,
+      }),
+      calc({
+        product_id: "2",
+        product_name: "B-item",
+        category: "B",
+        supplier: "ProvX",
+        stock: 0,
+        sales_30: 300,
+      }),
+      calc({
+        product_id: "3",
+        product_name: "Over",
+        category: "A",
+        supplier: "ProvX",
+        stock: 9000,
+        sales_30: 30,
+      }),
     ];
     const chips = mockNextStepChips(rows, EMPTY);
     expect(chips.length).toBeLessThanOrEqual(6);
@@ -61,7 +85,13 @@ describe("mockNextStepChips", () => {
 
   it("does not pad when only two slots apply", () => {
     const rows = [
-      calc({ product_id: "1", product_name: "Only", category: "Cabello", stock: 40, sales_30: 210 }),
+      calc({
+        product_id: "1",
+        product_name: "Only",
+        category: "Cabello",
+        stock: 40,
+        sales_30: 210,
+      }),
     ];
     const chips = mockNextStepChips(rows, EMPTY);
     expect(chips.length).toBeGreaterThanOrEqual(2);
@@ -71,7 +101,13 @@ describe("mockNextStepChips", () => {
 
   it("skips active category but still offers open_sku / draft_oc", () => {
     const rows = [
-      calc({ product_id: "99", product_name: "Top SKU", category: "Cabello", stock: 0, sales_30: 400 }),
+      calc({
+        product_id: "99",
+        product_name: "Top SKU",
+        category: "Cabello",
+        stock: 0,
+        sales_30: 400,
+      }),
     ];
     const chips = mockNextStepChips(rows, {
       cats: ["Cabello"],
@@ -86,7 +122,13 @@ describe("mockNextStepChips", () => {
   });
 
   it("keeps recommended_quantity from the row fixture", () => {
-    const row = calc({ product_id: "1", product_name: "Qty", category: "Cuidado", stock: 0, sales_30: 300 });
+    const row = calc({
+      product_id: "1",
+      product_name: "Qty",
+      category: "Cuidado",
+      stock: 0,
+      sales_30: 300,
+    });
     const chips = mockNextStepChips([row], EMPTY);
     const skuChip = chips.find((c) => c.action === "open_sku");
     if (skuChip) {

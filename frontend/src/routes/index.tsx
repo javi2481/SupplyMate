@@ -23,18 +23,23 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { PurchaseOrder } from "@/components/PurchaseOrder";
 import { SkuDrawer } from "@/components/SkuDrawer";
 import { SkuTable } from "@/components/SkuTable";
 import { useScope } from "@/hooks/use-scope";
 import { useSlice } from "@/hooks/use-slice";
-import {
-  fetchReplenishment,
-  fetchSlice,
-  postChat,
-  scopeQueryToPayload,
-} from "@/lib/api";
+import { fetchReplenishment, fetchSlice, postChat, scopeQueryToPayload } from "@/lib/api";
 import { factsFromRecommendation, rowFromPurchaseItem } from "@/lib/adapter";
 import { applyChatScope, chatFailureMessage } from "@/lib/applyChatScope";
 import {
@@ -80,7 +85,12 @@ import {
   kpisFromDashboard,
   panelFromSources,
 } from "@/lib/data-source";
-import { purchaseActionsAllowed, toggleBuyOnly, toggleHealthTag, visibleExploreKpiKinds } from "@/lib/kpi-actions";
+import {
+  purchaseActionsAllowed,
+  toggleBuyOnly,
+  toggleHealthTag,
+  visibleExploreKpiKinds,
+} from "@/lib/kpi-actions";
 import { calcFromApiRow } from "@/lib/ops-row";
 import { filterChipsCoveredByCharts } from "@/lib/nextStepChips";
 import { COVERAGE_ORDER, EMPTY_SLICE, sliceToScopeQuery, type UiSlice } from "@/lib/scope";
@@ -156,7 +166,11 @@ function applyClientFilters(rows: Calc[], slice: UiSlice): Calc[] {
 function Index() {
   const boot = useMemo(() => loadThreads(SEED), []);
   const bootPanel = useMemo(
-    () => panelOf(boot.threads.find((thread) => thread.id === boot.activeId), emptyPanel(HORIZON_DAYS)),
+    () =>
+      panelOf(
+        boot.threads.find((thread) => thread.id === boot.activeId),
+        emptyPanel(HORIZON_DAYS),
+      ),
     [boot],
   );
   const [threads, setThreads] = useState<Thread[]>(boot.threads);
@@ -384,10 +398,7 @@ function Index() {
       purchaseForChart,
     ],
   );
-  const chartData = useMemo(
-    () => chartUnitsByCategory(dash, chartHints),
-    [dash, chartHints],
-  );
+  const chartData = useMemo(() => chartUnitsByCategory(dash, chartHints), [dash, chartHints]);
   const chartMode = useMemo(() => chartBarMode(dash, chartHints), [dash, chartHints]);
   const chartKey = `${chartMode}:${chartData.map((b) => `${b.productId ?? b.category}:${b.units}`).join("|")}`;
 
@@ -498,7 +509,9 @@ function Index() {
         setMobileView("chat");
         window.setTimeout(() => setMobileView("explore"), 1200);
         if (applied.openProductId) {
-          const fromRes = res.purchase_list.find((item) => item.product_id === applied.openProductId);
+          const fromRes = res.purchase_list.find(
+            (item) => item.product_id === applied.openProductId,
+          );
           const row = fromRes
             ? calcFromApiRow(rowFromPurchaseItem(fromRes))
             : findRowForProduct(applied.openProductId);
@@ -516,11 +529,7 @@ function Index() {
             ? thread
             : {
                 ...thread,
-                messages: completeTurn(
-                  thread.messages,
-                  pending,
-                  chatFailureMessage(query, error),
-                ),
+                messages: completeTurn(thread.messages, pending, chatFailureMessage(query, error)),
               },
         ),
       );
@@ -677,23 +686,54 @@ function Index() {
   }
 
   const rail = (
-    <aside className={`${railCollapsed ? "w-[72px]" : "w-[72px] xl:w-[248px]"} flex h-full shrink-0 flex-col border-r border-ops-border bg-ops-panel transition-[width] duration-200`}>
+    <aside
+      className={`${railCollapsed ? "w-[72px]" : "w-[72px] xl:w-[248px]"} flex h-full shrink-0 flex-col border-r border-ops-border bg-ops-panel transition-[width] duration-200`}
+    >
       <div className="grid h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-ops-border px-4">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-ops-accent text-ops-accent-foreground"><Box className="h-4 w-4" /></div>
-          {!railCollapsed && <div className="hidden min-w-0 xl:block"><div className="truncate font-display text-base font-semibold text-foreground">SupplyMate</div><div className="truncate text-[11px] text-muted-foreground">Reposición · {horizonDays} días</div></div>}
+          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-ops-accent text-ops-accent-foreground">
+            <Box className="h-4 w-4" />
+          </div>
+          {!railCollapsed && (
+            <div className="hidden min-w-0 xl:block">
+              <div className="truncate font-display text-base font-semibold text-foreground">
+                SupplyMate
+              </div>
+              <div className="truncate text-[11px] text-muted-foreground">
+                Reposición · {horizonDays} días
+              </div>
+            </div>
+          )}
         </div>
-        <button type="button" aria-label={railCollapsed ? "Expandir menú" : "Reducir menú"} onClick={() => setRailCollapsed((value) => !value)} className="hidden h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground outline-none hover:bg-ops-row hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-accent md:grid">
-          {railCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+        <button
+          type="button"
+          aria-label={railCollapsed ? "Expandir menú" : "Reducir menú"}
+          onClick={() => setRailCollapsed((value) => !value)}
+          className="hidden h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground outline-none hover:bg-ops-row hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-accent md:grid"
+        >
+          {railCollapsed ? (
+            <PanelLeftOpen className="h-4 w-4" />
+          ) : (
+            <PanelLeftClose className="h-4 w-4" />
+          )}
         </button>
       </div>
       <div className="p-3">
-        <button type="button" onClick={newThread} className="flex h-9 w-full items-center justify-center gap-2 rounded-md bg-ops-accent px-3 text-xs font-semibold text-ops-accent-foreground outline-none hover:bg-ops-accent-hover focus-visible:ring-2 focus-visible:ring-ops-focus">
-          <Plus className="h-4 w-4 shrink-0" />{!railCollapsed && <span className="hidden xl:inline">Nueva conversación</span>}
+        <button
+          type="button"
+          onClick={newThread}
+          className="flex h-9 w-full items-center justify-center gap-2 rounded-md bg-ops-accent px-3 text-xs font-semibold text-ops-accent-foreground outline-none hover:bg-ops-accent-hover focus-visible:ring-2 focus-visible:ring-ops-focus"
+        >
+          <Plus className="h-4 w-4 shrink-0" />
+          {!railCollapsed && <span className="hidden xl:inline">Nueva conversación</span>}
         </button>
       </div>
       <nav aria-label="Conversaciones" className="flex-1 overflow-y-auto px-3">
-        {!railCollapsed && <div className="mb-2 hidden px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground xl:block">Ejemplos</div>}
+        {!railCollapsed && (
+          <div className="mb-2 hidden px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground xl:block">
+            Ejemplos
+          </div>
+        )}
         <div className="space-y-1">
           {threads.map((thread) => (
             <div
@@ -706,7 +746,9 @@ function Index() {
                 onClick={() => activateThread(thread.id)}
                 className="flex min-w-0 flex-1 items-center gap-3 rounded-md px-3 text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-ops-accent"
               >
-                <MessageSquareText className={`h-4 w-4 shrink-0 ${thread.id === activeId ? "text-ops-accent" : ""}`} />
+                <MessageSquareText
+                  className={`h-4 w-4 shrink-0 ${thread.id === activeId ? "text-ops-accent" : ""}`}
+                />
                 {!railCollapsed && (
                   <span className="hidden min-w-0 flex-1 truncate xl:inline">{thread.title}</span>
                 )}
@@ -725,7 +767,12 @@ function Index() {
         </div>
       </nav>
       <div className="border-t border-ops-border p-4">
-        <div className="flex items-center gap-2 text-[11px] text-muted-foreground"><CheckCircle2 className={`h-4 w-4 shrink-0 ${statusLive ? "text-ops-ok" : "text-ops-warn"}`} />{!railCollapsed && <span className="hidden xl:inline">{statusLabel}</span>}</div>
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <CheckCircle2
+            className={`h-4 w-4 shrink-0 ${statusLive ? "text-ops-ok" : "text-ops-warn"}`}
+          />
+          {!railCollapsed && <span className="hidden xl:inline">{statusLabel}</span>}
+        </div>
       </div>
     </aside>
   );
@@ -734,28 +781,91 @@ function Index() {
     <div className="h-dvh w-full overflow-hidden bg-background font-sans text-[13px] text-foreground">
       <div className="flex h-full w-full">
         <div className="hidden md:block">{rail}</div>
-        {mobileMenu && <div className="fixed inset-0 z-50 md:hidden"><button aria-label="Cerrar menú" className="absolute inset-0 bg-ops-overlay" onClick={() => setMobileMenu(false)} /><div className="relative h-full w-[268px]">{rail}</div></div>}
+        {mobileMenu && (
+          <div className="fixed inset-0 z-50 md:hidden">
+            <button
+              aria-label="Cerrar menú"
+              className="absolute inset-0 bg-ops-overlay"
+              onClick={() => setMobileMenu(false)}
+            />
+            <div className="relative h-full w-[268px]">{rail}</div>
+          </div>
+        )}
 
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="grid h-16 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-ops-border bg-ops-panel px-4 md:px-5">
             <div className="flex min-w-0 items-center gap-3">
-              <button type="button" aria-label="Abrir menú" onClick={() => setMobileMenu(true)} className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted-foreground outline-none hover:bg-ops-row focus-visible:ring-2 focus-visible:ring-ops-accent md:hidden"><Menu className="h-5 w-5" /></button>
-              <div className="min-w-0"><h1 className="truncate font-display text-lg font-semibold">SupplyMate · Operación de reposición</h1><p className="truncate text-[11px] text-muted-foreground">Próximos {horizonDays} días · este recorte</p></div>
+              <button
+                type="button"
+                aria-label="Abrir menú"
+                onClick={() => setMobileMenu(true)}
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted-foreground outline-none hover:bg-ops-row focus-visible:ring-2 focus-visible:ring-ops-accent md:hidden"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+              <div className="min-w-0">
+                <h1 className="truncate font-display text-lg font-semibold">
+                  SupplyMate · Operación de reposición
+                </h1>
+                <p className="truncate text-[11px] text-muted-foreground">
+                  Próximos {horizonDays} días · este recorte
+                </p>
+              </div>
             </div>
-            <div className={`flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase ${statusLive ? "border-ops-ok/30 bg-ops-ok-soft text-ops-ok" : "border-ops-warn/40 bg-ops-warn/10 text-ops-warn"}`}><span className={`h-1.5 w-1.5 rounded-full ${statusLive ? "bg-ops-ok" : "bg-ops-warn"}`} />{statusLabel}</div>
+            <div
+              className={`flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase ${statusLive ? "border-ops-ok/30 bg-ops-ok-soft text-ops-ok" : "border-ops-warn/40 bg-ops-warn/10 text-ops-warn"}`}
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${statusLive ? "bg-ops-ok" : "bg-ops-warn"}`}
+              />
+              {statusLabel}
+            </div>
           </header>
 
           <div className="grid h-12 shrink-0 grid-cols-3 border-b border-ops-border bg-ops-panel md:hidden">
-            {(["chat", "explore", "po"] as MobileView[]).map((item) => <button key={item} type="button" disabled={item === "po" && !canReviewPo} onClick={() => { if (item === "po") { openPo(); return; } setMobileView(item); if (item === "explore") { setMode("explore"); setFrozen(null); } }} className={`border-b-2 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ops-accent disabled:opacity-40 ${mobileView === item ? "border-ops-accent text-foreground" : "border-transparent text-muted-foreground"}`}>{item === "chat" ? "Consulta" : item === "explore" ? "Explorar" : "Revisar OC"}</button>)}
+            {(["chat", "explore", "po"] as MobileView[]).map((item) => (
+              <button
+                key={item}
+                type="button"
+                disabled={item === "po" && !canReviewPo}
+                onClick={() => {
+                  if (item === "po") {
+                    openPo();
+                    return;
+                  }
+                  setMobileView(item);
+                  if (item === "explore") {
+                    setMode("explore");
+                    setFrozen(null);
+                  }
+                }}
+                className={`border-b-2 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ops-accent disabled:opacity-40 ${mobileView === item ? "border-ops-accent text-foreground" : "border-transparent text-muted-foreground"}`}
+              >
+                {item === "chat" ? "Consulta" : item === "explore" ? "Explorar" : "Revisar OC"}
+              </button>
+            ))}
           </div>
 
           <div className="grid min-h-0 flex-1 md:grid-cols-[minmax(280px,38%)_minmax(420px,62%)] xl:grid-cols-[minmax(340px,34%)_minmax(560px,66%)]">
-            <section className={`${mobileView === "chat" ? "flex" : "hidden"} min-h-0 flex-col border-r border-ops-border bg-background md:flex`}>
+            <section
+              className={`${mobileView === "chat" ? "flex" : "hidden"} min-h-0 flex-col border-r border-ops-border bg-background md:flex`}
+            >
               <div className="border-b border-ops-border p-4 md:p-5">
-                <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"><MessageSquareText className="h-4 w-4 text-ops-accent" />Consulta de reposición</div>
+                <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  <MessageSquareText className="h-4 w-4 text-ops-accent" />
+                  Consulta de reposición
+                </div>
                 {buyQuery ? (
-                  <button type="button" onClick={() => void send(buyQuery)} disabled={chatBusy} className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-ops-accent/60 bg-ops-accent-soft p-4 text-left outline-none hover:border-ops-accent focus-visible:ring-2 focus-visible:ring-ops-focus disabled:opacity-50">
-                    <span className="min-w-0 font-display text-base font-semibold text-foreground">{buyQuery}</span><ChevronRight className="h-5 w-5 shrink-0 text-ops-accent" />
+                  <button
+                    type="button"
+                    onClick={() => void send(buyQuery)}
+                    disabled={chatBusy}
+                    className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-ops-accent/60 bg-ops-accent-soft p-4 text-left outline-none hover:border-ops-accent focus-visible:ring-2 focus-visible:ring-ops-focus disabled:opacity-50"
+                  >
+                    <span className="min-w-0 font-display text-base font-semibold text-foreground">
+                      {buyQuery}
+                    </span>
+                    <ChevronRight className="h-5 w-5 shrink-0 text-ops-accent" />
                   </button>
                 ) : (
                   <p className="rounded-lg border border-ops-border bg-ops-panel px-3.5 py-3 text-sm text-muted-foreground">
@@ -764,7 +874,12 @@ function Index() {
                 )}
               </div>
               <div className="flex-1 space-y-3 overflow-y-auto p-4 md:p-5">
-                {active?.messages.length === 0 && <p className="text-sm text-muted-foreground">Escribí una consulta sobre reposición. Las cantidades siempre provienen del motor de cálculo.</p>}
+                {active?.messages.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Escribí una consulta sobre reposición. Las cantidades siempre provienen del
+                    motor de cálculo.
+                  </p>
+                )}
                 {active?.messages.map((message) => (
                   <div
                     key={message.id}
@@ -776,7 +891,10 @@ function Index() {
                   >
                     {message.role === "thinking" ? (
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-ops-accent" aria-hidden />
+                        <Loader2
+                          className="h-4 w-4 shrink-0 animate-spin text-ops-accent"
+                          aria-hidden
+                        />
                         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ops-accent">
                           Pensando
                         </span>
@@ -803,8 +921,14 @@ function Index() {
                 <div ref={chatEndRef} />
               </div>
               <div className="border-t border-ops-border bg-ops-panel p-4">
-                {labels.length > 0 && <p className="mb-2 text-[11px] text-muted-foreground">Recorte actual: <span className="text-foreground">{labels.join(" · ")}</span></p>}
-                {pedidoFooter ? <p className="mb-2 text-[11px] text-muted-foreground">{pedidoFooter}</p> : null}
+                {labels.length > 0 && (
+                  <p className="mb-2 text-[11px] text-muted-foreground">
+                    Recorte actual: <span className="text-foreground">{labels.join(" · ")}</span>
+                  </p>
+                )}
+                {pedidoFooter ? (
+                  <p className="mb-2 text-[11px] text-muted-foreground">{pedidoFooter}</p>
+                ) : null}
                 {nextStepChips.length > 0 && (
                   <div className="mb-2 grid grid-cols-3 gap-1.5">
                     {nextStepChips.map((chip) => (
@@ -820,17 +944,54 @@ function Index() {
                     ))}
                   </div>
                 )}
-                <form onSubmit={(event) => { event.preventDefault(); void send(input); }} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-                  <div className="relative min-w-0"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><input value={input} onChange={(event) => setInput(event.target.value)} aria-label="Consulta de reposición" placeholder="Escribí una consulta…" className="h-10 w-full rounded-md border border-ops-border bg-background pl-9 pr-3 text-sm outline-none placeholder:text-muted-foreground focus:border-ops-accent focus:ring-2 focus:ring-ops-focus" /></div>
-                  <button type="submit" aria-label="Enviar consulta" disabled={chatBusy} className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-ops-accent text-ops-accent-foreground outline-none hover:bg-ops-accent-hover focus-visible:ring-2 focus-visible:ring-ops-focus disabled:opacity-50"><Send className="h-4 w-4" /></button>
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void send(input);
+                  }}
+                  className="grid grid-cols-[minmax(0,1fr)_auto] gap-2"
+                >
+                  <div className="relative min-w-0">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      value={input}
+                      onChange={(event) => setInput(event.target.value)}
+                      aria-label="Consulta de reposición"
+                      placeholder="Escribí una consulta…"
+                      className="h-10 w-full rounded-md border border-ops-border bg-background pl-9 pr-3 text-sm outline-none placeholder:text-muted-foreground focus:border-ops-accent focus:ring-2 focus:ring-ops-focus"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    aria-label="Enviar consulta"
+                    disabled={chatBusy}
+                    className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-ops-accent text-ops-accent-foreground outline-none hover:bg-ops-accent-hover focus-visible:ring-2 focus-visible:ring-ops-focus disabled:opacity-50"
+                  >
+                    <Send className="h-4 w-4" />
+                  </button>
                 </form>
               </div>
             </section>
 
-            <section className={`${mobileView !== "chat" ? "flex" : "hidden"} min-h-0 min-w-0 flex-col bg-background md:flex`}>
+            <section
+              className={`${mobileView !== "chat" ? "flex" : "hidden"} min-h-0 min-w-0 flex-col bg-background md:flex`}
+            >
               <div className="hidden h-12 shrink-0 grid-cols-2 border-b border-ops-border bg-ops-panel md:grid">
-                <button type="button" onClick={backToExplore} className={`border-b-2 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ops-accent ${mode === "explore" ? "border-ops-accent text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Explorar</button>
-                <button type="button" onClick={openPo} disabled={!canReviewPo} className={`border-b-2 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ops-accent disabled:opacity-40 ${mode === "po" ? "border-ops-accent text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>Revisar OC</button>
+                <button
+                  type="button"
+                  onClick={backToExplore}
+                  className={`border-b-2 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ops-accent ${mode === "explore" ? "border-ops-accent text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                >
+                  Explorar
+                </button>
+                <button
+                  type="button"
+                  onClick={openPo}
+                  disabled={!canReviewPo}
+                  className={`border-b-2 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ops-accent disabled:opacity-40 ${mode === "po" ? "border-ops-accent text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                >
+                  Revisar OC
+                </button>
               </div>
 
               {mode === "po" ? (
@@ -849,19 +1010,52 @@ function Index() {
               ) : (
                 <div className="min-h-0 flex-1 overflow-y-auto">
                   <div className="flex flex-wrap items-center gap-2 border-b border-ops-border bg-ops-panel px-4 py-2.5 lg:px-5">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Recorte</span>
-                    <span className="min-w-0 truncate text-xs text-foreground">{labels.length > 0 ? labels.join(" · ") : "Inventario completo"}</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                      Recorte
+                    </span>
+                    <span className="min-w-0 truncate text-xs text-foreground">
+                      {labels.length > 0 ? labels.join(" · ") : "Inventario completo"}
+                    </span>
                     <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
-                      <button type="button" onClick={handleGoBack} disabled={history.length === 0} className="inline-flex h-7 items-center gap-1 rounded-md border border-ops-border px-2 text-[11px] text-muted-foreground outline-none hover:border-ops-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-focus disabled:opacity-40"><ArrowLeft className="h-3.5 w-3.5" />Volver</button>
-                      <button type="button" onClick={handleClearSlice} disabled={labels.length === 0 && !chatBoard} className="inline-flex h-7 items-center gap-1 rounded-md border border-ops-border px-2 text-[11px] text-muted-foreground outline-none hover:border-ops-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-focus disabled:opacity-40"><Eraser className="h-3.5 w-3.5" />Limpiar</button>
+                      <button
+                        type="button"
+                        onClick={handleGoBack}
+                        disabled={history.length === 0}
+                        className="inline-flex h-7 items-center gap-1 rounded-md border border-ops-border px-2 text-[11px] text-muted-foreground outline-none hover:border-ops-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-focus disabled:opacity-40"
+                      >
+                        <ArrowLeft className="h-3.5 w-3.5" />
+                        Volver
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleClearSlice}
+                        disabled={labels.length === 0 && !chatBoard}
+                        className="inline-flex h-7 items-center gap-1 rounded-md border border-ops-border px-2 text-[11px] text-muted-foreground outline-none hover:border-ops-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-focus disabled:opacity-40"
+                      >
+                        <Eraser className="h-3.5 w-3.5" />
+                        Limpiar
+                      </button>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 p-4 lg:grid-cols-4 lg:p-5">
                     {kpis.map((kpi) => (
-                      <button key={kpi.label} type="button" onClick={kpi.onClick} aria-pressed={kpi.active} className={`rounded-lg border p-3.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ops-focus ${kpi.active ? "border-ops-accent bg-ops-accent-soft" : "border-ops-border bg-ops-panel hover:border-ops-accent"}`}>
-                        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2"><div className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{kpi.label}</div><kpi.icon className="h-4 w-4 shrink-0 text-ops-accent" /></div>
-                        <div className="mt-2 font-display text-2xl font-semibold tabular-nums">{kpi.value}</div>
+                      <button
+                        key={kpi.label}
+                        type="button"
+                        onClick={kpi.onClick}
+                        aria-pressed={kpi.active}
+                        className={`rounded-lg border p-3.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ops-focus ${kpi.active ? "border-ops-accent bg-ops-accent-soft" : "border-ops-border bg-ops-panel hover:border-ops-accent"}`}
+                      >
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                          <div className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                            {kpi.label}
+                          </div>
+                          <kpi.icon className="h-4 w-4 shrink-0 text-ops-accent" />
+                        </div>
+                        <div className="mt-2 font-display text-2xl font-semibold tabular-nums">
+                          {kpi.value}
+                        </div>
                         <div className="mt-0.5 text-[11px] text-muted-foreground">{kpi.detail}</div>
                       </button>
                     ))}
@@ -887,15 +1081,25 @@ function Index() {
                       )}
                     </div>
                     {api.error && chartData.length === 0 ? (
-                      <p className="py-6 text-center text-xs text-muted-foreground">{COPY_CATEGORIES_LOAD_FAILED}</p>
+                      <p className="py-6 text-center text-xs text-muted-foreground">
+                        {COPY_CATEGORIES_LOAD_FAILED}
+                      </p>
                     ) : api.loading && chartData.length === 0 ? (
-                      <p className="py-6 text-center text-xs text-muted-foreground">Cargando categorías del catálogo…</p>
+                      <p className="py-6 text-center text-xs text-muted-foreground">
+                        Cargando categorías del catálogo…
+                      </p>
                     ) : chartData.length === 0 ? (
-                      <p className="py-6 text-center text-xs text-muted-foreground">No hay unidades a reponer en este recorte.</p>
+                      <p className="py-6 text-center text-xs text-muted-foreground">
+                        No hay unidades a reponer en este recorte.
+                      </p>
                     ) : (
                       <div className="h-[210px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart key={chartKey} data={chartData} margin={{ top: 40, right: 8, bottom: 36, left: 0 }}>
+                          <BarChart
+                            key={chartKey}
+                            data={chartData}
+                            margin={{ top: 40, right: 8, bottom: 36, left: 0 }}
+                          >
                             <CartesianGrid stroke="var(--ops-border)" vertical={false} />
                             <XAxis
                               dataKey="category"
@@ -904,7 +1108,11 @@ function Index() {
                               axisLine={{ stroke: "var(--ops-border)" }}
                               interval={0}
                               tickFormatter={(value: string) =>
-                                chartTickLabel(value, chartData.length, chartMode === "sku" ? 10 : 13)
+                                chartTickLabel(
+                                  value,
+                                  chartData.length,
+                                  chartMode === "sku" ? 10 : 13,
+                                )
                               }
                               label={{
                                 value: "ud",
@@ -914,8 +1122,23 @@ function Index() {
                                 fontSize: 11,
                               }}
                             />
-                            <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }} tickLine={false} axisLine={false} width={44} />
-                            <Tooltip cursor={{ fill: "var(--ops-row)" }} contentStyle={{ background: "var(--ops-panel)", border: "1px solid var(--ops-border)", borderRadius: 8, fontSize: 12, color: "var(--foreground)" }} formatter={(item: number) => [nf.format(item), "Unidades"]} />
+                            <YAxis
+                              tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                              tickLine={false}
+                              axisLine={false}
+                              width={44}
+                            />
+                            <Tooltip
+                              cursor={{ fill: "var(--ops-row)" }}
+                              contentStyle={{
+                                background: "var(--ops-panel)",
+                                border: "1px solid var(--ops-border)",
+                                borderRadius: 8,
+                                fontSize: 12,
+                                color: "var(--foreground)",
+                              }}
+                              formatter={(item: number) => [nf.format(item), "Unidades"]}
+                            />
                             <Bar
                               dataKey="units"
                               maxBarSize={64}
@@ -926,7 +1149,8 @@ function Index() {
                                 if (chartMode === "sku") {
                                   const productId =
                                     bar.productId ||
-                                    chartData.find((item) => item.category === bar.category)?.productId;
+                                    chartData.find((item) => item.category === bar.category)
+                                      ?.productId;
                                   if (!productId) return;
                                   const row = findRowForProduct(productId);
                                   if (row) void openDetail(row);
@@ -940,7 +1164,10 @@ function Index() {
                                   }));
                                   return;
                                 }
-                                mutateSlice((previous) => ({ ...previous, cats: [bar.category as string] }));
+                                mutateSlice((previous) => ({
+                                  ...previous,
+                                  cats: [bar.category as string],
+                                }));
                               }}
                             >
                               {chartData.map((item) => {
@@ -986,9 +1213,20 @@ function Index() {
                   </div>
 
                   <div className="border-b border-ops-border bg-ops-panel px-4 py-3 lg:px-5">
-                    <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground"><SlidersHorizontal className="h-3.5 w-3.5" />Filtros</div>
+                    <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                      <SlidersHorizontal className="h-3.5 w-3.5" />
+                      Filtros
+                    </div>
                     <div className="flex flex-wrap gap-1.5">
-                      <button type="button" onClick={() => mutateSlice((previous) => ({ ...previous, buyOnly: !previous.buyOnly }))} className={`rounded-full border px-2.5 py-1 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-ops-focus ${slice.buyOnly ? "border-ops-accent bg-ops-accent-soft text-ops-accent" : "border-ops-border text-muted-foreground hover:border-ops-accent"}`}><ShoppingCart className="mr-1 inline h-3 w-3" />A comprar</button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          mutateSlice((previous) => ({ ...previous, buyOnly: !previous.buyOnly }))
+                        }
+                        className={`rounded-full border px-2.5 py-1 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-ops-focus ${slice.buyOnly ? "border-ops-accent bg-ops-accent-soft text-ops-accent" : "border-ops-border text-muted-foreground hover:border-ops-accent"}`}
+                      >
+                        <ShoppingCart className="mr-1 inline h-3 w-3" />A comprar
+                      </button>
                       {HEALTH_FILTERS.map((tag) => {
                         const Icon = healthIcon[tag];
                         const healthTag = tag as "riesgo_quiebre" | "sin_stock" | "sobrestock";
@@ -1006,15 +1244,50 @@ function Index() {
                       })}
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                      <span className="mr-1 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">Cobertura</span>
-                      {COVERAGE_ORDER.map((band) => <button key={band} type="button" onClick={() => mutateSlice((previous) => ({ ...previous, coverage: previous.coverage === band ? null : band }))} className={`rounded-full border px-2.5 py-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ops-focus ${slice.coverage === band ? "border-ops-accent bg-ops-accent-soft text-ops-accent" : "border-ops-border text-muted-foreground hover:border-ops-accent"}`}><Timer className="mr-1 inline h-3 w-3" />{band}</button>)}
+                      <span className="mr-1 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                        Cobertura
+                      </span>
+                      {COVERAGE_ORDER.map((band) => (
+                        <button
+                          key={band}
+                          type="button"
+                          onClick={() =>
+                            mutateSlice((previous) => ({
+                              ...previous,
+                              coverage: previous.coverage === band ? null : band,
+                            }))
+                          }
+                          className={`rounded-full border px-2.5 py-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ops-focus ${slice.coverage === band ? "border-ops-accent bg-ops-accent-soft text-ops-accent" : "border-ops-border text-muted-foreground hover:border-ops-accent"}`}
+                        >
+                          <Timer className="mr-1 inline h-3 w-3" />
+                          {band}
+                        </button>
+                      ))}
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">{categoryNames.map((category) => <button key={category} type="button" onClick={() => mutateSlice((previous) => ({ ...previous, cats: toggleList(previous.cats, category) }))} className={`rounded-md border px-2.5 py-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ops-focus ${slice.cats.includes(category) ? "border-ops-accent text-ops-accent" : "border-ops-border text-muted-foreground hover:border-ops-accent"}`}>{category}</button>)}</div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {categoryNames.map((category) => (
+                        <button
+                          key={category}
+                          type="button"
+                          onClick={() =>
+                            mutateSlice((previous) => ({
+                              ...previous,
+                              cats: toggleList(previous.cats, category),
+                            }))
+                          }
+                          className={`rounded-md border px-2.5 py-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ops-focus ${slice.cats.includes(category) ? "border-ops-accent text-ops-accent" : "border-ops-border text-muted-foreground hover:border-ops-accent"}`}
+                        >
+                          {category}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <SkuTable
                     rows={rows}
-                    recorteToBuy={allowPurchase ? (dash?.purchase_skus ?? rows.length) : rows.length}
+                    recorteToBuy={
+                      allowPurchase ? (dash?.purchase_skus ?? rows.length) : rows.length
+                    }
                     onOpen={(row) => void openDetail(row)}
                     cartProductIds={cartProductIds}
                     onAddLine={addLineFromTable}

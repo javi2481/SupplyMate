@@ -38,7 +38,11 @@ export function applySuggestedFilter(chip: SuggestedChip, slice: UiSlice): Apply
     case "filter_health": {
       const bucket = chip.args["health_bucket"];
       const tag: HealthTag | null =
-        bucket === "stockout_risk" ? "riesgo_quiebre" : bucket === "overstock" ? "sobrestock" : null;
+        bucket === "stockout_risk"
+          ? "riesgo_quiebre"
+          : bucket === "overstock"
+            ? "sobrestock"
+            : null;
       if (!tag) return { type: "noop" };
       return { type: "slice", slice: { ...slice, health: unionHealth(slice.health, tag) } };
     }

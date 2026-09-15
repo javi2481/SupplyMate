@@ -1,5 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchSlice, type InventoryDashboard, type PurchaseListItem, type ScopeQuery, type SuggestedFilter } from "@/lib/api";
+import {
+  fetchSlice,
+  type InventoryDashboard,
+  type PurchaseListItem,
+  type ScopeQuery,
+  type SuggestedFilter,
+} from "@/lib/api";
 import { rowFromPurchaseItem, type SkuListRow } from "@/lib/adapter";
 import { preferLiveApi } from "@/lib/data-source";
 
