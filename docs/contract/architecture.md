@@ -10,12 +10,14 @@ SupplyMate is a **replenishment assistant**, not a generic chat wrapper. User in
 
 | Artifact | Role |
 |----------|------|
-| CSVs in `data/` | Primary catalog evidence |
-| `app/catalog/store.py` | In-memory load + `CatalogStore` |
+| API-like CSV resources in `data/` | Simulated external ops APIs (see [data-contract](data-contract.md)); joined by `product_id` |
+| `CatalogStore` (`app/catalog/store.py`) | Loads those resource CSVs in-memory and resolves products (not a monolithic dump) |
 | `ProductMaster` | Unified row for metrics and replenishment |
 | `calculate_replenishment()` | Operational qty truth |
 | LLM roles | Intent, explain, insight, optional commit narration |
 | Vite frontend | Live consumer UI (not source of truth) |
+
+The three agent tools (`get_inventory`, `get_sales_history`, `get_replenishment_params`) consume those resources via `CatalogStore`. FastAPI (`/chat`, `/replenishment/*`, `/products/*`) is the **application** API — not a substitute for the API-like data contract.
 
 ```mermaid
 flowchart TB

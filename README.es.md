@@ -39,6 +39,8 @@ Filtros y KPIs quedan en Python sobre el scope activo para que el modelo no sea 
 
 El lenguaje natural entra por intent y resolución de referencias, se convierte en un `AnalyticalScope`, y luego en el slice de Explorar o en un agente de un solo SKU. La cantidad recomendada siempre sale de `calculate_replenishment()` en Python.
 
+SupplyMate usa un **contrato de datos API-like** reproducible: los CSV en [`data/`](data/) simulan APIs operacionales externas (products, prices, inventory, sales, replenishment params), unidos por `product_id`. Detalle: [`docs/contract/data-contract.es.md`](docs/contract/data-contract.es.md).
+
 ```mermaid
 flowchart TB
   user[User_NL] --> intent[Intent_and_ReferenceResolver]
@@ -59,8 +61,8 @@ flowchart TB
 
 | Artefacto | Rol |
 |-----------|-----|
-| Catálogo CSV (`data/`) | Catálogo demo reproducible (~13k SKUs) |
-| `CatalogStore` | Carga in-memory y resolución de productos |
+| Recursos CSV API-like (`data/`) | Simulan APIs ops externas (products, inventory, prices, sales, replenishment params); ~13k SKUs; ver [data-contract](docs/contract/data-contract.es.md) |
+| `CatalogStore` | Carga esos recursos in-memory y resuelve productos |
 | `AnalyticalScope` | Estado analítico estructurado (filtros, horizonte) |
 | `calculate_replenishment()` | Verdad operativa de qty |
 | Roles LLM | Intent, explain, insight; narración commit opcional |
@@ -69,6 +71,7 @@ flowchart TB
 
 ### Conceptos centrales
 
+- **API-like data contract** — los CSV por recurso sustituyen APIs ops externas; las tools del agente leen vía `CatalogStore`, no como fixtures sueltas
 - **AnalyticalScope** — estado analítico estructurado compartido por chat, panel y predicados de export
 - **Deterministic replenishment** — qty order-up-to en Python (`ceil`, `max(0, …)`); fórmula en [`local-dev`](docs/operations/local-dev.es.md)
 - **LLM boundary** — el modelo interpreta, explica y resume; no controla qty, filtros ni filas CSV
@@ -93,7 +96,7 @@ Valor de compra = qty × precio de lista (no PVP). Verdad del panel: [`docs/oper
 
 | Listo al clonar | Opcional |
 |-----------------|----------|
-| Catálogo CSV en [`data/`](data/) | `GROQ_API_KEY` / DeepSeek / OpenAI-compatible |
+| Recursos CSV API-like en [`data/`](data/) (demo reproducible) | `GROQ_API_KEY` / DeepSeek / OpenAI-compatible |
 | FastAPI + agente + fórmula | Llamadas LLM en vivo |
 | Frontend Vite (`frontend/`) | Docker (imagen API) |
 | pytest + goldens / evals (sin LLM live en CI principal) | |
@@ -158,7 +161,7 @@ Vocabulario UI: **Explorar → Revisar OC → Exportar CSV**. Clicks, filtros y 
 |----------|----------|
 | 3 tools de inventario + roles LLM acotados | RAG / embeddings obligatorios |
 | Cálculo determinístico order-up-to | Forecasting / ML / EOQ |
-| Catálogo demo reproducible (CSV) | Postgres app DB / dbt / Airflow / Superset |
+| Recursos CSV API-like (demo reproducible) | Postgres app DB / dbt / Airflow / Superset |
 | UI Vite Explorar / Revisar OC | BI aparte obligatorio |
 | Carrito operator-driven + CSV con columnas | Multi-agent swarm / LangChain |
 | Insight con validator + fallback determinístico | LLM dueño de qty o filtros de filas |
@@ -174,7 +177,7 @@ Vocabulario UI: **Explorar → Revisar OC → Exportar CSV**. Clicks, filtros y 
 |-----|-----------|
 | [`docs/contract/architecture.es.md`](docs/contract/architecture.es.md) | Frontera LLM vs Python, tools, slice/scope |
 | [`docs/contract/evaluation.es.md`](docs/contract/evaluation.es.md) | CI, goldens, markers pytest |
-| [`docs/contract/data-contract.es.md`](docs/contract/data-contract.es.md) | Contrato CSV / `product_id` |
+| [`docs/contract/data-contract.es.md`](docs/contract/data-contract.es.md) | Recursos CSV API-like / `product_id` |
 | [`docs/operations/recorte-coherence.md`](docs/operations/recorte-coherence.md) | Dueño del panel + invariantes |
 | [`docs/operations/local-dev.es.md`](docs/operations/local-dev.es.md) | Fórmula, curls, Docker, Why not X extendida |
 | [`docs/README.md`](docs/README.md) | Índice completo de docs |
