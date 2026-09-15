@@ -16,13 +16,14 @@ Spanish twins: `*.es.md` in the same folder.
 
 | Doc | Purpose |
 |-----|---------|
+| [`operations/local-dev.md`](operations/local-dev.md) | Formula, curls, Docker, extended Why not X ([ES](operations/local-dev.es.md)) |
+| [`operations/recorte-coherence.md`](operations/recorte-coherence.md) | Panel owner + 6 coherence invariants |
 | [`operations/maintenance-policy.md`](operations/maintenance-policy.md) | Preventive maintenance cadence |
 | [`operations/performance-profile.md`](operations/performance-profile.md) | Latency smoke thresholds |
 | [`operations/security-audit-osstmm-lite.md`](operations/security-audit-osstmm-lite.md) | Lite security checklist |
 | [`operations/security-deps.md`](operations/security-deps.md) | Dependency audit notes |
 | [`operations/compatibility-matrix.md`](operations/compatibility-matrix.md) | Browser / OS matrix |
 | [`operations/beta-test-protocol.md`](operations/beta-test-protocol.md) | Beta UX scenario |
-| [`operations/recorte-coherence.md`](operations/recorte-coherence.md) | Panel owner + 6 coherence invariants |
 
 ## Templates
 

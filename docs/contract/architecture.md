@@ -17,11 +17,23 @@ SupplyMate is a **replenishment assistant**, not a generic chat wrapper. User in
 | LLM roles | Intent, explain, insight, optional commit narration |
 | Vite frontend | Live consumer UI (not source of truth) |
 
-```text
-CSV → CatalogStore → ProductMaster → calculate_replenishment → REST / CSV
-                                              ↑
-                                    3 tools (agent path)
+```mermaid
+flowchart TB
+  user[User_NL] --> intent[Intent_and_ReferenceResolver]
+  intent --> scope[AnalyticalScope]
+  scope --> analytics[Slice_Dashboard]
+  scope --> agent[Single_SKU_Agent]
+  agent --> tools[Three_inventory_tools]
+  tools --> formula[calculate_replenishment]
+  analytics --> formula
+  formula --> truth[Python_Truth]
+  truth --> ui[Explore_UI]
+  truth --> cart[Operator_Cart_CSV]
+  truth --> insight[Insight_or_SKU_explanation]
+  insight -->|validator_and_fallback| ui
 ```
+
+*Simplified view. SKU explanation and insight/commit are distinct LLM roles with guardrails. Same diagram as the [README](../../README.md#how-it-works).*
 
 ## LLM vs Python boundary
 
@@ -96,7 +108,7 @@ Layered layout — detail in [`app/README.md`](../../app/README.md) and [`tests/
 | `data/` | Resource CSVs (see [data-contract.md](data-contract.md)) |
 | `tests/` | Layered pytest + golden CSVs |
 | `docs/contract/` | Public architecture, evaluation, data contract |
-| `docs/operations/` | Maintenance, security, performance |
+| `docs/operations/` | Local-dev runbook, maintenance, security, performance |
 | `openspec/` | Internal SDD (strict TDD specs per change) |
 
 Internal specs live under `openspec/changes/` — not the public README index.

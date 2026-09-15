@@ -2,86 +2,84 @@
 
 *English* · [Español](README.es.md)
 
-AI Engineering MVP for replenishment in distribution SMBs.
+AI Engineering MVP: conversational replenishment over a structured catalog — natural language as the interface, Python as the source of truth.
 
 **Principle:** *LLM orchestrates, deterministic code decides.*
 
 ## Why it exists
 
-A distribution SMB needs to answer:
+A distribution operator needs a trustworthy answer to:
 
 > How much of product X should I order to cover the next 7 days?
 
-If the LLM invents stock, sales, or quantity, the system is not trustworthy. SupplyMate separates roles:
+The hard failure mode is not “no answer” — it is **inconsistency** between interpretation, stock, demand, filters, and recommended quantity. SupplyMate keeps those concerns separate:
 
 - the **LLM orchestrates** (intent, explanation, insight)
-- **Python code decides** (formula, filters, CSV)
+- **Python decides** (formula, filters, CSV)
 
 ## Who this is for
 
-- **Applied AI engineers** who want a *tool-calling + deterministic logic + validated insights* case study
-- **Operations / supply** teams who need an exportable purchase order on the same slice they see
+- **Applied AI engineers** studying tool-calling + deterministic logic + validated insights
+- **Ops / supply** teams who need an exportable purchase order on the same slice they see
+- **Engineers evaluating LLM + deterministic workflows** (not chat wrappers that invent numbers)
 - **Interviews** — small, testable, easy-to-narrate MVP
 
 ## Why not just use X?
 
-| Alternative | Why not in this MVP |
-|-------------|---------------------|
-| **RAG / embeddings / vector DB** | Structured CSV; lexical SKU matching. No embedding models at runtime. |
-| **LangChain / LangGraph** | Overkill for 3 inventory tools; OpenAI Agents SDK |
-| **Let the LLM calculate** | Critical numbers are not hallucinated; Python calculates and validates narration |
-| **Multi-agent swarm** | Separate LLM roles (intent / explain / insight / commit), not a swarm |
-| **Forecasting / ML / EOQ** | Out of scope; policy is explicit and simple |
-| **Postgres / dbt / Airflow / Superset** | Overkill; dashboard lives in chat |
+- **RAG / embeddings** — structured CSV and lexical SKU matching; no embedding models at runtime
+- **Let the LLM calculate** — critical numbers are owned by Python; the model narrates validated facts
+- **Forecasting / ML / EOQ** — out of scope; the replenishment policy is explicit and simple
+- **Multi-agent swarm** — bounded LLM roles (intent / explain / insight / commit), not a swarm
+
+Filtering and KPIs stay in Python on the active scope so the model does not own the panel. Extended alternatives (LangChain, Postgres/dbt, etc.): [`docs/operations/local-dev.md`](docs/operations/local-dev.md). Architecture: [`docs/contract/architecture.md`](docs/contract/architecture.md).
 
 ## How it works
 
-```text
-User
-  ↓
-/chat  ── regex or intent classifier
-  ├── list / dashboard  → Python slice (0 LLM per click)
-  └── single SKU        → 3 tools → calculate_replenishment → explanation (validated)
-/replenishment/slice     → same filters as CSV export
-/replenishment/analyze   → insight or PO summary, validator, deterministic fallback
+Natural language enters intent and reference resolution, becomes an `AnalyticalScope`, then either the Explore slice or a single-SKU agent. Recommended quantity always comes from `calculate_replenishment()` in Python.
+
+```mermaid
+flowchart TB
+  user[User_NL] --> intent[Intent_and_ReferenceResolver]
+  intent --> scope[AnalyticalScope]
+  scope --> analytics[Slice_Dashboard]
+  scope --> agent[Single_SKU_Agent]
+  agent --> tools[Three_inventory_tools]
+  tools --> formula[calculate_replenishment]
+  analytics --> formula
+  formula --> truth[Python_Truth]
+  truth --> ui[Explore_UI]
+  truth --> cart[Operator_Cart_CSV]
+  truth --> insight[Insight_or_SKU_explanation]
+  insight -->|validator_and_fallback| ui
 ```
 
-| Piece | Role |
-|-------|------|
-| CSVs in [`data/`](data/) | Simulated catalog (~13k SKUs) |
-| [`app/services/analytics/metrics.py`](app/services/analytics/metrics.py) | Metric contracts + coverage + health + priority |
-| 3 tools + [`app/core/replenishment.py`](app/core/replenishment.py) | Inventory / sales / params; qty in Python |
-| LLM roles | Intent, SKU explainer, insight (Explore); commit summary optional |
-| REST | search, replenishment, `/chat`, `/slice`, `/analyze`, dashboard, CSV |
-| Vite frontend (`frontend/`) | Live UI: chat + **Explore** / **Review PO** |
+*Simplified view. SKU explanation and insight/commit are distinct LLM roles with guardrails.*
 
-### Replenishment policy (honest)
+| Artifact | Role |
+|----------|------|
+| CSV catalog (`data/`) | Reproducible demo catalog (~13k SKUs) |
+| `CatalogStore` | In-memory load and product resolution |
+| `AnalyticalScope` | Structured analytic state (filters, horizon) |
+| `calculate_replenishment()` | Operational qty truth |
+| LLM roles | Intent, explain, insight; optional commit narration |
+| Validator + fallback | Rejects invalid insight; deterministic summary on failure |
+| Vite UI | Chat + **Explore** / **Review PO** (consumes slice truth) |
 
-**Order-up-to / periodic review**
+### Core concepts
 
-```text
-avg_daily      = total_units_sold_last_30 / 30
-demand_horizon = avg_daily * 7
-demand_lead    = avg_daily * lead_time_days
-stock_target   = demand_horizon + demand_lead + safety_stock
-recommended    = max(0, ceil(stock_target - current_stock))
-```
-
-- **Reorder point** is a health alarm (“stockout risk”). It does not enter the order quantity.
-- **Coverage** = stock / 30d daily demand. Approximation, not a forecast.
-- **Stockout risk** = rule (`qty > 0` and stock ≤ ROP). Not a probability.
-- **Overstock** = stock > max and qty = 0. Not dead stock.
-- Daily sales in history are **expanded uniformly** from the 30d total. No real time series: do not infer trend or seasonality.
-
-This is not an ML demand model. The MVP demonstrates deterministic replenishment + conversational analytics.
-
-Details: [`docs/contract/architecture.md`](docs/contract/architecture.md)
+- **AnalyticalScope** — structured analytic state shared by chat, panel, and export predicates
+- **Deterministic replenishment** — order-up-to qty in Python (`ceil`, `max(0, …)`); formula details in [`local-dev`](docs/operations/local-dev.md)
+- **LLM boundary** — the model interprets, explains, and summarizes; it does not control qty, filters, or CSV rows
 
 ## What the MVP proves
 
-**Real catalog** — `6033436` → qty **173**; `8141600` → **0**. Operator-driven cart → Review PO → CSV with a **column picker** (default `barcode` + `order_quantity`; optional product id/name, category, supplier, suggested qty, estimated value). Purchase value = qty × list price (not retail PVP).
+- `6033436` → recommended quantity **173**; `8141600` → **0** (reproducible calculation)
+- Same predicates drive `GET /replenishment/slice` and purchase-list CSV export
+- Qty is computed in Python; LLM narration is validated against those facts
+- Invalid or failed insight → deterministic fallback (`insight_source=fallback`)
+- Operator owns the PO: add lines, edit qty, pick CSV columns (default `barcode` + `order_quantity`)
 
-Panel truth: KPIs / chart / table come from `GET /replenishment/slice` for the active scope (see [`docs/operations/recorte-coherence.md`](docs/operations/recorte-coherence.md)).
+Purchase value = qty × list price (not retail PVP). Panel truth: [`docs/operations/recorte-coherence.md`](docs/operations/recorte-coherence.md).
 
 ### Screenshots
 
@@ -91,12 +89,12 @@ Panel truth: KPIs / chart / table come from `GET /replenishment/slice` for the a
 
 ## What the clone includes
 
-| Ready to clone | Optional |
+| Out of the box | Optional |
 |----------------|----------|
-| CSVs in [`data/`](data/) | `GROQ_API_KEY` in `.env` (or DeepSeek / OpenAI) |
-| pytest tests | Paid OpenAI |
-| FastAPI + agent + formula | |
-| Vite frontend (`frontend/`) | |
+| CSV catalog in [`data/`](data/) | `GROQ_API_KEY` / DeepSeek / OpenAI-compatible |
+| FastAPI + agent + formula | Live LLM calls |
+| Vite frontend (`frontend/`) | Docker (API image) |
+| pytest + goldens / evals (no live LLM in main CI) | |
 
 ## Quickstart
 
@@ -107,7 +105,7 @@ python -m venv .venv
 # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 cp .env.example .env
-# Edit .env and set GROQ_API_KEY (https://console.groq.com/keys)
+# Edit .env — GROQ_API_KEY (https://console.groq.com/keys) or another provider below
 
 pytest -m "not performance and not llm"
 uvicorn app.api:app --reload --host 127.0.0.1 --port 8000
@@ -122,141 +120,75 @@ npm install
 npm run dev -- --host 127.0.0.1 --port 8080
 ```
 
-Open **http://127.0.0.1:8080**. If port `8000` is already taken on your machine, run the API on `8001` and set `VITE_SUPPLYMATE_API_URL` accordingly.
+Open **http://127.0.0.1:8080**. If port `8000` is taken, run the API on `8001` and set `VITE_SUPPLYMATE_API_URL` accordingly.
 
-API smoke (with uvicorn on :8000):
-
-```powershell
-.\scripts\smoke_api.ps1
-```
-
-### The flow (under 2 minutes)
-
-1. Ask: **What products should I buy?**
-2. Click a **health chip** or a **chart bar** → refine the slice (KPIs/table follow `/slice`)
-3. **Add to order** on the SKUs you want (chat suggests; the operator decides)
-4. Open **Review PO** → adjust quantities → **Export and finish** → pick CSV columns (barcode + qty by default)
-
-Clicks, filters, and CSV = **0 LLM calls**. The model runs on free-form questions and SKU explanation.
-
-Demo SKU: `6033436`. Vocabulary: Stockout risk, Out of stock, Overstock, Coverage, Recommended quantity.
-
-Examples:
-
-- `How much should I order of 6033436?` → qty + **How it was calculated**
-- `What products should I buy?` → **Explore** → add lines → **Review PO** → **Export CSV**
-
-```bash
-curl -s -X POST http://127.0.0.1:8000/replenishment/analyze \
-  -H "Content-Type: application/json" \
-  -d "{\"mode\":\"explore\",\"scope\":{},\"events\":[],\"root_question\":\"What to buy?\"}"
-```
-
-First verifiable result:
-
-```bash
-curl -s http://127.0.0.1:8000/products/6033436/replenishment
-# → recommended_quantity: 173
-```
+Curls, smoke script, Docker: [`docs/operations/local-dev.md`](docs/operations/local-dev.md).
 
 ## Terminal flow
 
-**SKU path**
+**Single SKU path**
 
 ```text
 Question: How much should I order of 6033436?
    ↓
-Intent → 3 tools → calculate_replenishment
+Intent / reference → 3 tools → calculate_replenishment
    ↓
 Answer: qty 173 + How it was calculated (validated)
 ```
 
-**Slice + cart path**
+**Explore / PO path**
 
 ```text
 Question: What products should I buy?
    ↓
-Explore panel → clicks (0 LLM) → Add to order → Review PO → CSV columns
+Explore → scope / filters (0 LLM per click) → operator adds SKUs
+   ↓
+Review PO → Export CSV (column picker)
    ↓
 If LLM insight fails → deterministic fallback
 ```
 
-```bash
-curl -s http://127.0.0.1:8000/health
-curl -s "http://127.0.0.1:8000/products/search?q=47%20street"
-curl -s http://127.0.0.1:8000/products/6033436/replenishment
-curl -s "http://127.0.0.1:8000/replenishment/slice?limit=5"
-curl -s "http://127.0.0.1:8000/replenishment/slice?category=Cabello&limit=5"
-curl -s "http://127.0.0.1:8000/replenishment/purchase-list.csv?limit=10" -o purchase_order.csv
-curl -s -X POST http://127.0.0.1:8000/chat \
-  -H "Content-Type: application/json" \
-  -d "{\"message\": \"How much should I order of 6033436?\"}"
-```
+UI vocabulary: **Explore → Review PO → Export CSV**. Clicks, filters, and CSV = **0 LLM calls**.
 
 ## Scope
 
 | Included | Excluded |
 |----------|----------|
-| 3 inventory tools + bounded LLM roles | RAG, embeddings, vector DB |
+| 3 inventory tools + bounded LLM roles | RAG / embeddings required |
 | Deterministic order-up-to calculation | Forecasting / ML / EOQ |
-| CSV catalog | Postgres app DB / dbt / Airflow / Superset |
-| Vite Explore / Review PO UI | Mandatory separate BI tool |
+| Reproducible demo catalog (CSV) | Postgres app DB / dbt / Airflow / Superset |
+| Vite Explore / Review PO | Mandatory separate BI tool |
 | Operator-driven cart + column-picker CSV | Multi-agent swarm / LangChain |
-| `/replenishment/analyze` (LLM interprets, Python calculates; optional insight API) | LLM calculates qty or filters rows |
-| Insight evals + golden intents (CI without live LLM) | LangSmith / OpenTelemetry |
+| Insight with validator + deterministic fallback | LLM owns qty or row filters |
+| Goldens / evals in CI without live LLM | ERP write-back / auth (milestones) |
 
-## Live UI
+## Optional LLM providers
 
-Chat + **Explore** / **Review PO** at http://127.0.0.1:8080 against the API on `:8000`. See [`frontend/README.md`](frontend/README.md).
-
-UI scaffold originated in Lovable; the product surface is this Vite app under `frontend/`.
-
-Docker (API only):
-
-```bash
-docker build -t supplymate .
-docker run --rm -p 8000:8000 -e GROQ_API_KEY=gsk-... -e LLM_PROVIDER=groq supplymate
-```
+**Groq** (default) · **DeepSeek** · **OpenAI-compatible** — see [`.env.example`](.env.example). Recommended quantity does not depend on which model you choose.
 
 ## Documentation
 
 | Doc | Contents |
 |-----|----------|
-| [`docs/README.md`](docs/README.md) | Doc index (contract / operations / templates) |
-| [`app/README.md`](app/README.md) | Application code layers |
-| [`tests/README.md`](tests/README.md) | Test suite layers |
-| [`docs/contract/architecture.md`](docs/contract/architecture.md) | LLM vs Python boundary, tools, slice/scope, layout |
-| [`docs/contract/evaluation.md`](docs/contract/evaluation.md) | CI, goldens, pytest markers, performance |
+| [`docs/contract/architecture.md`](docs/contract/architecture.md) | LLM vs Python boundary, tools, slice/scope |
+| [`docs/contract/evaluation.md`](docs/contract/evaluation.md) | CI, goldens, pytest markers |
 | [`docs/contract/data-contract.md`](docs/contract/data-contract.md) | CSV contract / `product_id` |
+| [`docs/operations/recorte-coherence.md`](docs/operations/recorte-coherence.md) | Panel owner + coherence invariants |
+| [`docs/operations/local-dev.md`](docs/operations/local-dev.md) | Formula, curls, Docker, extended Why not X |
+| [`docs/README.md`](docs/README.md) | Full doc index |
 
-Internal SDD: [`openspec/`](openspec/) (per-change specs; not the public entry point).
+## Status
 
-### Quality and maintenance
+**v0.5.0** — conversational replenishment + sliceable Explore panel; qty and filters in Python; operator-driven PO cart.
 
-| Doc | Contents |
-|-----|-----------|
-| [`docs/operations/recorte-coherence.md`](docs/operations/recorte-coherence.md) | Panel owner + six coherence invariants |
-| [`docs/operations/maintenance-policy.md`](docs/operations/maintenance-policy.md) | Lehman laws, preventive sprint |
-| [`docs/operations/beta-test-protocol.md`](docs/operations/beta-test-protocol.md) | Beta scenario + UX checklist |
-| [`docs/operations/security-audit-osstmm-lite.md`](docs/operations/security-audit-osstmm-lite.md) | Lite web audit |
-| [`docs/operations/compatibility-matrix.md`](docs/operations/compatibility-matrix.md) | Browsers / OS |
-| [`docs/operations/performance-profile.md`](docs/operations/performance-profile.md) | Performance smoke thresholds |
-| [`openspec/changes/archive/2026-09-10-engineering-quality/traceability-matrix.md`](openspec/changes/archive/2026-09-10-engineering-quality/traceability-matrix.md) | MUST → test (archived) |
+Portfolio / academic MVP; not an ERP or forecasting system.
 
-**Status:** v0.5.0 — conversational replenishment + sliceable Explore panel; qty and filters in Python; operator-driven PO cart; LLM on free-form question / insight only.
+## Next milestones
 
-### Design decisions (interview-ready)
-
-1. **Numbers never come from the model** — `calculate_replenishment()` owns qty; the LLM narrates validated facts.
-2. **One panel owner** — `/replenishment/slice` for the active `UiSlice`; chat board is only a loading placeholder.
-3. **Operator owns the PO** — chat suggests; the human adds lines, edits qty, and chooses CSV columns.
-
-### Next milestones
-
-1. **Second catalog source** — validate the CSV contract with another dataset
-2. **API auth** — endpoints ready for controlled deployment
-3. **Query interpretation** — harden multiturn goldens and reference resolution
-4. **Richer PO formats** — ERP templates beyond the column picker (EDI, XLSX, etc.)
+1. Second catalog source — validate the CSV contract on another dataset
+2. Stronger query / reference evaluation — multiturn goldens and resolution
+3. API auth — endpoints ready for controlled deployment
+4. Richer PO formats — ERP templates beyond the column picker
 
 ## Contributing
 
@@ -266,13 +198,7 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 [![CI](https://github.com/javi2481/SupplyMate/actions/workflows/ci.yml/badge.svg)](https://github.com/javi2481/SupplyMate/actions/workflows/ci.yml)
 
-CI runs `pytest -m "not performance and not llm"`, coverage ≥85% on critical modules, and Docker smoke. Marker `llm` excluded from main CI.
-
-```bash
-pytest -m "not performance and not llm"
-pytest -m performance   # performance smoke (main CI only)
-# Live LLM paraphrase evals (not CI): RUN_LLM_EVALS=1 pytest -m llm
-```
+CI runs `pytest -m "not performance and not llm"`, coverage gates on critical modules, and Docker smoke. Marker `llm` is excluded from main CI.
 
 ## License
 

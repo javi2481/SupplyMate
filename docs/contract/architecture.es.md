@@ -19,11 +19,23 @@ SupplyMate es un **asistente de reposición**, no un chat genérico. La entrada 
 | Roles LLM | Intent, explain, insight, narración commit opcional |
 | Frontend Vite | UI consumidora viva (no fuente de verdad) |
 
-```text
-CSV → CatalogStore → ProductMaster → calculate_replenishment → REST / CSV
-                                              ↑
-                                    3 tools (camino agente)
+```mermaid
+flowchart TB
+  user[User_NL] --> intent[Intent_and_ReferenceResolver]
+  intent --> scope[AnalyticalScope]
+  scope --> analytics[Slice_Dashboard]
+  scope --> agent[Single_SKU_Agent]
+  agent --> tools[Three_inventory_tools]
+  tools --> formula[calculate_replenishment]
+  analytics --> formula
+  formula --> truth[Python_Truth]
+  truth --> ui[Explore_UI]
+  truth --> cart[Operator_Cart_CSV]
+  truth --> insight[Insight_or_SKU_explanation]
+  insight -->|validator_and_fallback| ui
 ```
+
+*Vista simplificada. La explicación de SKU y el insight/commit son roles LLM distintos con guardrails. Mismo diagrama que el [README ES](../../README.es.md#cómo-funciona).*
 
 ## Frontera LLM vs Python
 
@@ -98,7 +110,7 @@ Layout por capas — detalle en [`app/README.md`](../../app/README.md) y [`tests
 | `data/` | CSVs por recurso (ver [data-contract.es.md](data-contract.es.md)) |
 | `tests/` | pytest por capas + goldens CSV |
 | `docs/contract/` | Arquitectura, evaluación, contrato de datos |
-| `docs/operations/` | Mantenimiento, seguridad, rendimiento |
+| `docs/operations/` | Runbook local-dev, mantenimiento, seguridad, rendimiento |
 | `openspec/` | SDD interno (specs strict TDD por change) |
 
 Las specs internas viven en `openspec/changes/` — no son el índice público del README.
