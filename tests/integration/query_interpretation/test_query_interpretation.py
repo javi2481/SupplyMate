@@ -1,4 +1,5 @@
 import pytest
+
 from app.core.models import AnalyticalScope
 from app.pipeline.query_interpretation import classify_relation, interpret_query_rules
 

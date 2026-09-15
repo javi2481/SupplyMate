@@ -2,7 +2,7 @@
 
 # Evaluación
 
-El harness de evaluación es **re-ejecutable** desde git clone. **Scores Groq live** requieren `RUN_LLM_EVALS=1` y API key real — excluidos del CI.
+El harness de evaluación es **re-ejecutable** desde git clone. **Scores LLM paraphrase live** requieren `RUN_LLM_EVALS=1` y API key real (Groq / DeepSeek / OpenAI) — excluidos del CI.
 
 CI valida contratos, lógica de fórmula, filtros slice e insight validators; **no** afirma calidad de prosa LLM en cada push.
 
@@ -36,7 +36,7 @@ Configurado en CI y [`pyproject.toml`](../pyproject.toml) (subconjunto en `[tool
 |--------|-----|-----------|
 | (default) | sí | Tests unitarios y API |
 | `performance` | solo main | Smoke de latencia slice/dashboard |
-| `llm` | no | Evals Groq live |
+| `llm` | no | Evals LLM paraphrase live |
 
 Correr local:
 
@@ -65,7 +65,7 @@ Layout: [`tests/README.md`](../tests/README.md).
 
 ## Oráculo de recorte y traps
 
-SupplyMate puntúa el chat con **predicados oráculo en Python**, no con jueces LLM. Groq puede parafrasear entradas en corridas opt-in `@pytest.mark.llm`; las aserciones leen superficies estructuradas (`ResolvedReference`, `AnalyticalScope`, `ReplenishmentSlice`, `ChatResponse`, `applyChatScope` en frontend).
+SupplyMate puntúa el chat con **predicados oráculo en Python**, no con jueces LLM. Un provider configurado puede parafrasear entradas en corridas opt-in `@pytest.mark.llm`; las aserciones leen superficies estructuradas (`ResolvedReference`, `AnalyticalScope`, `ReplenishmentSlice`, `ChatResponse`, `applyChatScope` en frontend).
 
 | Superficie | Qué afirmamos |
 |------------|---------------|
@@ -100,7 +100,7 @@ Umbrales en [`docs/operations/performance-profile.md`](performance-profile.md):
 | `replenishment_slice(limit=100)` | < 3 s |
 | `chat_dashboard(limit=100)` | < 3 s |
 
-Primera carga construye `_sku_rows_cache` — incluida en medición. Latencia Groq excluida (mock en tests).
+Primera carga construye `_sku_rows_cache` — incluida en medición. Latencia del provider LLM excluida (mock en tests).
 
 ## Presupuesto de interpretación LLM
 

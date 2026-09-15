@@ -16,8 +16,8 @@ SupplyMate es un **asistente de reposición**, no un chat genérico. La entrada 
 | `app/catalog/store.py` | Carga in-memory + `CatalogStore` |
 | `ProductMaster` | Fila unificada para métricas y reposición |
 | `calculate_replenishment()` | Verdad operativa de qty |
-| Roles LLM | Intent, explain, insight, commit (solo narración) |
-| Frontend Lovable | UI consumidora viva (no fuente de verdad) |
+| Roles LLM | Intent, explain, insight, narración commit opcional |
+| Frontend Vite | UI consumidora viva (no fuente de verdad) |
 
 ```text
 CSV → CatalogStore → ProductMaster → calculate_replenishment → REST / CSV
@@ -34,7 +34,7 @@ CSV → CatalogStore → ProductMaster → calculate_replenishment → REST / CS
 | Filas CSV OC del scope actual | Python (mismos filtros que slice) |
 | Clasificación de intención | Regex + clasificador; LLM para texto libre ambiguo |
 | Prosa de explicación SKU | LLM, validada contra hechos Python |
-| Insight Explorar / resumen Armar OC | LLM + `insight_validator`; fallback determinístico si falla |
+| Insight Explorar / resumen OC opcional | LLM + `insight_validator`; fallback determinístico si falla |
 
 **Python decide qty. El LLM explica y resume.**
 
@@ -54,27 +54,30 @@ Constantes de política: `HORIZON_DAYS = 7`, `HISTORY_DAYS = 30`, nombre `order-
 
 ## Slice y scope
 
-- **`GET /replenishment/slice`** — filas SKU filtradas; mismos predicados que el CSV de compra.
-- **`AnalyticalScope`** — categoría, proveedor, chips de salud, banda de cobertura; congelado al armar OC.
-- **Clicks en el panel Explorar Lovable** — actualizan scope vía query params del slice; **0 llamadas LLM** por click de filtro.
+- **`GET /replenishment/slice`** — filas SKU y dashboard del `UiSlice` activo; **dueño único de KPIs / chart / tabla** en Explorar.
+- **`AnalyticalScope`** — categoría, subcategoría, proveedor, salud, cobertura, name tokens, horizonte.
+- **Chat board** — placeholder optimista solo mientras carga el slice; nunca verdad durable sobre un scope ya cambiado.
+- **Clicks en el panel Explorar** — actualizan scope vía query params del slice; **0 llamadas LLM** por click de filtro.
+- **Álgebra de filtros** (`filter_rows`): mismo eje → OR; ejes distintos → AND.
+- **Carrito operator-driven** — Explorar sugiere; el operador agrega líneas, edita `order_quantity` en Revisar OC y elige columnas del CSV al exportar.
 
-[`app/services/scoping/scope_sanitize.py`](../../app/services/scoping/scope_sanitize.py) sanitiza payloads de scope. [`app/pipeline/scope_builder.py`](../../app/pipeline/scope_builder.py) fusiona eventos UI en scope.
+[`app/services/scoping/scope_sanitize.py`](../../app/services/scoping/scope_sanitize.py) sanitiza payloads de scope. [`app/pipeline/scope_builder.py`](../../app/pipeline/scope_builder.py) fusiona eventos UI en scope. Checklist: [`docs/operations/recorte-coherence.md`](../operations/recorte-coherence.md).
 
 ## Superficies
 
 | Superficie | Puerto | Rol |
 |------------|--------|-----|
 | FastAPI | 8000 | Runtime: `/chat`, `/replenishment/*`, `/products/*` |
-| Frontend Lovable (`frontend/`) | 8080 | UI viva: chat + Explorar + Armar OC |
+| Frontend Vite (`frontend/`) | 8080 | UI viva: chat + Explorar + Revisar OC |
 | Imagen Docker | 8000 | Solo API (`COPY app`, `COPY data`) |
 
 Endpoints clave:
 
 - `POST /chat` — router de intención + agente
-- `GET /replenishment/slice` — tabla dashboard
+- `GET /replenishment/slice` — dashboard + tabla del scope activo
 - `POST /replenishment/analyze` — insight explore o resumen commit
-- `GET /replenishment/purchase-list.csv` — export OC del scope actual
-
+- `GET /replenishment/purchase-list.csv` — export OC server-side de un scope
+- CSV del carrito en cliente — picker de columnas en Revisar OC (default barcode + qty)
 ## Layout del repo
 
 Layout por capas — detalle en [`app/README.md`](../../app/README.md) y [`tests/README.md`](../../tests/README.md). Índice: [`docs/README.md`](../README.md).
@@ -91,7 +94,7 @@ Layout por capas — detalle en [`app/README.md`](../../app/README.md) y [`tests
 | `app/services/scoping/` | Mutaciones de scope, panel modes, filtros sugeridos |
 | `app/services/insight/` | Prompt compiler, validator, cache de insight |
 | `app/middleware/` | Rate limit, safe errors, security headers |
-| `frontend/` | UI viva Lovable / Vite |
+| `frontend/` | UI viva Vite (Explorar / Revisar OC) |
 | `data/` | CSVs por recurso (ver [data-contract.es.md](data-contract.es.md)) |
 | `tests/` | pytest por capas + goldens CSV |
 | `docs/contract/` | Arquitectura, evaluación, contrato de datos |

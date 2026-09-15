@@ -51,9 +51,9 @@ User
 | CSVs in [`data/`](data/) | Simulated catalog (~13k SKUs) |
 | [`app/services/analytics/metrics.py`](app/services/analytics/metrics.py) | Metric contracts + coverage + health + priority |
 | 3 tools + [`app/core/replenishment.py`](app/core/replenishment.py) | Inventory / sales / params; qty in Python |
-| LLM roles | Intent, SKU explainer, insight (Explore), commit (Build PO) |
+| LLM roles | Intent, SKU explainer, insight (Explore); commit summary optional |
 | REST | search, replenishment, `/chat`, `/slice`, `/analyze`, dashboard, CSV |
-| Lovable frontend (`frontend/`) | Live UI: chat + **Explore** / **Build PO** |
+| Vite frontend (`frontend/`) | Live UI: chat + **Explore** / **Review PO** |
 
 ### Replenishment policy (honest)
 
@@ -79,13 +79,21 @@ Details: [`docs/contract/architecture.md`](docs/contract/architecture.md)
 
 ## What the MVP proves
 
-**Real catalog** — `6033436` → qty **173**; `8141600` → **0**. Purchase list + PO CSV (`barcode,product_id,product_name,supplier,recommended_quantity,operational_priority,estimated_purchase_value`). Purchase value = qty × list price (not retail PVP).
+**Real catalog** — `6033436` → qty **173**; `8141600` → **0**. Operator-driven cart → Review PO → CSV with a **column picker** (default `barcode` + `order_quantity`; optional product id/name, category, supplier, suggested qty, estimated value). Purchase value = qty × list price (not retail PVP).
+
+Panel truth: KPIs / chart / table come from `GET /replenishment/slice` for the active scope (see [`docs/operations/recorte-coherence.md`](docs/operations/recorte-coherence.md)).
+
+### Screenshots
+
+![Explore panel — chat + KPIs + chart](docs/assets/explore-panel.png)
+
+![Review PO — export column picker](docs/assets/oc-export-columns.png)
 
 ## What the clone includes
 
 | Ready to clone | Optional |
 |----------------|----------|
-| CSVs in [`data/`](data/) | `GROQ_API_KEY` in `.env` |
+| CSVs in [`data/`](data/) | `GROQ_API_KEY` in `.env` (or DeepSeek / OpenAI) |
 | pytest tests | Paid OpenAI |
 | FastAPI + agent + formula | |
 | Vite frontend (`frontend/`) | |
@@ -109,11 +117,12 @@ In another terminal:
 
 ```bash
 cd frontend
+cp .env.example .env   # VITE_SUPPLYMATE_API_URL=http://127.0.0.1:8000
 npm install
-npm run dev
+npm run dev -- --host 127.0.0.1 --port 8080
 ```
 
-Open http://127.0.0.1:5173 (or the port Vite prints). Copy `frontend/.env.example` to `frontend/.env` so `VITE_SUPPLYMATE_API_URL` points at `:8000`.
+Open **http://127.0.0.1:8080**. If port `8000` is already taken on your machine, run the API on `8001` and set `VITE_SUPPLYMATE_API_URL` accordingly.
 
 API smoke (with uvicorn on :8000):
 
@@ -124,9 +133,9 @@ API smoke (with uvicorn on :8000):
 ### The flow (under 2 minutes)
 
 1. Ask: **What products should I buy?**
-2. Click **Stockout risk** → click a category → select a SKU
-3. See the calculation (Python, not the LLM) — *Facts calculated by Python*
-4. **Ready — build PO** → export the CSV for that slice
+2. Click a **health chip** or a **chart bar** → refine the slice (KPIs/table follow `/slice`)
+3. **Add to order** on the SKUs you want (chat suggests; the operator decides)
+4. Open **Review PO** → adjust quantities → **Export and finish** → pick CSV columns (barcode + qty by default)
 
 Clicks, filters, and CSV = **0 LLM calls**. The model runs on free-form questions and SKU explanation.
 
@@ -135,7 +144,7 @@ Demo SKU: `6033436`. Vocabulary: Stockout risk, Out of stock, Overstock, Coverag
 Examples:
 
 - `How much should I order of 6033436?` → qty + **How it was calculated**
-- `What products should I buy?` → **Explore** panel → slice → **Build PO** → **Export PO**
+- `What products should I buy?` → **Explore** → add lines → **Review PO** → **Export CSV**
 
 ```bash
 curl -s -X POST http://127.0.0.1:8000/replenishment/analyze \
@@ -162,12 +171,12 @@ Intent → 3 tools → calculate_replenishment
 Answer: qty 173 + How it was calculated (validated)
 ```
 
-**Slice path**
+**Slice + cart path**
 
 ```text
 Question: What products should I buy?
    ↓
-Explore panel → clicks (0 LLM) → Build PO → CSV
+Explore panel → clicks (0 LLM) → Add to order → Review PO → CSV columns
    ↓
 If LLM insight fails → deterministic fallback
 ```
@@ -191,14 +200,16 @@ curl -s -X POST http://127.0.0.1:8000/chat \
 | 3 inventory tools + bounded LLM roles | RAG, embeddings, vector DB |
 | Deterministic order-up-to calculation | Forecasting / ML / EOQ |
 | CSV catalog | Postgres app DB / dbt / Airflow / Superset |
-| Lovable frontend Explore / Build PO | Mandatory separate BI tool |
-| PO CSV export (scope frozen in Agent) | Multi-agent swarm / LangChain |
+| Vite Explore / Review PO UI | Mandatory separate BI tool |
+| Operator-driven cart + column-picker CSV | Multi-agent swarm / LangChain |
 | `/replenishment/analyze` (LLM interprets, Python calculates; optional insight API) | LLM calculates qty or filters rows |
-| Insight evals + golden intents (CI without live Groq) | LangSmith / OpenTelemetry |
+| Insight evals + golden intents (CI without live LLM) | LangSmith / OpenTelemetry |
 
-## Live UI (Lovable frontend)
+## Live UI
 
-Chat + **Explore** / **Build PO** at http://127.0.0.1:8080 against the API on `:8000`. See [`frontend/README.md`](frontend/README.md).
+Chat + **Explore** / **Review PO** at http://127.0.0.1:8080 against the API on `:8000`. See [`frontend/README.md`](frontend/README.md).
+
+UI scaffold originated in Lovable; the product surface is this Vite app under `frontend/`.
 
 Docker (API only):
 
@@ -224,21 +235,28 @@ Internal SDD: [`openspec/`](openspec/) (per-change specs; not the public entry p
 
 | Doc | Contents |
 |-----|-----------|
+| [`docs/operations/recorte-coherence.md`](docs/operations/recorte-coherence.md) | Panel owner + six coherence invariants |
 | [`docs/operations/maintenance-policy.md`](docs/operations/maintenance-policy.md) | Lehman laws, preventive sprint |
 | [`docs/operations/beta-test-protocol.md`](docs/operations/beta-test-protocol.md) | Beta scenario + UX checklist |
 | [`docs/operations/security-audit-osstmm-lite.md`](docs/operations/security-audit-osstmm-lite.md) | Lite web audit |
 | [`docs/operations/compatibility-matrix.md`](docs/operations/compatibility-matrix.md) | Browsers / OS |
 | [`docs/operations/performance-profile.md`](docs/operations/performance-profile.md) | Performance smoke thresholds |
-| [`openspec/changes/engineering-quality/traceability-matrix.md`](openspec/changes/engineering-quality/traceability-matrix.md) | MUST → test |
+| [`openspec/changes/archive/2026-09-10-engineering-quality/traceability-matrix.md`](openspec/changes/archive/2026-09-10-engineering-quality/traceability-matrix.md) | MUST → test (archived) |
 
-**Status:** v0.1 — assistant + sliceable replenishment panel; qty and filters in Python; LLM only on free-form question / insight / commit.
+**Status:** v0.5.0 — conversational replenishment + sliceable Explore panel; qty and filters in Python; operator-driven PO cart; LLM on free-form question / insight only.
+
+### Design decisions (interview-ready)
+
+1. **Numbers never come from the model** — `calculate_replenishment()` owns qty; the LLM narrates validated facts.
+2. **One panel owner** — `/replenishment/slice` for the active `UiSlice`; chat board is only a loading placeholder.
+3. **Operator owns the PO** — chat suggests; the human adds lines, edits qty, and chooses CSV columns.
 
 ### Next milestones
 
 1. **Second catalog source** — validate the CSV contract with another dataset
 2. **API auth** — endpoints ready for controlled deployment
 3. **Query interpretation** — harden multiturn goldens and reference resolution
-4. **Richer export** — PO formats beyond base CSV
+4. **Richer PO formats** — ERP templates beyond the column picker (EDI, XLSX, etc.)
 
 ## Contributing
 
@@ -253,7 +271,7 @@ CI runs `pytest -m "not performance and not llm"`, coverage ≥85% on critical m
 ```bash
 pytest -m "not performance and not llm"
 pytest -m performance   # performance smoke (main CI only)
-# Live Groq (not CI): RUN_LLM_EVALS=1 pytest -m llm
+# Live LLM paraphrase evals (not CI): RUN_LLM_EVALS=1 pytest -m llm
 ```
 
 ## License

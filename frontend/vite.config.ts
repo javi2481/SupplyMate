@@ -16,7 +16,8 @@ export default defineConfig({
     server: {
       proxy: {
         "/__supplymate": {
-          target: "http://127.0.0.1:8000",
+          // Dev proxy fallback; prefer VITE_SUPPLYMATE_API_URL for the client.
+          target: process.env.VITE_SUPPLYMATE_API_URL || "http://127.0.0.1:8000",
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/__supplymate/, ""),
         },

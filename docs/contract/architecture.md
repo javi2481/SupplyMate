@@ -14,8 +14,8 @@ SupplyMate is a **replenishment assistant**, not a generic chat wrapper. User in
 | `app/catalog/store.py` | In-memory load + `CatalogStore` |
 | `ProductMaster` | Unified row for metrics and replenishment |
 | `calculate_replenishment()` | Operational qty truth |
-| LLM roles | Intent, explain, insight, commit (narration only) |
-| Lovable frontend | Live consumer UI (not source of truth) |
+| LLM roles | Intent, explain, insight, optional commit narration |
+| Vite frontend | Live consumer UI (not source of truth) |
 
 ```text
 CSV → CatalogStore → ProductMaster → calculate_replenishment → REST / CSV
@@ -32,7 +32,7 @@ CSV → CatalogStore → ProductMaster → calculate_replenishment → REST / CS
 | PO CSV rows for current scope | Python (same filters as slice) |
 | Intent classification | Regex + classifier; LLM for ambiguous free text |
 | SKU explanation prose | LLM, validated against Python facts |
-| Explore insight / Build PO summary | LLM + `insight_validator`; deterministic fallback on failure |
+| Explore insight / optional PO summary | LLM + `insight_validator`; deterministic fallback on failure |
 
 **Python decides qty. LLM explains and summarizes.**
 
@@ -52,27 +52,30 @@ Policy constants: `HORIZON_DAYS = 7`, `HISTORY_DAYS = 30`, policy name `order-up
 
 ## Slice and scope
 
-- **`GET /replenishment/slice`** — filtered SKU rows; same predicates as purchase-list CSV.
-- **`AnalyticalScope`** — category, supplier, health chips, coverage band; frozen when building a PO.
-- **Clicks in the Lovable Explore panel** — update scope via slice query params; **0 LLM calls** per filter click.
+- **`GET /replenishment/slice`** — filtered SKU rows and dashboard for the active `UiSlice`; **single owner of Explore KPIs / chart / table**.
+- **`AnalyticalScope`** — category, subcategory, supplier, health, coverage, name tokens, horizon.
+- **Chat board** — optimistic placeholder only while the slice query is loading; never durable truth over a changed scope.
+- **Clicks in the Explore panel** — update scope via slice query params; **0 LLM calls** per filter click.
+- **Filter algebra** (`filter_rows`): same axis → OR; distinct axes → AND.
+- **Operator-driven cart** — Explore suggests; the operator adds lines, edits `order_quantity` in Review PO, and picks CSV columns on export.
 
-[`app/services/scoping/scope_sanitize.py`](../../app/services/scoping/scope_sanitize.py) sanitizes scope payloads. [`app/pipeline/scope_builder.py`](../../app/pipeline/scope_builder.py) merges UI events into scope.
+[`app/services/scoping/scope_sanitize.py`](../../app/services/scoping/scope_sanitize.py) sanitizes scope payloads. [`app/pipeline/scope_builder.py`](../../app/pipeline/scope_builder.py) merges UI events into scope. Coherence checklist: [`docs/operations/recorte-coherence.md`](../operations/recorte-coherence.md).
 
 ## Surfaces
 
 | Surface | Port | Role |
 |---------|------|------|
 | FastAPI | 8000 | Runtime: `/chat`, `/replenishment/*`, `/products/*` |
-| Lovable frontend (`frontend/`) | 8080 | Live UI: chat + Explore + Build PO |
+| Vite frontend (`frontend/`) | 8080 | Live UI: chat + Explore + Review PO |
 | Docker image | 8000 | API only (`COPY app`, `COPY data`) |
 
 Key endpoints:
 
 - `POST /chat` — intent router + agent
-- `GET /replenishment/slice` — dashboard table
+- `GET /replenishment/slice` — dashboard + table for active scope
 - `POST /replenishment/analyze` — explore insight or commit summary
-- `GET /replenishment/purchase-list.csv` — PO export for current scope
-
+- `GET /replenishment/purchase-list.csv` — server-side PO export for a scope
+- Client cart CSV — operator column picker in Review PO (default barcode + qty)
 ## Repo layout
 
 Layered layout — detail in [`app/README.md`](../../app/README.md) and [`tests/README.md`](../../tests/README.md). Index: [`docs/README.md`](../README.md).
@@ -89,7 +92,7 @@ Layered layout — detail in [`app/README.md`](../../app/README.md) and [`tests/
 | `app/services/scoping/` | Scope mutations, panel modes, suggested filters |
 | `app/services/insight/` | Prompt compiler, validator, insight cache |
 | `app/middleware/` | Rate limit, safe errors, security headers |
-| `frontend/` | Live Lovable / Vite UI |
+| `frontend/` | Live Vite UI (Explore / Review PO) |
 | `data/` | Resource CSVs (see [data-contract.md](data-contract.md)) |
 | `tests/` | Layered pytest + golden CSVs |
 | `docs/contract/` | Public architecture, evaluation, data contract |

@@ -53,9 +53,9 @@ User
 | CSVs en [`data/`](data/) | Catálogo simulado (~13k SKUs) |
 | [`app/services/analytics/metrics.py`](app/services/analytics/metrics.py) | Contratos de métricas + cobertura + salud + prioridad |
 | 3 tools + [`app/core/replenishment.py`](app/core/replenishment.py) | Inventario / ventas / params; qty en Python |
-| Roles LLM | Intent, explainer de SKU, insight (Explorar), commit (Armar OC) |
+| Roles LLM | Intent, explainer de SKU, insight (Explorar); resumen commit opcional |
 | REST | search, replenishment, `/chat`, `/slice`, `/analyze`, dashboard, CSV |
-| Frontend Lovable (`frontend/`) | UI viva: chat + **Explorar** / **Armar OC** |
+| Frontend Vite (`frontend/`) | UI viva: chat + **Explorar** / **Revisar OC** |
 
 ### Política de reposición (honesta)
 
@@ -81,13 +81,21 @@ Detalle: [`docs/contract/architecture.es.md`](docs/contract/architecture.es.md)
 
 ## Qué demuestra el MVP
 
-**Catálogo real** — `6033436` → qty **173**; `8141600` → **0**. Lista de compras + CSV OC (`barcode,product_id,product_name,supplier,recommended_quantity,operational_priority,estimated_purchase_value`). Valor de compra = qty × precio de lista (no PVP).
+**Catálogo real** — `6033436` → qty **173**; `8141600` → **0**. Carrito operator-driven → Revisar OC → CSV con **selector de columnas** (default `barcode` + `order_quantity`; opcionales id/nombre, categoría, proveedor, sugerida, valor estimado). Valor de compra = qty × precio de lista (no PVP).
+
+Verdad del panel: KPIs / chart / tabla vienen de `GET /replenishment/slice` para el scope activo (ver [`docs/operations/recorte-coherence.md`](docs/operations/recorte-coherence.md)).
+
+### Capturas
+
+![Panel Explorar — chat + KPIs + chart](docs/assets/explore-panel.png)
+
+![Revisar OC — columnas del export](docs/assets/oc-export-columns.png)
 
 ## Qué trae el clone
 
 | Listo al clonar | Opcional |
 |-----------------|----------|
-| CSVs en [`data/`](data/) | `GROQ_API_KEY` en `.env` |
+| CSVs en [`data/`](data/) | `GROQ_API_KEY` en `.env` (o DeepSeek / OpenAI) |
 | Tests pytest | OpenAI pago |
 | FastAPI + agente + fórmula | |
 | Frontend Vite (`frontend/`) | |
@@ -111,11 +119,12 @@ En otra terminal:
 
 ```bash
 cd frontend
+cp .env.example .env   # VITE_SUPPLYMATE_API_URL=http://127.0.0.1:8000
 npm install
-npm run dev
+npm run dev -- --host 127.0.0.1 --port 8080
 ```
 
-Abrí http://127.0.0.1:5173 (o el puerto que imprima Vite). Copiá `frontend/.env.example` a `frontend/.env` para que `VITE_SUPPLYMATE_API_URL` apunte a `:8000`.
+Abrí **http://127.0.0.1:8080**. Si el puerto `8000` ya está ocupado, corré la API en `8001` y ajustá `VITE_SUPPLYMATE_API_URL`.
 
 Smoke de API (con uvicorn en :8000):
 
@@ -126,9 +135,9 @@ Smoke de API (con uvicorn en :8000):
 ### El flujo (menos de 2 minutos)
 
 1. Preguntá: **¿Qué productos tengo que comprar?**
-2. Click **Riesgo de quiebre** → click una categoría → seleccioná un SKU
-3. Mirá el cálculo (Python, no el LLM) — *Hechos calculados por Python*
-4. **Listo — armar OC** → exportá el CSV de ese recorte
+2. Click en un **chip de salud** o una **barra del chart** → refiná el recorte (KPIs/tabla siguen `/slice`)
+3. **Agregar al pedido** en los SKUs que quieras (el chat sugiere; el operador decide)
+4. Abrí **Revisar OC** → ajustá cantidades → **Exportar y terminar** → elegí columnas del CSV (barcode + qty por defecto)
 
 Clicks, filtros y CSV = **0 llamadas al LLM**. El modelo entra en la pregunta libre y la explicación de un SKU.
 
@@ -137,7 +146,7 @@ SKU demo: `6033436`. Vocabulario: Riesgo de quiebre, Falta de stock, Sobrestock,
 Ejemplos:
 
 - `¿Cuánto debería pedir de 6033436?` → qty + **Cómo se calculó**
-- `¿Qué productos tengo que comprar?` → panel **Explorar** → recorte → **Armar OC** → **Exportar OC**
+- `¿Qué productos tengo que comprar?` → **Explorar** → agregar líneas → **Revisar OC** → **Exportar CSV**
 
 ```bash
 curl -s -X POST http://127.0.0.1:8000/replenishment/analyze \
@@ -164,12 +173,12 @@ Intent → 3 tools → calculate_replenishment
 Respuesta: qty 173 + Cómo se calculó (validado)
 ```
 
-**Camino slice**
+**Camino slice + carrito**
 
 ```text
 Pregunta: ¿Qué productos tengo que comprar?
    ↓
-Panel Explorar → clicks (0 LLM) → Armar OC → CSV
+Panel Explorar → clicks (0 LLM) → Agregar al pedido → Revisar OC → columnas CSV
    ↓
 Si el insight LLM falla → fallback determinístico
 ```
@@ -193,14 +202,16 @@ curl -s -X POST http://127.0.0.1:8000/chat \
 | 3 tools de inventario + roles LLM acotados | RAG, embeddings, vector DB |
 | Cálculo determinístico order-up-to | Forecasting / ML / EOQ |
 | Catálogo CSV | Postgres app DB / dbt / Airflow / Superset |
-| Frontend Lovable Explorar / Armar OC | BI aparte obligatorio |
-| Export CSV OC (scope congelado en Agent) | Multi-agent swarm / LangChain |
+| UI Vite Explorar / Revisar OC | BI aparte obligatorio |
+| Carrito operator-driven + CSV con columnas | Multi-agent swarm / LangChain |
 | `/replenishment/analyze` (LLM interpreta, Python calcula; API de insight opcional) | LLM calcula qty o filtra filas |
-| Evals de insight + golden intents (CI sin Groq live) | LangSmith / OpenTelemetry |
+| Evals de insight + golden intents (CI sin LLM live) | LangSmith / OpenTelemetry |
 
-## UI viva (frontend Lovable)
+## UI viva
 
-Chat + **Explorar** / **Armar OC** en http://127.0.0.1:8080 contra la API en `:8000`. Ver [`frontend/README.md`](frontend/README.md).
+Chat + **Explorar** / **Revisar OC** en http://127.0.0.1:8080 contra la API en `:8000`. Ver [`frontend/README.md`](frontend/README.md).
+
+El scaffold de UI nació en Lovable; la superficie de producto es esta app Vite en `frontend/`.
 
 Docker (solo API):
 
@@ -226,21 +237,28 @@ SDD interno: [`openspec/`](openspec/) (specs por change; no es la puerta de entr
 
 | Doc | Contenido |
 |-----|-----------|
+| [`docs/operations/recorte-coherence.md`](docs/operations/recorte-coherence.md) | Dueño del panel + seis invariantes de coherencia |
 | [`docs/operations/maintenance-policy.md`](docs/operations/maintenance-policy.md) | Leyes de Lehman, sprint preventivo |
 | [`docs/operations/beta-test-protocol.md`](docs/operations/beta-test-protocol.md) | Escenario beta + checklist UX |
 | [`docs/operations/security-audit-osstmm-lite.md`](docs/operations/security-audit-osstmm-lite.md) | Auditoría web lite |
 | [`docs/operations/compatibility-matrix.md`](docs/operations/compatibility-matrix.md) | Browsers / SO |
 | [`docs/operations/performance-profile.md`](docs/operations/performance-profile.md) | Umbrales smoke de rendimiento |
-| [`openspec/changes/engineering-quality/traceability-matrix.md`](openspec/changes/engineering-quality/traceability-matrix.md) | MUST → test |
+| [`openspec/changes/archive/2026-09-10-engineering-quality/traceability-matrix.md`](openspec/changes/archive/2026-09-10-engineering-quality/traceability-matrix.md) | MUST → test (archivado) |
 
-**Estado:** v0.1 — asistente + panel de reposición recortable; qty y filtros en Python; LLM solo en pregunta libre / insight / commit.
+**Estado:** v0.5.0 — reposición conversacional + panel Explorar recortable; qty y filtros en Python; carrito OC operator-driven; LLM en pregunta libre / insight.
+
+### Decisiones de diseño (listas para entrevista)
+
+1. **Los números nunca salen del modelo** — `calculate_replenishment()` es dueño de la qty; el LLM narra hechos validados.
+2. **Un solo dueño del panel** — `/replenishment/slice` para el `UiSlice` activo; el chat board solo es placeholder de carga.
+3. **El operador es dueño de la OC** — el chat sugiere; el humano agrega líneas, edita qty y elige columnas del CSV.
 
 ### Próximos hitos
 
 1. **Segundo origen de catálogo** — validar el contrato CSV con otro dataset
 2. **Auth en API** — endpoints listos para despliegue controlado
 3. **Interpretación de consulta** — endurecer goldens multiturn y referencias
-4. **Export enriquecido** — formatos de OC más allá del CSV base
+4. **Formatos de OC más ricos** — plantillas ERP más allá del picker (EDI, XLSX, etc.)
 
 ## Contribuciones
 
@@ -255,7 +273,7 @@ CI ejecuta `pytest -m "not performance and not llm"`, cobertura ≥85% en módul
 ```bash
 pytest -m "not performance and not llm"
 pytest -m performance   # smoke de rendimiento (main CI)
-# Live Groq (no CI): RUN_LLM_EVALS=1 pytest -m llm
+# Evals LLM paraphrase (no CI): RUN_LLM_EVALS=1 pytest -m llm
 ```
 
 ## Licencia

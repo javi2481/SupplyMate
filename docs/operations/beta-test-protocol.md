@@ -1,6 +1,6 @@
 # Protocolo de prueba beta — SupplyMate
 
-Prueba de usuario estilo escenario (Kaner, citado en Cap. II §2.5).
+Prueba de usuario estilo escenario (Kaner).
 
 ## Participante
 
@@ -12,20 +12,19 @@ Operador de distribución / compras (conoce categorías y OC).
 
 ## Escenario narrativo
 
-> Sos el responsable de compras. Abrís SupplyMate en http://localhost:8080. Querés saber qué comprar esta semana, recortar por categoría problemática, refinar por cobertura, exportar la OC de ese recorte y revisar un SKU puntual.
+> Sos el responsable de compras. Abrís SupplyMate en http://localhost:8080. Querés saber qué comprar esta semana, recortar por categoría problemática, agregar SKUs al pedido, exportar la OC eligiendo columnas y revisar un SKU puntual.
 
 ### Pasos
 
 1. Preguntá: **¿Qué productos tengo que comprar?**
-2. Verificá KPIs + gráficos + tabla en el panel.
-3. Click en una **categoría** del lollipop → breadcrumb actualizado; tarjeta **Analista IA** (modo Explorar).
-4. Click en un **chip** de cobertura sugerido.
-5. Verificá que **Exportar OC** está deshabilitado en Explorar.
-6. Pulsá **Listo — armar OC de este recorte** → badge **Armar OC**; resumen de confirmación.
-7. **Exportar OC (N SKUs)** → abrir CSV y contar filas (= N).
-8. Click en una fila SKU (en Explorar) → **Cómo se calculó**.
-9. **Volver a explorar** → clicks habilitados de nuevo.
-10. **Limpiar filtros** → volver al universo completo.
+2. Verificá KPIs + gráficos + tabla en el panel (misma verdad que el label del recorte).
+3. Click en una **categoría** del chart → breadcrumb actualizado; KPIs/tabla cambian.
+4. Click en un **chip** de cobertura o salud sugerido → el panel se actualiza sin colgar el chat.
+5. En la tabla, **Agregar al pedido** en 2–3 SKUs (el chat no arma el carrito solo).
+6. Abrí **Revisar OC** → ajustá una cantidad → **Exportar y terminar**.
+7. En el cartel de columnas, dejá **barcode + cantidad** (o agregá nombre) → confirmá → abrí el CSV.
+8. Volvé a Explorar → click en una fila SKU → **Cómo se calculó**.
+9. **Limpiar filtros** → volver al universo completo.
 
 ## Registro de hallazgos
 
@@ -37,8 +36,8 @@ Operador de distribución / compras (conoce categorías y OC).
 ## Criterio de éxito beta
 
 - Completar el escenario sin ayuda del desarrollador
-- CSV coherente con el recorte visible
-- Cantidades iguales a las de la tabla
+- CSV con las columnas elegidas y las cantidades de Revisar OC
+- Label ≡ KPIs ≡ chart ≡ tabla después de cada click
 
 ## Checklist UX automatizable (manual)
 
@@ -48,15 +47,13 @@ Operador de distribución / compras (conoce categorías y OC).
 | UX-02 | Historial de chat sin selección en gráficos | |
 | UX-03 | Breadcrumb + Limpiar filtros | |
 | UX-04 | Click gráfico → add al scope | |
-| UX-05 | Chip → add al scope | |
-| UX-06 | Exportar OC solo en modo Armar OC | |
+| UX-05 | Chip → add al scope (nota local, sin LLM) | |
+| UX-06 | Exportar OC solo desde Revisar OC con carrito | |
 | UX-07 | SKU → Cómo se calculó | |
-| UX-08 | Analista IA coherente con tabla (Explorar) | |
-| UX-09 | Prioridades sugeridas = SKUs visibles | |
-| UX-10 | Toggle Analista IA off → evidence determinística | |
-| UX-11 | Transición Explorar → Armar OC congela scope | |
-| UX-12 | CSV filas = N del recorte congelado | |
-| UX-13 | Volver a explorar rehabilita clicks | |
-| UX-14 | Pregunta sugerida re-dispara chat | |
-
-Completar en [`openspec/changes/interactive-drilldown/verify-report.md`](../openspec/changes/interactive-drilldown/verify-report.md).
+| UX-08 | Analista / respuesta coherente con tabla (Explorar) | |
+| UX-09 | Agregar al pedido no vacía el carrito previo | |
+| UX-10 | Picker de columnas: default barcode + qty | |
+| UX-11 | Tras exportar, carrito vacío y vuelta a Explorar | |
+| UX-12 | CSV filas = líneas del pedido | |
+| UX-13 | Pregunta sugerida re-dispara chat | |
+| UX-14 | Ritual: mirar trace / chat-turns antes de culpar UI | |

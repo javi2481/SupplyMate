@@ -167,7 +167,7 @@ def _greedy_pairwise(
     for i, row in enumerate(product_iter):
         if i >= pool_size:
             break
-        candidates.append(dict(zip(keys, row)))
+        candidates.append(dict(zip(keys, row, strict=True)))
     rng.shuffle(candidates)
 
     selected: list[dict[str, Any]] = []
@@ -202,7 +202,7 @@ def _greedy_pairwise(
 
 def _full_cartesian(values: dict[str, tuple[Any, ...]]) -> list[dict[str, Any]]:
     keys = list(values.keys())
-    return [dict(zip(keys, row)) for row in itertools.product(*(values[k] for k in keys))]
+    return [dict(zip(keys, row, strict=True)) for row in itertools.product(*(values[k] for k in keys))]
 
 
 def generate_contracts(

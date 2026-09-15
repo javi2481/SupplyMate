@@ -2,7 +2,7 @@
 
 # Evaluation
 
-The evaluation harness is **re-runnable** from git clone. **Live Groq scores** require `RUN_LLM_EVALS=1` and a real API key — excluded from CI.
+The evaluation harness is **re-runnable** from git clone. **Live LLM paraphrase scores** require `RUN_LLM_EVALS=1` and a real API key (Groq / DeepSeek / OpenAI) — excluded from CI.
 
 CI validates contracts, formula logic, slice filters, and insight validators; it does **not** assert LLM prose quality on every push.
 
@@ -36,7 +36,7 @@ Configured in CI and [`pyproject.toml`](../pyproject.toml) (subset in `[tool.cov
 |--------|-----|---------|
 | (default) | yes | Unit and API tests |
 | `performance` | main only | Slice/dashboard latency smoke |
-| `llm` | no | Live Groq evals |
+| `llm` | no | Live LLM paraphrase evals |
 
 Run locally:
 
@@ -65,7 +65,7 @@ Layout overview: [`tests/README.md`](../tests/README.md).
 
 ## Recorte oracle and traps
 
-SupplyMate scores chat behavior with **Python oracle predicates**, not LLM judges. Groq may paraphrase inputs in opt-in `@pytest.mark.llm` runs; assertions always read structured surfaces (`ResolvedReference`, `AnalyticalScope`, `ReplenishmentSlice`, `ChatResponse`, frontend `applyChatScope`).
+SupplyMate scores chat behavior with **Python oracle predicates**, not LLM judges. A configured provider may paraphrase inputs in opt-in `@pytest.mark.llm` runs; assertions always read structured surfaces (`ResolvedReference`, `AnalyticalScope`, `ReplenishmentSlice`, `ChatResponse`, frontend `applyChatScope`).
 
 | Surface | What we assert |
 |---------|----------------|
@@ -100,7 +100,7 @@ Thresholds in [`docs/operations/performance-profile.md`](performance-profile.md)
 | `replenishment_slice(limit=100)` | < 3 s |
 | `chat_dashboard(limit=100)` | < 3 s |
 
-First load builds `_sku_rows_cache` — included in measurement. Groq latency excluded (mocked in tests).
+First load builds `_sku_rows_cache` — included in measurement. Provider LLM latency excluded (mocked in tests).
 
 ## LLM interpret budget
 

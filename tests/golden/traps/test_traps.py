@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from app.agent.explore_answer import format_explore_answer
+from app.catalog.store import get_store
 from app.core.models import (
     AnalyticalScope,
     ChatInterpretation,
@@ -18,7 +19,6 @@ from app.core.models import (
     Reference,
     ReplenishmentSlice,
 )
-from app.catalog.store import get_store
 from app.pipeline.reference_resolver import resolve_single_reference
 
 TRAPS = Path(__file__).parent / "traps.csv"

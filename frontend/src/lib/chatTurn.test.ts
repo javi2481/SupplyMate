@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   completeTurn,
   emptyPanel,
@@ -34,6 +34,26 @@ function panel(partial: Partial<ThreadPanel>): ThreadPanel {
   return { ...fallback, ...partial };
 }
 
+function stubSessionStorage() {
+  const store = new Map<string, string>();
+  vi.stubGlobal("sessionStorage", {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      store.set(key, value);
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+    clear: () => {
+      store.clear();
+    },
+    key: (index: number) => [...store.keys()][index] ?? null,
+    get length() {
+      return store.size;
+    },
+  });
+}
+
 describe("isSameTurn", () => {
   it("does not treat a cancelled turn as current", () => {
     expect(isSameTurn(null, pending)).toBe(false);
@@ -65,6 +85,14 @@ describe("completeTurn", () => {
 });
 
 describe("stripThinkingMessages / loadThreads", () => {
+  beforeEach(() => {
+    stubSessionStorage();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("drops thinking bubbles from a message list", () => {
     const messages: ChatMsg[] = [
       { id: 1, role: "assistant", text: "hola" },
