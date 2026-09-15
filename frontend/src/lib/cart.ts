@@ -44,10 +44,12 @@ export function hydrateCartLine(raw: LegacyCartLine): CartLine {
     product_name: raw.product_name ?? raw.product_id,
     suggested_quantity: suggested,
     order_quantity: order,
-    category: raw.category || undefined,
-    supplier: raw.supplier || undefined,
-    barcode: raw.barcode || undefined,
-    estimated_purchase_value: raw.estimated_purchase_value ?? undefined,
+    ...(raw.category ? { category: raw.category } : {}),
+    ...(raw.supplier ? { supplier: raw.supplier } : {}),
+    ...(raw.barcode ? { barcode: raw.barcode } : {}),
+    ...(raw.estimated_purchase_value != null
+      ? { estimated_purchase_value: raw.estimated_purchase_value }
+      : {}),
   };
 }
 
@@ -87,10 +89,12 @@ export function cartLinesFromPurchaseItems(items: PurchaseListItem[]): CartLine[
         product_name: item.product_name,
         suggested_quantity: item.recommended_quantity,
         order_quantity: item.recommended_quantity,
-        category: item.category || undefined,
-        supplier: item.supplier || undefined,
-        barcode: item.barcode || undefined,
-        estimated_purchase_value: item.estimated_purchase_value ?? undefined,
+        ...(item.category ? { category: item.category } : {}),
+        ...(item.supplier ? { supplier: item.supplier } : {}),
+        ...(item.barcode ? { barcode: item.barcode } : {}),
+        ...(item.estimated_purchase_value != null
+          ? { estimated_purchase_value: item.estimated_purchase_value }
+          : {}),
       }),
     );
 }
@@ -123,11 +127,12 @@ export function cartSourceFromCalc(row: Calc): CartLineSource {
     product_id: row.sku.product_id,
     product_name: row.sku.product_name,
     suggested_quantity: suggested > 0 ? suggested : 1,
-    category: row.sku.category || undefined,
-    supplier: row.sku.supplier || undefined,
-    barcode: row.sku.barcode || undefined,
-    estimated_purchase_value:
-      row.estimated_purchase_value > 0 ? row.estimated_purchase_value : undefined,
+    ...(row.sku.category ? { category: row.sku.category } : {}),
+    ...(row.sku.supplier ? { supplier: row.sku.supplier } : {}),
+    ...(row.sku.barcode ? { barcode: row.sku.barcode } : {}),
+    ...(row.estimated_purchase_value > 0
+      ? { estimated_purchase_value: row.estimated_purchase_value }
+      : {}),
   };
 }
 
@@ -149,10 +154,12 @@ export function addLineToCart(
     product_name: source.product_name || source.product_id,
     suggested_quantity: suggested,
     order_quantity: qty,
-    category: source.category,
-    supplier: source.supplier,
-    barcode: source.barcode,
-    estimated_purchase_value: source.estimated_purchase_value,
+    ...(source.category ? { category: source.category } : {}),
+    ...(source.supplier ? { supplier: source.supplier } : {}),
+    ...(source.barcode ? { barcode: source.barcode } : {}),
+    ...(source.estimated_purchase_value != null
+      ? { estimated_purchase_value: source.estimated_purchase_value }
+      : {}),
   };
   const idx = cart.findIndex((line) => line.product_id === source.product_id);
   if (idx < 0) return [...cart, nextLine];
@@ -343,7 +350,9 @@ function maxMergePreserveOrder(cart: CartLine[], incoming: CartLine[]): CartLine
       ...winner,
       suggested_quantity: suggested,
       order_quantity: edited ? prev.order_quantity : suggested,
-      estimated_purchase_value: winner.estimated_purchase_value,
+      ...(winner.estimated_purchase_value != null
+        ? { estimated_purchase_value: winner.estimated_purchase_value }
+        : {}),
     });
   }
   return [...byId.values()];

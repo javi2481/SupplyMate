@@ -88,7 +88,7 @@ export function panelAfterChat(
     slice: applied.slice,
     history: applied.pushHistory ? [...current.history, current.slice] : current.history,
     horizonDays,
-    chatBoard: keepBoard ? current.chatBoard : applied.chatBoard,
+    chatBoard: applied.chatBoard === "keep" ? current.chatBoard : applied.chatBoard,
     replacedSurface: keepBoard ? current.replacedSurface : applied.replacedSurface,
     conversationSlice: applied.conversationSlice,
     cart: current.cart,
@@ -156,6 +156,15 @@ export function deleteThread(
   }
 
   const next = neighborAfterDelete(threads, removeId) ?? remaining[0];
+  if (!next) {
+    const blank = newBlank();
+    return {
+      threads: [blank],
+      activeId: blank.id,
+      panel: fallback,
+      deletedActive: true,
+    };
+  }
   return {
     threads: remaining,
     activeId: next.id,

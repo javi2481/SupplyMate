@@ -318,30 +318,23 @@ async def test_llm_unknown_does_not_force_a_random_sku():
 
 
 @pytest.mark.asyncio
-async def test_llm_first_interprets_rexona_horizon(monkeypatch):
-    """Free-text always hits LLM; horizon ignored → explore by brand."""
-    from app.core.models import QueryInterpretation, Reference
+async def test_rules_first_interprets_rexona_horizon(monkeypatch):
+    """Brand + horizon free-text is owned by rules; LLM must not run."""
 
-    llm_interp = QueryInterpretation(
-        intent="replenishment",
-        references=[Reference(text="rexona", kind="product_group")],
-        confidence="high",
-        source="llm",
-        relation="new_query",
-    )
-    mock_llm = AsyncMock(return_value=llm_interp)
+    async def boom(*_args, **_kwargs):
+        raise AssertionError("LLM should not run when rules match")
+
     monkeypatch.setattr(
         "app.pipeline.query_interpreter_agent.interpret_query_llm",
-        mock_llm,
+        boom,
     )
     response = await run_supplymate(
         "que productos rexona debo comprar para 14 dias?"
     )
-    mock_llm.assert_awaited()
-    assert mock_llm.await_args.kwargs.get("force") is True
     assert response.mode == "explore"
     assert response.scope is not None
     assert "rexona" in response.scope.name_tokens
+    assert response.scope.horizon_days == 14
     assert response.purchase_list
 
 

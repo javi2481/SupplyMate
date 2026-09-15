@@ -28,9 +28,9 @@ export function PurchaseOrder({
   skuCount: number;
   onExportAndFinish: (columns: CartCsvColumnId[]) => void;
   onBack: () => void;
-  editable?: boolean;
-  onChangeQty?: (productId: string, qty: number) => void;
-  onRemoveLine?: (productId: string) => void;
+  editable?: boolean | undefined;
+  onChangeQty?: ((productId: string, qty: number) => void) | undefined;
+  onRemoveLine?: ((productId: string) => void) | undefined;
 }) {
   const [exportOpen, setExportOpen] = useState(false);
   const [columns, setColumns] = useState<CartCsvColumnId[]>(DEFAULT_CART_CSV_COLUMNS);
