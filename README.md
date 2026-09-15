@@ -39,6 +39,21 @@ Natural language enters intent and reference resolution, becomes an `AnalyticalS
 
 SupplyMate uses a reproducible **API-like data contract**: CSV resources in [`data/`](data/) simulate external operational APIs (products, prices, inventory, sales, replenishment params), joined by `product_id`. Details: [`docs/contract/data-contract.md`](docs/contract/data-contract.md).
 
+**Data path** (simulated ops APIs → domain):
+
+```mermaid
+flowchart TB
+  resources[API_like_CSV_resources] --> store[CatalogStore]
+  store --> master[ProductMaster]
+  master --> tools[Three_agent_tools]
+  master --> analytics[Analytics_Slice]
+  tools --> formula[calculate_replenishment]
+  analytics --> formula
+  formula --> domain[AnalyticalScope_and_UI]
+```
+
+**Conversational path** (NL turn → truth → UI):
+
 ```mermaid
 flowchart TB
   user[User_NL] --> intent[Intent_and_ReferenceResolver]
@@ -55,7 +70,7 @@ flowchart TB
   insight -->|validator_and_fallback| ui
 ```
 
-*Simplified view. SKU explanation and insight/commit are distinct LLM roles with guardrails.*
+*Simplified views. Tools and slice read API-like resources via `CatalogStore`. SKU explanation and insight/commit are distinct LLM roles with guardrails.*
 
 | Artifact | Role |
 |----------|------|

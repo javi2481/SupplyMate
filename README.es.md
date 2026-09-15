@@ -41,6 +41,21 @@ El lenguaje natural entra por intent y resolución de referencias, se convierte 
 
 SupplyMate usa un **contrato de datos API-like** reproducible: los CSV en [`data/`](data/) simulan APIs operacionales externas (products, prices, inventory, sales, replenishment params), unidos por `product_id`. Detalle: [`docs/contract/data-contract.es.md`](docs/contract/data-contract.es.md).
 
+**Camino de datos** (APIs ops simuladas → dominio):
+
+```mermaid
+flowchart TB
+  resources[API_like_CSV_resources] --> store[CatalogStore]
+  store --> master[ProductMaster]
+  master --> tools[Three_agent_tools]
+  master --> analytics[Analytics_Slice]
+  tools --> formula[calculate_replenishment]
+  analytics --> formula
+  formula --> domain[AnalyticalScope_and_UI]
+```
+
+**Camino conversacional** (turno NL → verdad → UI):
+
 ```mermaid
 flowchart TB
   user[User_NL] --> intent[Intent_and_ReferenceResolver]
@@ -57,7 +72,7 @@ flowchart TB
   insight -->|validator_and_fallback| ui
 ```
 
-*Vista simplificada. La explicación de SKU y el insight/commit son roles LLM distintos con guardrails.*
+*Vistas simplificadas. Tools y slice leen recursos API-like vía `CatalogStore`. La explicación de SKU y el insight/commit son roles LLM distintos con guardrails.*
 
 | Artefacto | Rol |
 |-----------|-----|

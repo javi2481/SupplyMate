@@ -21,6 +21,21 @@ SupplyMate es un **asistente de reposición**, no un chat genérico. La entrada 
 
 Las tres tools del agente (`get_inventory`, `get_sales_history`, `get_replenishment_params`) consumen esos recursos vía `CatalogStore`. FastAPI (`/chat`, `/replenishment/*`, `/products/*`) es la API de **aplicación** — no sustituye el contrato de datos API-like.
 
+**Camino de datos** (APIs ops simuladas → dominio):
+
+```mermaid
+flowchart TB
+  resources[API_like_CSV_resources] --> store[CatalogStore]
+  store --> master[ProductMaster]
+  master --> tools[Three_agent_tools]
+  master --> analytics[Analytics_Slice]
+  tools --> formula[calculate_replenishment]
+  analytics --> formula
+  formula --> domain[AnalyticalScope_and_UI]
+```
+
+**Camino conversacional** (turno NL → verdad → UI):
+
 ```mermaid
 flowchart TB
   user[User_NL] --> intent[Intent_and_ReferenceResolver]
@@ -37,7 +52,7 @@ flowchart TB
   insight -->|validator_and_fallback| ui
 ```
 
-*Vista simplificada. La explicación de SKU y el insight/commit son roles LLM distintos con guardrails. Mismo diagrama que el [README ES](../../README.es.md#cómo-funciona).*
+*Vistas simplificadas. Tools y slice leen recursos API-like vía `CatalogStore`. La explicación de SKU y el insight/commit son roles LLM distintos con guardrails. Mismos diagramas que el [README ES](../../README.es.md#cómo-funciona).*
 
 ## Frontera LLM vs Python
 
