@@ -177,26 +177,95 @@ export function cartFooterText(cart: CartLine[]): string {
   return `En el pedido: ${nf.format(lines)} líneas · ${nf.format(units)} u.`;
 }
 
-export function csvTextFromCart(cart: CartLine[]): string {
-  const header =
-    "product_id,product_name,category,supplier,order_quantity,suggested_quantity,estimated_purchase_value";
-  const rows = cart.map((line) =>
-    [
-      csvCell(line.product_id),
-      csvCell(line.product_name),
-      csvCell(line.category ?? ""),
-      csvCell(line.supplier ?? ""),
-      csvCell(String(line.order_quantity)),
-      csvCell(String(line.suggested_quantity)),
-      csvCell(lineOrderValue(line) === 0 && line.estimated_purchase_value == null ? "" : String(lineOrderValue(line))),
-    ].join(","),
-  );
+/** Columns the operator can pick when exporting the OC CSV. */
+export const CART_CSV_COLUMN_DEFS = [
+  { id: "barcode", header: "barcode", label: "Código de barras" },
+  { id: "order_quantity", header: "order_quantity", label: "Cantidad a pedir" },
+  { id: "product_id", header: "product_id", label: "Código interno" },
+  { id: "product_name", header: "product_name", label: "Nombre" },
+  { id: "category", header: "category", label: "Categoría" },
+  { id: "supplier", header: "supplier", label: "Proveedor" },
+  { id: "suggested_quantity", header: "suggested_quantity", label: "Cantidad sugerida" },
+  { id: "estimated_purchase_value", header: "estimated_purchase_value", label: "Valor estimado" },
+] as const;
+
+export type CartCsvColumnId = (typeof CART_CSV_COLUMN_DEFS)[number]["id"];
+
+/** Minimal ERP-friendly default: barcode + qty. */
+export const DEFAULT_CART_CSV_COLUMNS: CartCsvColumnId[] = ["barcode", "order_quantity"];
+
+/** Full set in picker order (includes barcode). */
+export const ALL_CART_CSV_COLUMNS: CartCsvColumnId[] = CART_CSV_COLUMN_DEFS.map((col) => col.id);
+
+const CSV_COLUMNS_STORAGE_KEY = "supplymate.ocCsvColumns";
+
+export function normalizeCartCsvColumns(raw: unknown): CartCsvColumnId[] {
+  const allowed = new Set<string>(ALL_CART_CSV_COLUMNS);
+  if (!Array.isArray(raw)) return [...DEFAULT_CART_CSV_COLUMNS];
+  const picked = raw.filter((id): id is CartCsvColumnId => typeof id === "string" && allowed.has(id));
+  return picked.length > 0 ? picked : [...DEFAULT_CART_CSV_COLUMNS];
+}
+
+export function loadCartCsvColumns(): CartCsvColumnId[] {
+  if (typeof localStorage === "undefined") return [...DEFAULT_CART_CSV_COLUMNS];
+  try {
+    return normalizeCartCsvColumns(JSON.parse(localStorage.getItem(CSV_COLUMNS_STORAGE_KEY) ?? "null"));
+  } catch {
+    return [...DEFAULT_CART_CSV_COLUMNS];
+  }
+}
+
+export function saveCartCsvColumns(columns: CartCsvColumnId[]): void {
+  if (typeof localStorage === "undefined") return;
+  const normalized = normalizeCartCsvColumns(columns);
+  localStorage.setItem(CSV_COLUMNS_STORAGE_KEY, JSON.stringify(normalized));
+}
+
+function csvValueForColumn(line: CartLine, column: CartCsvColumnId): string {
+  switch (column) {
+    case "barcode":
+      return line.barcode ?? "";
+    case "order_quantity":
+      return String(line.order_quantity);
+    case "product_id":
+      return line.product_id;
+    case "product_name":
+      return line.product_name;
+    case "category":
+      return line.category ?? "";
+    case "supplier":
+      return line.supplier ?? "";
+    case "suggested_quantity":
+      return String(line.suggested_quantity);
+    case "estimated_purchase_value": {
+      const value = lineOrderValue(line);
+      return value === 0 && line.estimated_purchase_value == null ? "" : String(value);
+    }
+    default: {
+      const _exhaustive: never = column;
+      return _exhaustive;
+    }
+  }
+}
+
+export function csvTextFromCart(
+  cart: CartLine[],
+  columns: CartCsvColumnId[] = ALL_CART_CSV_COLUMNS,
+): string {
+  const picked = new Set(normalizeCartCsvColumns(columns));
+  const selected = ALL_CART_CSV_COLUMNS.filter((id) => picked.has(id));
+  const header = selected.join(",");
+  const rows = cart.map((line) => selected.map((col) => csvCell(csvValueForColumn(line, col))).join(","));
   return [header, ...rows].join("\n");
 }
 
-export function downloadCartCsv(cart: CartLine[], filename = "pedido.csv"): void {
+export function downloadCartCsv(
+  cart: CartLine[],
+  filename = "pedido.csv",
+  columns: CartCsvColumnId[] = ALL_CART_CSV_COLUMNS,
+): void {
   if (typeof document === "undefined") return;
-  const blob = new Blob([csvTextFromCart(cart)], { type: "text/csv;charset=utf-8" });
+  const blob = new Blob([csvTextFromCart(cart, columns)], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;

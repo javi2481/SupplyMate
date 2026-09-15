@@ -13,6 +13,7 @@ import {
   focusHasPurchase,
   hydrateCart,
   hydrateCartLine,
+  normalizeCartCsvColumns,
   removeCartLine,
   resolvePoRows,
   setOrderQuantity,
@@ -297,22 +298,54 @@ describe("cartFooterText / csv / resolvePoRows", () => {
   });
 
   it("builds a CSV with order and suggested qty columns", () => {
-    const csv = csvTextFromCart([
-      line({
-        product_id: "A",
-        product_name: "Jabón, extra",
-        category: "Jabones",
-        supplier: "Sur",
-        suggested_quantity: 3,
-        order_quantity: 50,
-        estimated_purchase_value: 30,
-      }),
-    ]);
+    const csv = csvTextFromCart(
+      [
+        line({
+          product_id: "A",
+          product_name: "Jabón, extra",
+          category: "Jabones",
+          supplier: "Sur",
+          suggested_quantity: 3,
+          order_quantity: 50,
+          estimated_purchase_value: 30,
+        }),
+      ],
+      [
+        "product_id",
+        "product_name",
+        "category",
+        "supplier",
+        "order_quantity",
+        "suggested_quantity",
+        "estimated_purchase_value",
+      ],
+    );
     expect(csv.split("\n")[0]).toBe(
-      "product_id,product_name,category,supplier,order_quantity,suggested_quantity,estimated_purchase_value",
+      "order_quantity,product_id,product_name,category,supplier,suggested_quantity,estimated_purchase_value",
     );
     expect(csv).toContain('"Jabón, extra"');
-    expect(csv).toContain(",50,3,");
+    expect(csv.split("\n")[1]).toBe('50,A,"Jabón, extra",Jabones,Sur,3,500');
+  });
+
+  it("exports only the selected columns in picker order", () => {
+    const csv = csvTextFromCart(
+      [
+        line({
+          product_id: "A",
+          product_name: "Jabón",
+          barcode: "779123",
+          order_quantity: 12,
+          suggested_quantity: 10,
+        }),
+      ],
+      ["barcode", "order_quantity"],
+    );
+    expect(csv).toBe("barcode,order_quantity\n779123,12");
+  });
+
+  it("falls back to barcode + qty when normalize gets an empty selection", () => {
+    expect(normalizeCartCsvColumns([])).toEqual(["barcode", "order_quantity"]);
+    expect(normalizeCartCsvColumns(["nope", "barcode"])).toEqual(["barcode"]);
   });
 
   it("prefers cart rows for OC using order_quantity", () => {

@@ -42,6 +42,8 @@ import {
   cartFooterText,
   cartTotals,
   downloadCartCsv,
+  saveCartCsvColumns,
+  type CartCsvColumnId,
   addLineToCart,
   cartSourceFromCalc,
   emptyCart,
@@ -580,16 +582,10 @@ function Index() {
     setMobileView("explore");
   }
 
-  function exportAndFinish() {
-    if (cart.length === 0) return;
-    if (
-      !window.confirm(
-        "¿Exportar el pedido y terminarlo? Se descarga el CSV y se vacía el carrito.",
-      )
-    ) {
-      return;
-    }
-    downloadCartCsv(cart);
+  function exportAndFinish(columns: CartCsvColumnId[]) {
+    if (cart.length === 0 || columns.length === 0) return;
+    saveCartCsvColumns(columns);
+    downloadCartCsv(cart, "pedido.csv", columns);
     persistCart(emptyCart());
     backToExplore();
   }

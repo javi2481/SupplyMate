@@ -1,4 +1,12 @@
-import { ArrowLeft, Download, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, Download, Trash2, X } from "lucide-react";
+import {
+  ALL_CART_CSV_COLUMNS,
+  CART_CSV_COLUMN_DEFS,
+  DEFAULT_CART_CSV_COLUMNS,
+  loadCartCsvColumns,
+  type CartCsvColumnId,
+} from "@/lib/cart";
 import { money, nf, type Calc } from "@/lib/supplymate";
 
 export function PurchaseOrder({
@@ -18,12 +26,30 @@ export function PurchaseOrder({
   units: number;
   value: number;
   skuCount: number;
-  onExportAndFinish: () => void;
+  onExportAndFinish: (columns: CartCsvColumnId[]) => void;
   onBack: () => void;
   editable?: boolean;
   onChangeQty?: (productId: string, qty: number) => void;
   onRemoveLine?: (productId: string) => void;
 }) {
+  const [exportOpen, setExportOpen] = useState(false);
+  const [columns, setColumns] = useState<CartCsvColumnId[]>(DEFAULT_CART_CSV_COLUMNS);
+
+  useEffect(() => {
+    if (!exportOpen) return;
+    setColumns(loadCartCsvColumns());
+  }, [exportOpen]);
+
+  function toggleColumn(id: CartCsvColumnId) {
+    setColumns((prev) => (prev.includes(id) ? prev.filter((col) => col !== id) : [...prev, id]));
+  }
+
+  function confirmExport() {
+    if (columns.length === 0) return;
+    onExportAndFinish(columns);
+    setExportOpen(false);
+  }
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-5">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
@@ -46,7 +72,7 @@ export function PurchaseOrder({
           </button>
           <button
             type="button"
-            onClick={onExportAndFinish}
+            onClick={() => setExportOpen(true)}
             disabled={rows.length === 0}
             className="inline-flex h-9 items-center gap-2 rounded-md bg-ops-accent px-3 text-xs font-semibold text-ops-accent-foreground outline-none hover:bg-ops-accent-hover focus-visible:ring-2 focus-visible:ring-ops-focus disabled:opacity-40"
           >
@@ -186,6 +212,95 @@ export function PurchaseOrder({
           {nf.format(skuCount)} del recorte.
         </p>
       )}
+
+      {exportOpen ? (
+        <div
+          className="fixed inset-0 z-[60] grid place-items-center bg-ops-overlay p-4"
+          onClick={() => setExportOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="oc-export-title"
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-md rounded-lg border border-ops-border bg-background p-4 shadow-2xl"
+          >
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+              <div>
+                <h3 id="oc-export-title" className="font-display text-base font-semibold">
+                  Columnas del CSV
+                </h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Elegí qué atributos exportar. Se descarga el pedido y se vacía el carrito.
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Cerrar"
+                onClick={() => setExportOpen(false)}
+                className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground outline-none hover:bg-ops-row hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-focus"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setColumns([...DEFAULT_CART_CSV_COLUMNS])}
+                className="rounded-md border border-ops-border px-2 py-1 text-[11px] text-muted-foreground outline-none hover:border-ops-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-focus"
+              >
+                Solo barcode + cantidad
+              </button>
+              <button
+                type="button"
+                onClick={() => setColumns([...ALL_CART_CSV_COLUMNS])}
+                className="rounded-md border border-ops-border px-2 py-1 text-[11px] text-muted-foreground outline-none hover:border-ops-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-focus"
+              >
+                Todas
+              </button>
+            </div>
+
+            <fieldset className="mt-3 space-y-2">
+              <legend className="sr-only">Atributos a exportar</legend>
+              {CART_CSV_COLUMN_DEFS.map((col) => (
+                <label
+                  key={col.id}
+                  className="flex cursor-pointer items-center gap-2 rounded-md border border-ops-border px-3 py-2 text-sm hover:border-ops-accent"
+                >
+                  <input
+                    type="checkbox"
+                    checked={columns.includes(col.id)}
+                    onChange={() => toggleColumn(col.id)}
+                    className="h-4 w-4 accent-[hsl(var(--ops-accent))]"
+                  />
+                  <span>{col.label}</span>
+                  <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">{col.header}</span>
+                </label>
+              ))}
+            </fieldset>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setExportOpen(false)}
+                className="inline-flex h-9 items-center rounded-md border border-ops-border px-3 text-xs font-semibold text-muted-foreground outline-none hover:border-ops-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-focus"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmExport}
+                disabled={columns.length === 0}
+                className="inline-flex h-9 items-center gap-2 rounded-md bg-ops-accent px-3 text-xs font-semibold text-ops-accent-foreground outline-none hover:bg-ops-accent-hover focus-visible:ring-2 focus-visible:ring-ops-focus disabled:opacity-40"
+              >
+                <Download className="h-4 w-4" />
+                Exportar CSV
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
