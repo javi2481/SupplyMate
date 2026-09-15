@@ -2,7 +2,9 @@
 
 ## Intent
 
-The chat thread is the operator’s **order cart**, not a single-rubro recorte. Successful purchase turns accumulate SKUs across categories; Armar OC / Revisar OC / CSV export that cart. Explore still shows **current focus** (last purchase turn). Python quantities remain the only numbers.
+The chat thread holds a multi-rubro **order cart** (storage + OC/CSV/footer). Explore still shows **current focus** (last purchase turn).
+
+> **Superseded trigger:** auto-accumulate on successful purchase turns is **obsolete**. See `operator-driven-cart`: the operator adds the focus via **Agregar al pedido** and edits `order_quantity` in Revisar OC. Python quantities are suggestions only.
 
 ## Scope
 

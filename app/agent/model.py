@@ -9,6 +9,14 @@ from app.core import config
 _model_cache: OpenAIChatCompletionsModel | str | None = None
 
 
+def _openai_client(*, api_key: str, base_url: str) -> AsyncOpenAI:
+    return AsyncOpenAI(
+        api_key=api_key,
+        base_url=base_url,
+        timeout=config.LLM_HTTP_TIMEOUT_SEC,
+    )
+
+
 def get_model() -> OpenAIChatCompletionsModel | str:
     global _model_cache
     if _model_cache is not None:
@@ -20,12 +28,22 @@ def get_model() -> OpenAIChatCompletionsModel | str:
                 "GROQ_API_KEY is not set. Get a free key at https://console.groq.com/keys"
             )
         set_tracing_disabled(True)
-        client = AsyncOpenAI(
-            api_key=config.GROQ_API_KEY,
-            base_url=config.GROQ_BASE_URL,
-        )
+        client = _openai_client(api_key=config.GROQ_API_KEY, base_url=config.GROQ_BASE_URL)
         _model_cache = OpenAIChatCompletionsModel(
             model=config.GROQ_MODEL,
+            openai_client=client,
+        )
+        return _model_cache
+
+    if config.LLM_PROVIDER == "deepseek":
+        if not config.DEEPSEEK_API_KEY:
+            raise RuntimeError(
+                "DEEPSEEK_API_KEY is not set. Get a key at https://platform.deepseek.com/api_keys"
+            )
+        set_tracing_disabled(True)
+        client = _openai_client(api_key=config.DEEPSEEK_API_KEY, base_url=config.DEEPSEEK_BASE_URL)
+        _model_cache = OpenAIChatCompletionsModel(
+            model=config.DEEPSEEK_MODEL,
             openai_client=client,
         )
         return _model_cache

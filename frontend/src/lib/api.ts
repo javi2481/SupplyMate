@@ -153,6 +153,9 @@ export class HttpError extends Error {
   }
 }
 
+/** Client-side abort for hung /chat (LLM). Matches browser AbortSignal.timeout. */
+export const CHAT_FETCH_TIMEOUT_MS = 25_000;
+
 async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, init);
   if (!res.ok) {
@@ -181,6 +184,7 @@ export function postChat(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, scope: scope ?? null }),
+    signal: AbortSignal.timeout(CHAT_FETCH_TIMEOUT_MS),
   });
 }
 

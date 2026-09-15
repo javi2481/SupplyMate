@@ -131,6 +131,58 @@ SUBCATEGORY_OVER_CATEGORY_MARGIN = 10
 # node wins over the raw hit set.
 FAMILY_CONTAINMENT = 0.9
 
+# Vernacular stems that share a catalog taxonomy label (category/subcategory only).
+# Example: users say «perfumes»; the catalog node is «Fragancias».
+_TAXONOMY_ALIAS_STEM_GROUPS: tuple[frozenset[str], ...] = (
+    frozenset({"perfume", "fragancia"}),
+)
+
+
+def _taxonomy_alias_stems(token: str) -> frozenset[str]:
+    stem = _stem(normalize_text(token))
+    if len(stem) < 3:
+        return frozenset({stem} if stem else ())
+    for group in _TAXONOMY_ALIAS_STEM_GROUPS:
+        if stem in group:
+            return group
+    return frozenset({stem})
+
+
+def _taxonomy_alias_forms(token: str) -> list[str]:
+    """Query forms for taxonomy scoring (token + vernacular aliases).
+
+    `_stem` strips a trailing «es» aggressively («perfumes» → «perfum»), so we
+    also try a simple singular «…s» and membership via prefix against alias stems.
+    """
+    norm = normalize_text(token)
+    stem = _stem(norm)
+    soft = norm[:-1] if len(norm) > 3 and norm.endswith("s") else norm
+    forms = [token, norm, stem, soft]
+    for group in _TAXONOMY_ALIAS_STEM_GROUPS:
+        group_norms = {normalize_text(word) for word in group}
+        group_stems = {_stem(word) for word in group_norms}
+        linked = (
+            stem in group_stems
+            or soft in group_norms
+            or soft in group_stems
+            or norm in group_norms
+            or any(
+                len(stem) >= 5 and (member.startswith(stem) or stem.startswith(member))
+                for member in group_stems
+            )
+        )
+        if linked:
+            forms.extend(group)
+            forms.extend(group_norms)
+            forms.extend(group_stems)
+            break
+    return list(dict.fromkeys(form for form in forms if len(form) >= 3))
+
+
+def _taxonomy_match_score(token: str, label: str) -> int:
+    """Score token against a taxonomy label, including vernacular aliases."""
+    return max((_match_score(form, label) for form in _taxonomy_alias_forms(token)), default=0)
+
 
 def _match_score(token: str, label: str) -> int:
     label_norm = normalize_text(label)
@@ -265,13 +317,13 @@ def _pick_best_group(
     for cat, pids in categories.items():
         if len(pids) < 2:
             continue
-        score = _match_score(token, cat)
+        score = _taxonomy_match_score(token, cat)
         if score >= MIN_GROUP_SCORE:
             candidates.append((score, len(pids), "category", cat, pids))
     for sub, pids in subcategories.items():
         if len(pids) < 2:
             continue
-        score = _match_score(token, sub)
+        score = _taxonomy_match_score(token, sub)
         if score >= MIN_GROUP_SCORE:
             candidates.append((score, len(pids), "subcategory", sub, pids))
 
@@ -454,8 +506,8 @@ def _collect_entity_indexes(token: str) -> tuple[
         supplier = (master.supplier or "").strip()
         name_norm = normalize_text(master.product_name)
 
-        _index_label_hit(categories, cat, pid, token)
-        _index_label_hit(subcategories, sub, pid, token)
+        _index_label_hit(categories, cat, pid, token, score_fn=_taxonomy_match_score)
+        _index_label_hit(subcategories, sub, pid, token, score_fn=_taxonomy_match_score)
         _index_label_hit(
             suppliers,
             supplier,
@@ -535,8 +587,8 @@ def _resolve_conjunction(user_text: str, tokens: list[str]) -> ResolvedReference
             master = store.get_master(pid)
             cat = (master.category or "").strip()
             sub = (master.subcategory or "").strip()
-            _index_label_hit(cats, cat, pid, piece)
-            _index_label_hit(subs, sub, pid, piece)
+            _index_label_hit(cats, cat, pid, piece, score_fn=_taxonomy_match_score)
+            _index_label_hit(subs, sub, pid, piece, score_fn=_taxonomy_match_score)
         pick = _pick_best_group(piece, cats, subs)
         if pick and not group_val:
             group_dim, group_val, _ = pick
@@ -707,10 +759,10 @@ def disambiguation_options(resolved: list[ResolvedReference]) -> list[str]:
             for master in store.products.values():
                 cat = (master.category or "").strip()
                 sub = (master.subcategory or "").strip()
-                if cat and _token_matches_name(token, normalize_text(cat)) and cat not in seen:
+                if cat and _taxonomy_match_score(token, cat) >= MIN_GROUP_SCORE and cat not in seen:
                     seen.add(cat)
                     options.append(cat)
-                if sub and _token_matches_name(token, normalize_text(sub)) and sub not in seen:
+                if sub and _taxonomy_match_score(token, sub) >= MIN_GROUP_SCORE and sub not in seen:
                     seen.add(sub)
                     options.append(sub)
     return options[:5]

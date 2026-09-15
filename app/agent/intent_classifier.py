@@ -49,27 +49,53 @@ def build_classifier_agent(model) -> Agent:
 
 async def classify_intent(message: str) -> Intent | None:
     """LLM concept router. None = classifier unavailable; caller should fall back."""
+    import asyncio
+
+    from app.core import config
+
     text = (message or "").strip()
     if not text:
         return "unknown"
-    try:
-        agent = build_classifier_agent(get_model())
-        started = time.perf_counter()
-        result = await Runner.run(agent, f"Pregunta del usuario:\n{text}")
-        latency_ms = int((time.perf_counter() - started) * 1000)
-        intent = parse_intent_label(str(result.final_output))
-        emit(
-            event="runner.run",
-            agent="SupplyMateIntent",
-            latency_ms=latency_ms,
-            intent=intent,
-        )
-        return intent
-    except Exception:
-        emit(
-            event="runner.run",
-            agent="SupplyMateIntent",
-            latency_ms=0,
-            fallback_used=True,
-        )
-        return None
+
+    async def _run() -> Intent | None:
+        try:
+            agent = build_classifier_agent(get_model())
+            started = time.perf_counter()
+            result = await Runner.run(agent, f"Pregunta del usuario:\n{text}")
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            intent = parse_intent_label(str(result.final_output))
+            emit(
+                event="runner.run",
+                agent="SupplyMateIntent",
+                latency_ms=latency_ms,
+                intent=intent,
+            )
+            return intent
+        except Exception:
+            emit(
+                event="runner.run",
+                agent="SupplyMateIntent",
+                latency_ms=0,
+                fallback_used=True,
+            )
+            return None
+
+    task = asyncio.create_task(_run())
+
+    def _consume(done: asyncio.Task) -> None:
+        if done.cancelled():
+            return
+        try:
+            done.exception()
+        except Exception:
+            pass
+
+    task.add_done_callback(_consume)
+    done, _ = await asyncio.wait({task}, timeout=config.LLM_INTERPRET_TIMEOUT_SEC)
+    if task in done:
+        try:
+            return task.result()
+        except Exception:
+            return None
+    task.cancel()
+    return None

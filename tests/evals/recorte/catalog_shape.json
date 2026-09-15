@@ -1,0 +1,19 @@
+{
+  "n_categories": 27,
+  "n_subcategories": 80,
+  "n_suppliers": 180,
+  "n_skus_bucketed": 13120,
+  "coverage_order": [
+    "0–3 días",
+    "3–7 días",
+    "7–14 días",
+    "14–30 días",
+    "30+ días"
+  ],
+  "health_buckets": [
+    "stockout_risk",
+    "understock",
+    "overstock",
+    "healthy"
+  ]
+}

@@ -151,6 +151,43 @@ export function tableScopeCaption(opts: {
   return { shown: opts.pageRows, total: opts.pageRows, noun: "productos" };
 }
 
+/** Snapshot from the last /chat — never durable panel truth after /slice settles. */
+export type ChatBoardSnapshot = {
+  dashboard: InventoryDashboard;
+  purchaseList: PurchaseListItem[];
+};
+
+export type PanelFromSources = {
+  dashboard: InventoryDashboard | null;
+  purchaseList: PurchaseListItem[];
+  /** True when chatBoard is shown only until /slice finishes. */
+  usedPlaceholder: boolean;
+};
+
+/**
+ * Single owner of Explore KPIs / chart / table data.
+ * `/replenishment/slice` wins; chatBoard is only an optimistic placeholder while loading.
+ */
+export function panelFromSources(opts: {
+  sliceDash: InventoryDashboard | null;
+  slicePurchaseList: PurchaseListItem[];
+  chatBoard: ChatBoardSnapshot | null;
+  loading: boolean;
+}): PanelFromSources {
+  if (opts.loading && opts.chatBoard) {
+    return {
+      dashboard: opts.chatBoard.dashboard,
+      purchaseList: opts.chatBoard.purchaseList,
+      usedPlaceholder: true,
+    };
+  }
+  return {
+    dashboard: opts.sliceDash,
+    purchaseList: opts.slicePurchaseList,
+    usedPlaceholder: false,
+  };
+}
+
 /** Fetch the live catalog when a base URL is configured. */
 export function preferLiveApi(
   env: Record<string, string | undefined> = import.meta.env as Record<string, string | undefined>,

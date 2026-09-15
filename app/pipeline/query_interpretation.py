@@ -436,27 +436,57 @@ async def interpret_query(
     message: str,
     previous_scope: AnalyticalScope | None = None,
 ) -> QueryInterpretation:
-    """Free-text chat always goes through the LLM; rules are only a fallback.
+    """Interpret free-text: rules first when they match; LLM only as escalation.
 
     Static filters/chips never call this — they apply scope without reinterpretation.
     """
+    import asyncio
+
+    from app.core import config
+
     relation = classify_relation(message, previous_scope)
+
+    # Fast path: rules already own purchase/risk/sales/sku patterns (e.g. Biferdil).
+    # Skipping a forced LLM call avoids DeepSeek hangs that used to block /chat for minutes.
+    ruled = interpret_query_rules(message, previous_scope)
+    if ruled is not None and ruled.intent != "unknown":
+        enriched = enrich_interpretation_from_message(ruled, message)
+        return enriched.model_copy(update={"relation": relation})
+
     try:
         from app.pipeline.query_interpreter_agent import interpret_query_llm
 
-        llm_result = await interpret_query_llm(
-            message, previous_scope, force=True
+        # Do NOT use asyncio.wait_for: it awaits cancellation, and Agents/HTTP often
+        # ignore CancelledError — leaving the request hung until the socket dies.
+        task = asyncio.create_task(
+            interpret_query_llm(message, previous_scope, force=True)
         )
+
+        def _consume_abandoned(done: asyncio.Task) -> None:
+            if done.cancelled():
+                return
+            try:
+                done.exception()
+            except Exception:
+                pass
+
+        task.add_done_callback(_consume_abandoned)
+        done, _pending = await asyncio.wait(
+            {task}, timeout=config.LLM_INTERPRET_TIMEOUT_SEC
+        )
+        llm_result = None
+        if task in done:
+            try:
+                llm_result = task.result()
+            except Exception:
+                llm_result = None
+        else:
+            task.cancel()
         if llm_result is not None:
             enriched = enrich_interpretation_from_message(llm_result, message)
             return enriched.model_copy(update={"relation": relation})
     except Exception:
         pass
-
-    ruled = interpret_query_rules(message, previous_scope)
-    if ruled is not None:
-        enriched = enrich_interpretation_from_message(ruled, message)
-        return enriched.model_copy(update={"relation": relation})
 
     unknown = QueryInterpretation(
         intent="unknown",

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  CHAT_FETCH_TIMEOUT_MS,
   fetchReplenishment,
   fetchSlice,
   postChat,
@@ -79,6 +80,18 @@ describe("api client", () => {
       message: "¿Qué comprar?",
       scope: { categories: ["Pañales"] },
     });
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+    expect(CHAT_FETCH_TIMEOUT_MS).toBe(25_000);
+  });
+
+  it("postChat surfaces abort as a rejected promise", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new DOMException("Timed out", "TimeoutError"));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(postChat("¿Qué productos debería comprar?")).rejects.toMatchObject({
+      name: "TimeoutError",
+    });
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
   it("fetchReplenishment encodes product id", async () => {

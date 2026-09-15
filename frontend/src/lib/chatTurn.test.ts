@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   completeTurn,
   emptyPanel,
+  loadThreads,
   panelAfterChat,
-  panelAfterPurchase,
   panelOf,
+  saveThreads,
+  stripThinkingMessages,
   switchThread,
   deleteThread,
   isSameTurn,
@@ -15,9 +17,9 @@ import {
   type ThreadState,
 } from "@/lib/chatTurn";
 import type { AppliedChatScope } from "@/lib/applyChatScope";
-import type { ChatResponse, InventoryDashboard, PurchaseListItem } from "@/lib/api";
+import type { InventoryDashboard } from "@/lib/api";
 import { EMPTY_SLICE } from "@/lib/scope";
-import { emptyCart, type CartLine } from "@/lib/cart";
+import { emptyCart, hydrateCartLine, type CartLine } from "@/lib/cart";
 
 const pending: PendingTurn = {
   threadId: "t1",
@@ -59,6 +61,62 @@ describe("completeTurn", () => {
     expect(next.some((m) => m.role === "user" && m.text === pending.userText)).toBe(true);
     expect(next.at(-1)?.role).toBe("assistant");
     expect(next.at(-1)?.text).toBe("respuesta 45d");
+  });
+});
+
+describe("stripThinkingMessages / loadThreads", () => {
+  it("drops thinking bubbles from a message list", () => {
+    const messages: ChatMsg[] = [
+      { id: 1, role: "assistant", text: "hola" },
+      { id: 2, role: "user", text: "comprar" },
+      { id: 3, role: "thinking", text: "Pensando…" },
+    ];
+    expect(stripThinkingMessages(messages).map((m) => m.role)).toEqual(["assistant", "user"]);
+  });
+
+  it("loadThreads strips thinking so reload never shows Pensando…", () => {
+    const seed: ThreadState[] = [
+      { id: "t1", title: "seed", messages: [{ id: 1, role: "assistant", text: "hola" }] },
+    ];
+    sessionStorage.setItem(
+      "supplymate.chat.threads.v1",
+      JSON.stringify({
+        activeId: "t1",
+        threads: [
+          {
+            id: "t1",
+            title: "hung",
+            messages: [
+              { id: 1, role: "user", text: "¿Qué productos debería comprar?" },
+              { id: 2, role: "thinking", text: "Pensando…" },
+            ],
+          },
+        ],
+      }),
+    );
+    const { threads } = loadThreads(seed);
+    expect(threads[0]?.messages.every((m) => m.role !== "thinking")).toBe(true);
+    expect(threads[0]?.messages.map((m) => m.text)).toEqual(["¿Qué productos debería comprar?"]);
+  });
+
+  it("saveThreads persists without thinking bubbles", () => {
+    saveThreads(
+      [
+        {
+          id: "t1",
+          title: "x",
+          messages: [
+            { id: 1, role: "user", text: "hola" },
+            { id: 2, role: "thinking", text: "Pensando…" },
+          ],
+        },
+      ],
+      "t1",
+    );
+    const raw = JSON.parse(sessionStorage.getItem("supplymate.chat.threads.v1") ?? "{}") as {
+      threads: ThreadState[];
+    };
+    expect(raw.threads[0]?.messages.map((m) => m.role)).toEqual(["user"]);
   });
 });
 
@@ -155,51 +213,29 @@ describe("deleteThread", () => {
 
 describe("thread cart persistence", () => {
   const panales: CartLine[] = [
-    { product_id: "P1", product_name: "Pañal", recommended_quantity: 10, category: "Pañales" },
+    hydrateCartLine({ product_id: "P1", product_name: "Pañal", recommended_quantity: 10, category: "Pañales" }),
   ];
   const shampoo: CartLine[] = [
-    { product_id: "S1", product_name: "Shampoo", recommended_quantity: 4, category: "Shampoo" },
+    hydrateCartLine({ product_id: "S1", product_name: "Shampoo", recommended_quantity: 4, category: "Shampoo" }),
   ];
-
-  function purchaseItem(id: string, category: string, qty: number): PurchaseListItem {
-    return {
-      product_id: id,
-      barcode: id,
-      product_name: id,
-      supplier: "Prov",
-      category,
-      subcategory: "",
-      current_stock: 0,
-      reorder_point: null,
-      below_reorder_point: true,
-      average_daily_demand: 1,
-      days_of_supply: 0,
-      health_bucket: "stockout_risk",
-      recommended_quantity: qty,
-      operational_priority: "high",
-      purchase_cost: null,
-      estimated_purchase_value: qty,
-    };
-  }
-
-  function chat(overrides: Partial<ChatResponse> = {}): ChatResponse {
-    return {
-      answer: "ok",
-      mode: "explore",
-      product_id: "",
-      product_name: "",
-      recommended_quantity: 0,
-      calculation: null,
-      purchase_list: [],
-      dashboard: null,
-      scope: null,
-      ...overrides,
-    };
-  }
 
   it("emptyPanel and missing thread cart start empty", () => {
     expect(emptyPanel(7).cart).toEqual(emptyCart());
     expect(panelOf({ id: "t", title: "x", messages: [] }, fallback).cart).toEqual([]);
+  });
+
+  it("panelOf hydrates legacy recommended_quantity cart lines", () => {
+    const legacy = panelOf(
+      {
+        id: "t",
+        title: "x",
+        messages: [],
+        cart: [{ product_id: "A", product_name: "A", recommended_quantity: 12 } as unknown as CartLine],
+      },
+      fallback,
+    );
+    expect(legacy.cart[0]?.suggested_quantity).toBe(12);
+    expect(legacy.cart[0]?.order_quantity).toBe(12);
   });
 
   it("switchThread snapshots live cart and restores the target thread cart", () => {
@@ -224,12 +260,43 @@ describe("thread cart persistence", () => {
     expect(result.panel.cart).toEqual([]);
   });
 
-  it("panelAfterChat keeps the cart (focus changes independently)", () => {
+  it("panelAfterChat keeps the cart without auto-adding focus purchase lines", () => {
     const live = panel({ cart: panales });
     const applied: AppliedChatScope = {
       slice: EMPTY_SLICE,
       openProductId: null,
-      chatBoard: { dashboard: { skus: 1, stockout_risk: 0, understock: 0, overstock: 0, healthy: 1, avg_coverage: 1, estimated_purchase_value: 0, by_category: [] }, purchaseList: [] },
+      chatBoard: {
+        dashboard: {
+          skus: 1,
+          stockout_risk: 0,
+          understock: 0,
+          overstock: 0,
+          healthy: 1,
+          avg_coverage: 1,
+          estimated_purchase_value: 0,
+          by_category: [],
+        },
+        purchaseList: [
+          {
+            product_id: "NEW",
+            product_name: "New",
+            barcode: "NEW",
+            supplier: "S",
+            category: "X",
+            subcategory: "",
+            current_stock: 0,
+            reorder_point: null,
+            below_reorder_point: true,
+            average_daily_demand: 1,
+            days_of_supply: 0,
+            health_bucket: "stockout_risk",
+            recommended_quantity: 9,
+            operational_priority: "high",
+            purchase_cost: null,
+            estimated_purchase_value: 9,
+          },
+        ],
+      },
       replacedSurface: true,
       pushHistory: false,
       conversationSlice: live.slice,
@@ -241,21 +308,6 @@ describe("thread cart persistence", () => {
     const thread: ThreadState = { id: "a", title: "x", messages: [] };
     const next = withPanel(thread, panel({ cart: panales }));
     expect(next.cart).toEqual(panales);
-  });
-
-  it("panelAfterPurchase max-merges a purchase turn into the thread cart", () => {
-    const live = panel({ cart: panales });
-    const next = panelAfterPurchase(
-      live,
-      chat({
-        mode: "explore",
-        purchase_list: [purchaseItem("S1", "Shampoo", 4)],
-      }),
-    );
-    expect(next.cart.map((row) => row.product_id)).toEqual(["P1", "S1"]);
-    expect(panelAfterPurchase(live, chat({ mode: "sales", purchase_list: [purchaseItem("X", "X", 9)] })).cart).toEqual(
-      panales,
-    );
   });
 });
 

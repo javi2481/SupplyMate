@@ -9,11 +9,15 @@ load_dotenv(REPO_ROOT / ".env")
 
 DATA_DIR = Path(os.getenv("SUPPLYMATE_DATA_DIR", REPO_ROOT / "data"))
 
-# Prefer Groq free tier; OpenAI remains optional fallback.
+# Prefer Groq free tier; DeepSeek / OpenAI as alternatives.
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq").lower()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
+
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
@@ -36,6 +40,11 @@ MAX_CHAT_MESSAGE_LENGTH = int(os.getenv("MAX_CHAT_MESSAGE_LENGTH", "2000"))
 MAX_SCOPE_VALUE_LENGTH = int(os.getenv("MAX_SCOPE_VALUE_LENGTH", "200"))
 CHAT_RATE_LIMIT_PER_MIN = int(os.getenv("CHAT_RATE_LIMIT_PER_MIN", "10"))
 ANALYZE_RATE_LIMIT_PER_MIN = int(os.getenv("ANALYZE_RATE_LIMIT_PER_MIN", "10"))
+# Seconds to wait for the LLM interpreter before falling back to rules.
+LLM_INTERPRET_TIMEOUT_SEC = float(os.getenv("LLM_INTERPRET_TIMEOUT_SEC", "15"))
+# HTTP timeout for OpenAI-compatible clients (Groq / DeepSeek / OpenAI).
+# Keep below the client /chat abort (~25s) so abandoned LLM calls die quickly.
+LLM_HTTP_TIMEOUT_SEC = float(os.getenv("LLM_HTTP_TIMEOUT_SEC", "20"))
 
 
 def is_production() -> bool:

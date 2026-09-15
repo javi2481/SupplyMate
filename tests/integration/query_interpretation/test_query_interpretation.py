@@ -1,3 +1,4 @@
+import pytest
 from app.core.models import AnalyticalScope
 from app.pipeline.query_interpretation import classify_relation, interpret_query_rules
 
@@ -141,3 +142,52 @@ def test_enrich_demotes_filter_hint_refs_to_hints():
     assert any(h in cleaned.filter_hints for h in ("criticos", "critico", "0–3 días")) or any(
         "critico" in h for h in cleaned.filter_hints
     )
+
+
+@pytest.mark.asyncio
+async def test_interpret_query_llm_timeout_falls_back_to_rules(monkeypatch):
+    """Hung LLM must not block — unknown rules escalate to LLM then abandon to unknown."""
+    import asyncio
+
+    from app.pipeline.query_interpretation import interpret_query
+
+    started = asyncio.get_event_loop().time()
+
+    async def slow_llm(*_args, **_kwargs):
+        try:
+            await asyncio.sleep(30)
+        except asyncio.CancelledError:
+            await asyncio.sleep(30)
+            raise
+        return None
+
+    monkeypatch.setattr(
+        "app.pipeline.query_interpreter_agent.interpret_query_llm",
+        slow_llm,
+    )
+    monkeypatch.setattr("app.core.config.LLM_INTERPRET_TIMEOUT_SEC", 0.05)
+
+    # Phrase rules cannot classify → forces LLM path (abandon on timeout).
+    result = await interpret_query("bla bla bla coso raro del depósito")
+    elapsed = asyncio.get_event_loop().time() - started
+    assert elapsed < 1.0, f"caller blocked {elapsed:.2f}s waiting for hung LLM"
+    assert result is not None
+    assert result.source == "rules"
+    assert result.intent == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_interpret_query_rules_first_skips_llm(monkeypatch):
+    """Queries rules already own must not wait on the LLM."""
+    from app.pipeline.query_interpretation import interpret_query
+
+    async def boom(*_args, **_kwargs):
+        raise AssertionError("LLM should not run when rules match")
+
+    monkeypatch.setattr(
+        "app.pipeline.query_interpreter_agent.interpret_query_llm",
+        boom,
+    )
+    result = await interpret_query("qué me falta de Biferdil en shampoo")
+    assert result.source == "rules"
+    assert result.intent == "inventory_risk"

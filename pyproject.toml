@@ -40,6 +40,7 @@ pythonpath = ["."]
 markers = [
   "performance: performance smoke tests (may run on main CI only)",
   "llm: live Groq evals (skipped in CI; requires RUN_LLM_EVALS=1)",
+  "combinatorial_full: full cartesian recorte contracts (opt-in; excluded from default CI)",
 ]
 
 [tool.coverage.run]

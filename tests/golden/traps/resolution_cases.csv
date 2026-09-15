@@ -1,0 +1,6 @@
+name,reference,match_kind,scope_dimension,scope_value,forbid_name_tokens,min_sku_count,issue
+perfumes_to_fragancias,perfumes,group,category,Fragancias,1,100,Vernacular perfume must map to catalog category Fragancias not name-token SKUs
+perfume_to_fragancias,perfume,group,category,Fragancias,1,100,Singular vernacular perfume must map to Fragancias
+fragancias_canonical,fragancias,group,category,Fragancias,1,100,Canonical catalog label Fragancias resolves as category
+toallitas_sku_set,toallitas,group,sku_set,,0,2,Name-hit token with no taxonomy label match stays sku_set
+avon_unresolved,avon,unresolved,,,0,,Supplier token must not invent a group when catalog has no Avon supplier

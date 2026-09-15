@@ -22,6 +22,7 @@ Spanish twins: `*.es.md` in the same folder.
 | [`operations/security-deps.md`](operations/security-deps.md) | Dependency audit notes |
 | [`operations/compatibility-matrix.md`](operations/compatibility-matrix.md) | Browser / OS matrix |
 | [`operations/beta-test-protocol.md`](operations/beta-test-protocol.md) | Beta UX scenario |
+| [`operations/recorte-coherence.md`](operations/recorte-coherence.md) | Panel owner + 6 coherence invariants |
 
 ## Templates
 

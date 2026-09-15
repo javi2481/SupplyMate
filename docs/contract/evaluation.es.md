@@ -57,9 +57,9 @@ CSVs bajo `tests/golden/`:
 | `golden/query_interpretation/golden_query_interpretation.csv` | 10 | Reglas de interpretación de consulta |
 | `golden/reference_resolution/golden_reference_resolution.csv` | 16 | Resolución SKU / nombre / barcode |
 
-Estos cuatro CSVs legacy están **congelados en cantidad de filas**. `tests/golden/test_frozen_golden_counts.py` protege los conteos (incluido el header). Casos nuevos van en `tests/golden/traps/traps.csv` o en un contrato generado — no agrandar los archivos legacy.
+Estos cuatro CSVs legacy están **congelados en cantidad de filas**. `tests/golden/test_frozen_golden_counts.py` protege los conteos (incluido el header). Casos nuevos van en `tests/golden/traps/traps.csv`, `tests/golden/traps/resolution_cases.csv` o en un contrato generado — no agrandar los archivos legacy.
 
-Tests: `golden/intents/test_golden_intents.py`, `golden/multiturn/test_golden_multiturn.py`, `golden/query_interpretation/test_golden_query_interpretation.py`, `golden/reference_resolution/test_golden_reference_resolution.py`, `golden/traps/test_traps.py`, `golden/test_frozen_golden_counts.py`.
+Tests: `golden/intents/test_golden_intents.py`, `golden/multiturn/test_golden_multiturn.py`, `golden/query_interpretation/test_golden_query_interpretation.py`, `golden/reference_resolution/test_golden_reference_resolution.py`, `golden/traps/test_traps.py`, `golden/traps/test_resolution_cases.py`, `golden/test_frozen_golden_counts.py`.
 
 Layout: [`tests/README.md`](../tests/README.md).
 
@@ -76,6 +76,8 @@ SupplyMate puntúa el chat con **predicados oráculo en Python**, no con jueces 
 | Carrito del hilo (Vitest) | Merge multi-rubro, sales no-op, refinement solo en la categoría refinada |
 
 **Traps** (`tests/golden/traps/traps.csv`): strings concretos congelados solo para bugs vistos (token proveedor no resuelto, confusión de size token, copy con purchase vacío, conjuntos name-hit documentados). Columnas: `name, message, previous_scope, surface, assertion, issue`. Los tests de trap llaman los mismos helpers del oráculo — sin goldens de texto de respuesta.
+
+**Casos de resolución** (`tests/golden/traps/resolution_cases.csv`): contratos vernáculo → taxonomía del catálogo (`match_kind`, `scope_dimension`, `scope_value`) vía `resolve_single_reference` — no se delegan al intérprete LLM, que solo conserva lo que dijo el operador.
 
 Un harness combinatorial completo (ejes driven por catálogo, cobertura pairwise, seed + cap, opt-in `combinatorial_full`, snapshot de forma del catálogo) vive en `tests/evals/recorte/` cuando está habilitado; CI corre traps y goldens congelados sin requests al modelo.
 
@@ -99,6 +101,20 @@ Umbrales en [`docs/operations/performance-profile.md`](performance-profile.md):
 | `chat_dashboard(limit=100)` | < 3 s |
 
 Primera carga construye `_sku_rows_cache` — incluida en medición. Latencia Groq excluida (mock en tests).
+
+## Presupuesto de interpretación LLM
+
+La interpretación es **rules-first**. Los patrones conocidos no llaman al modelo (`test_interpret_query_rules_first_skips_llm`). Frases ambiguas pueden ir al LLM; ante timeout el servidor **abandona** la tarea en vuelo y cae a rules (`asyncio.wait` + abandon — no `wait_for` que espera el cancel).
+
+| Perilla | Default | Rol |
+|---------|---------|-----|
+| `LLM_INTERPRET_TIMEOUT_SEC` | 15 | Presupuesto de abandon en interpret / intent classify |
+| `LLM_HTTP_TIMEOUT_SEC` | 20 | Timeout HTTP del client (debe quedar bajo el abort de UI) |
+| Abort frontend `/chat` | 25 s (`CHAT_FETCH_TIMEOUT_MS`) | `AbortSignal.timeout` para que la UI no cuelgue en un LLM zombie |
+
+**Regresión:** un `/chat` por rules (sin LLM) que tarde **> 5 s** es hang, no “modelo lento”. Mirar `logs/chat-turns.jsonl` / `trace` de la respuesta / `[SupplyMate turn]` en el browser antes de tocar UI.
+
+Checklist de coherencia del panel (label ≡ scope ≡ KPI ≡ chart ≡ tabla ≡ CTA/OC): [`docs/operations/recorte-coherence.md`](../operations/recorte-coherence.md).
 
 ## Qué no afirmamos
 

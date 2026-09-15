@@ -50,6 +50,13 @@ def _row_subcategory(row: dict) -> str:
 
 
 def filter_rows(rows: list[dict], scope: AnalyticalScope | None) -> list[dict]:
+    """Apply AnalyticalScope as recorte algebra over analytics rows.
+
+    Policy (single source of truth):
+    - Same axis family → OR (e.g. two categories, two suppliers, two name tokens).
+    - Distinct axes → AND (category ∩ subcategory ∩ health ∩ coverage ∩ …).
+    Never special-case a rubro; callers pass shape via scope fields only.
+    """
     if scope is None or not any(
         (
             scope.categories,
@@ -67,12 +74,13 @@ def filter_rows(rows: list[dict], scope: AnalyticalScope | None) -> list[dict]:
     if scope.categories or scope.subcategories:
         allowed_cats = set(scope.categories)
         allowed_subs = set(scope.subcategories)
+        # Same axis family: multiple cats/subs are OR; different axes intersect (AND).
         if allowed_cats and allowed_subs:
             filtered = [
                 row
                 for row in filtered
                 if _row_category(row) in allowed_cats
-                or _row_subcategory(row) in allowed_subs
+                and _row_subcategory(row) in allowed_subs
             ]
         elif allowed_cats:
             filtered = [row for row in filtered if _row_category(row) in allowed_cats]

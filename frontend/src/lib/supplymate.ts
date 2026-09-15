@@ -40,6 +40,8 @@ export type Calc = {
   demand_lead: number;
   stock_target: number;
   recommended_quantity: number;
+  /** Python suggestion when the row comes from an operator-edited cart line. */
+  suggested_quantity?: number;
   coverage_days: number;
   health: HealthTag[];
   priority: "Alta" | "Media" | "Baja";

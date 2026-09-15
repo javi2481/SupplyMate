@@ -57,9 +57,9 @@ CSV fixtures under `tests/golden/`:
 | `golden/query_interpretation/golden_query_interpretation.csv` | 10 | Query interpretation rules |
 | `golden/reference_resolution/golden_reference_resolution.csv` | 16 | SKU / name / barcode resolution |
 
-These four legacy CSVs are **frozen in row count**. `tests/golden/test_frozen_golden_counts.py` guards the counts (including the header row). Add new regression strings to `tests/golden/traps/traps.csv` or a generated recorte contract — do not grow the legacy files.
+These four legacy CSVs are **frozen in row count**. `tests/golden/test_frozen_golden_counts.py` guards the counts (including the header row). Add new regression strings to `tests/golden/traps/traps.csv`, `tests/golden/traps/resolution_cases.csv`, or a generated recorte contract — do not grow the legacy files.
 
-Tests: `golden/intents/test_golden_intents.py`, `golden/multiturn/test_golden_multiturn.py`, `golden/query_interpretation/test_golden_query_interpretation.py`, `golden/reference_resolution/test_golden_reference_resolution.py`, `golden/traps/test_traps.py`, `golden/test_frozen_golden_counts.py`.
+Tests: `golden/intents/test_golden_intents.py`, `golden/multiturn/test_golden_multiturn.py`, `golden/query_interpretation/test_golden_query_interpretation.py`, `golden/reference_resolution/test_golden_reference_resolution.py`, `golden/traps/test_traps.py`, `golden/traps/test_resolution_cases.py`, `golden/test_frozen_golden_counts.py`.
 
 Layout overview: [`tests/README.md`](../tests/README.md).
 
@@ -76,6 +76,8 @@ SupplyMate scores chat behavior with **Python oracle predicates**, not LLM judge
 | Thread cart (Vitest) | Multi-rubro merge, sales no-op, refinement drops only the refined category |
 
 **Traps** (`tests/golden/traps/traps.csv`): concrete strings frozen only for bugs we have seen (unresolved supplier token, size-token confusion, empty-purchase copy, documented name-hit sets). Columns: `name, message, previous_scope, surface, assertion, issue`. Trap tests call the same oracle helpers — no answer-text goldens.
+
+**Resolution cases** (`tests/golden/traps/resolution_cases.csv`): vernacular → catalog taxonomy contracts (`match_kind`, `scope_dimension`, `scope_value`) asserted via `resolve_single_reference` — not delegated to the LLM interpreter, which only keeps the operator's wording.
 
 A full combinatorial recorte harness (catalog-driven axes, pairwise coverage, seed + cap, `combinatorial_full` opt-in, catalog-shape drift snapshot) lives under `tests/evals/recorte/` when enabled; CI runs traps and frozen goldens without outbound model requests.
 
@@ -99,6 +101,20 @@ Thresholds in [`docs/operations/performance-profile.md`](performance-profile.md)
 | `chat_dashboard(limit=100)` | < 3 s |
 
 First load builds `_sku_rows_cache` — included in measurement. Groq latency excluded (mocked in tests).
+
+## LLM interpret budget
+
+Query interpretation is **rules-first**. Known patterns never call the model (`test_interpret_query_rules_first_skips_llm`). Ambiguous phrases may call the LLM; on timeout the server **abandons** the in-flight task and falls back to rules (`asyncio.wait` + abandon — not `wait_for` that blocks until cancel finishes).
+
+| Knob | Default | Role |
+|------|---------|------|
+| `LLM_INTERPRET_TIMEOUT_SEC` | 15 | Server abandon budget for interpret / intent classify |
+| `LLM_HTTP_TIMEOUT_SEC` | 20 | HTTP client timeout (must stay below the UI abort) |
+| Frontend `/chat` abort | 25 s (`CHAT_FETCH_TIMEOUT_MS`) | Browser `AbortSignal.timeout` so the UI never hangs on a zombie LLM call |
+
+**Regression:** a rules-path `/chat` (no LLM) taking **> 5 s** is a hang regression, not “slow model”. Look at `logs/chat-turns.jsonl` / response `trace` / browser `[SupplyMate turn]` before changing UI.
+
+Panel coherence checklist (label ≡ scope ≡ KPI ≡ chart ≡ table ≡ CTA/OC): [`docs/operations/recorte-coherence.md`](../operations/recorte-coherence.md).
 
 ## What we do not claim
 

@@ -273,6 +273,73 @@ def test_filter_rows_and_category_plus_coverage():
     assert out[0]["product_id"] == "a"
 
 
+def test_filter_rows_and_category_plus_subcategory():
+    """Chart drill Fragancias → Nacionales must intersect axes, not OR them."""
+    rows = [
+        _row(product_id="a", category="Fragancias", subcategory="Nacionales"),
+        _row(product_id="b", category="Fragancias", subcategory="Importadas"),
+        _row(product_id="c", category="Cosmetica", subcategory="Nacionales"),
+    ]
+    scope = AnalyticalScope(categories=["Fragancias"], subcategories=["Nacionales"])
+    out = dashboard.filter_rows(rows, scope)
+    assert [row["product_id"] for row in out] == ["a"]
+
+
+def test_filter_rows_and_category_plus_supplier():
+    rows = [
+        _row(product_id="a", category="Cabello", supplier="LOREAL"),
+        _row(product_id="b", category="Cabello", supplier="NIVEA"),
+        _row(product_id="c", category="Fragancias", supplier="LOREAL"),
+    ]
+    scope = AnalyticalScope(categories=["Cabello"], suppliers=["LOREAL"])
+    out = dashboard.filter_rows(rows, scope)
+    assert [row["product_id"] for row in out] == ["a"]
+
+
+def test_filter_rows_and_category_plus_health():
+    rows = [
+        _row(product_id="a", category="Cabello", health_bucket="stockout_risk"),
+        _row(product_id="b", category="Cabello", health_bucket="healthy"),
+        _row(product_id="c", category="Fragancias", health_bucket="stockout_risk"),
+    ]
+    scope = AnalyticalScope(categories=["Cabello"], health_buckets=["stockout_risk"])
+    out = dashboard.filter_rows(rows, scope)
+    assert [row["product_id"] for row in out] == ["a"]
+
+
+def test_filter_rows_and_subcategory_plus_health():
+    rows = [
+        _row(product_id="a", subcategory="Shampoo", health_bucket="stockout_risk"),
+        _row(product_id="b", subcategory="Shampoo", health_bucket="overstock"),
+        _row(product_id="c", subcategory="Acondicionador", health_bucket="stockout_risk"),
+    ]
+    scope = AnalyticalScope(subcategories=["Shampoo"], health_buckets=["stockout_risk"])
+    out = dashboard.filter_rows(rows, scope)
+    assert [row["product_id"] for row in out] == ["a"]
+
+
+def test_filter_rows_and_name_token_plus_category():
+    rows = [
+        _row(product_id="a", product_name="DOVE ORIGINAL X 90G", category="Jabon"),
+        _row(product_id="b", product_name="DOVE BODY WASH", category="Baño"),
+        _row(product_id="c", product_name="NIVEA CREMA", category="Jabon"),
+    ]
+    scope = AnalyticalScope(categories=["Jabon"], name_tokens=["dove"])
+    out = dashboard.filter_rows(rows, scope)
+    assert [row["product_id"] for row in out] == ["a"]
+
+
+def test_filter_rows_and_out_of_stock_plus_category():
+    rows = [
+        _row(product_id="a", category="Cabello", current_stock=0),
+        _row(product_id="b", category="Cabello", current_stock=5),
+        _row(product_id="c", category="Fragancias", current_stock=0),
+    ]
+    scope = AnalyticalScope(categories=["Cabello"], out_of_stock_only=True)
+    out = dashboard.filter_rows(rows, scope)
+    assert [row["product_id"] for row in out] == ["a"]
+
+
 def test_filter_rows_highlight_does_not_filter():
     rows = [
         _row(product_id="a", category="Cabello"),

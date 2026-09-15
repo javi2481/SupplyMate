@@ -6,6 +6,7 @@ import { EMPTY_SLICE, scopePayloadToUiSlice, type UiSlice } from "@/lib/scope";
 
 export const COPY_CATALOG_LOAD_FAILED = "No pude cargar el catálogo. Intentá de nuevo en un momento.";
 export const COPY_ASSISTANT_UNAVAILABLE = "El asistente no está disponible. Intentá de nuevo en un momento.";
+export const COPY_CHAT_TIMEOUT = "La consulta tardó demasiado. Intentá de nuevo en un momento.";
 
 const PRODUCT_NOT_FOUND_RE = /Product not found:\s*([^"}\n]+)/i;
 
@@ -23,7 +24,20 @@ export type AppliedChatScope = {
   conversationSlice: UiSlice;
 };
 
+function isAbortError(error: unknown): boolean {
+  if (error instanceof DOMException && (error.name === "TimeoutError" || error.name === "AbortError")) {
+    return true;
+  }
+  if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+    return true;
+  }
+  return false;
+}
+
 export function chatFailureMessage(query: string, error: unknown): string {
+  if (isAbortError(error)) {
+    return COPY_CHAT_TIMEOUT;
+  }
   if (error instanceof HttpError) {
     if (error.status === 404) {
       const fromDetail = PRODUCT_NOT_FOUND_RE.exec(error.message)?.[1]?.trim();

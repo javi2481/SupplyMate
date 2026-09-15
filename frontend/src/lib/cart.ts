@@ -1,20 +1,28 @@
-/** Thread-scoped purchase cart. Quantities come from Python purchase_list only. */
+/** Thread-scoped purchase cart. Chat suggests; operator adds and decides qty. */
 
 import { rowFromPurchaseItem } from "@/lib/adapter";
-import type { ChatResponse, PurchaseListItem } from "@/lib/api";
+import type { PurchaseListItem } from "@/lib/api";
 import { calcFromApiRow } from "@/lib/ops-row";
 import { nf, type Calc } from "@/lib/supplymate";
 
-export type CartRelation = "new_query" | "refinement";
+export const MAX_ORDER_QUANTITY = 1_000_000;
 
 export type CartLine = {
   product_id: string;
   product_name: string;
-  recommended_quantity: number;
+  suggested_quantity: number;
+  order_quantity: number;
   category?: string;
   supplier?: string;
   barcode?: string;
+  /** Estimated value at suggested_quantity; totals scale by order/suggested. */
   estimated_purchase_value?: number;
+};
+
+/** Legacy persisted shape (chat-cart-oc auto-accumulate era). */
+export type LegacyCartLine = Partial<CartLine> & {
+  product_id: string;
+  recommended_quantity?: number;
 };
 
 export type CartTotals = {
@@ -23,66 +31,144 @@ export type CartTotals = {
   value: number;
 };
 
-const PURCHASE_CART_MODES = new Set(["explore", "list", "single"]);
-
 export function emptyCart(): CartLine[] {
   return [];
+}
+
+export function hydrateCartLine(raw: LegacyCartLine): CartLine {
+  const suggested = Math.max(1, Math.floor(Number(raw.suggested_quantity ?? raw.recommended_quantity ?? 1)) || 1);
+  const orderRaw = raw.order_quantity ?? suggested;
+  const order = clampOrderQuantity(orderRaw) ?? suggested;
+  return {
+    product_id: raw.product_id,
+    product_name: raw.product_name ?? raw.product_id,
+    suggested_quantity: suggested,
+    order_quantity: order,
+    category: raw.category || undefined,
+    supplier: raw.supplier || undefined,
+    barcode: raw.barcode || undefined,
+    estimated_purchase_value: raw.estimated_purchase_value ?? undefined,
+  };
+}
+
+export function hydrateCart(raw: LegacyCartLine[] | undefined | null): CartLine[] {
+  if (!raw?.length) return emptyCart();
+  return raw.filter((line) => line.product_id).map(hydrateCartLine);
+}
+
+export function clampOrderQuantity(value: unknown): number | null {
+  if (typeof value === "string" && value.trim() === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1 || n > MAX_ORDER_QUANTITY) return null;
+  return n;
+}
+
+export function lineOrderValue(line: CartLine): number {
+  const suggested = line.suggested_quantity;
+  const value = line.estimated_purchase_value ?? 0;
+  if (suggested <= 0) return value;
+  return (value * line.order_quantity) / suggested;
 }
 
 export function cartTotals(cart: CartLine[]): CartTotals {
   return {
     lines: cart.length,
-    units: cart.reduce((sum, line) => sum + line.recommended_quantity, 0),
-    value: cart.reduce((sum, line) => sum + (line.estimated_purchase_value ?? 0), 0),
+    units: cart.reduce((sum, line) => sum + line.order_quantity, 0),
+    value: cart.reduce((sum, line) => sum + lineOrderValue(line), 0),
   };
 }
 
 export function cartLinesFromPurchaseItems(items: PurchaseListItem[]): CartLine[] {
-  return items.map((item) => ({
-    product_id: item.product_id,
-    product_name: item.product_name,
-    recommended_quantity: item.recommended_quantity,
-    category: item.category || undefined,
-    supplier: item.supplier || undefined,
-    barcode: item.barcode || undefined,
-    estimated_purchase_value: item.estimated_purchase_value ?? undefined,
-  }));
+  return items
+    .filter((item) => item.product_id && item.recommended_quantity > 0)
+    .map((item) =>
+      hydrateCartLine({
+        product_id: item.product_id,
+        product_name: item.product_name,
+        suggested_quantity: item.recommended_quantity,
+        order_quantity: item.recommended_quantity,
+        category: item.category || undefined,
+        supplier: item.supplier || undefined,
+        barcode: item.barcode || undefined,
+        estimated_purchase_value: item.estimated_purchase_value ?? undefined,
+      }),
+    );
 }
 
-export function cartRelationFromChat(res: Pick<ChatResponse, "trace">): CartRelation {
-  const trace = res.trace;
-  if (trace && typeof trace === "object") {
-    if (trace["relation"] === "refinement") return "refinement";
-    const interp = trace["interpretation"];
-    if (interp && typeof interp === "object" && interp !== null && "relation" in interp) {
-      if ((interp as { relation?: unknown }).relation === "refinement") return "refinement";
-    }
-  }
-  return "new_query";
+export function focusHasPurchase(items: PurchaseListItem[] | undefined | null): boolean {
+  return (items ?? []).some((item) => Boolean(item.product_id) && item.recommended_quantity > 0);
 }
 
-export function shouldAddPurchaseToCart(
-  res: Pick<ChatResponse, "mode" | "purchase_list">,
-): boolean {
-  const mode = (res.mode ?? "").toLowerCase();
-  if (!PURCHASE_CART_MODES.has(mode)) return false;
-  return (res.purchase_list?.length ?? 0) > 0;
-}
-
-export function mergeCart(cart: CartLine[], items: CartLine[], relation: CartRelation): CartLine[] {
-  if (items.length === 0) return cart;
-  const incoming = items.filter((item) => item.product_id);
+/** Opt-in merge of current focus (legacy helper; UI path uses addLineToCart). */
+export function addFocusToCart(cart: CartLine[], focusItems: PurchaseListItem[]): CartLine[] {
+  const incoming = cartLinesFromPurchaseItems(focusItems);
   if (incoming.length === 0) return cart;
-  const base = relation === "refinement" ? dropRefinedGroup(cart, incoming) : cart;
-  return maxMerge(base, incoming);
+  return maxMergePreserveOrder(cart, incoming);
 }
 
-export function applyPurchaseToCart(
+export type CartLineSource = {
+  product_id: string;
+  product_name: string;
+  suggested_quantity: number;
+  category?: string;
+  supplier?: string;
+  barcode?: string;
+  estimated_purchase_value?: number;
+};
+
+/** Build cart source metadata from an Explore Calc row. */
+export function cartSourceFromCalc(row: Calc): CartLineSource {
+  const suggested = Math.max(0, Math.floor(row.recommended_quantity) || 0);
+  return {
+    product_id: row.sku.product_id,
+    product_name: row.sku.product_name,
+    suggested_quantity: suggested > 0 ? suggested : 1,
+    category: row.sku.category || undefined,
+    supplier: row.sku.supplier || undefined,
+    barcode: row.sku.barcode || undefined,
+    estimated_purchase_value:
+      row.estimated_purchase_value > 0 ? row.estimated_purchase_value : undefined,
+  };
+}
+
+/**
+ * Confirm one SKU into the cart with the operator's typed qty.
+ * Empty / 0 / invalid → no-op. Same product_id → upsert order_quantity.
+ */
+export function addLineToCart(
   cart: CartLine[],
-  res: Pick<ChatResponse, "mode" | "purchase_list" | "trace">,
+  source: CartLineSource,
+  orderQty: unknown,
 ): CartLine[] {
-  if (!shouldAddPurchaseToCart(res)) return cart;
-  return mergeCart(cart, cartLinesFromPurchaseItems(res.purchase_list ?? []), cartRelationFromChat(res));
+  if (!source.product_id) return cart;
+  const qty = clampOrderQuantity(orderQty);
+  if (qty == null) return cart;
+  const suggested = Math.max(1, Math.floor(Number(source.suggested_quantity)) || 1);
+  const nextLine: CartLine = {
+    product_id: source.product_id,
+    product_name: source.product_name || source.product_id,
+    suggested_quantity: suggested,
+    order_quantity: qty,
+    category: source.category,
+    supplier: source.supplier,
+    barcode: source.barcode,
+    estimated_purchase_value: source.estimated_purchase_value,
+  };
+  const idx = cart.findIndex((line) => line.product_id === source.product_id);
+  if (idx < 0) return [...cart, nextLine];
+  const copy = cart.slice();
+  copy[idx] = nextLine;
+  return copy;
+}
+
+export function setOrderQuantity(cart: CartLine[], productId: string, qty: unknown): CartLine[] {
+  const nextQty = clampOrderQuantity(qty);
+  if (nextQty == null) return cart;
+  return cart.map((line) => (line.product_id === productId ? { ...line, order_quantity: nextQty } : line));
+}
+
+export function removeCartLine(cart: CartLine[], productId: string): CartLine[] {
+  return cart.filter((line) => line.product_id !== productId);
 }
 
 export function cartFooterText(cart: CartLine[]): string {
@@ -92,15 +178,17 @@ export function cartFooterText(cart: CartLine[]): string {
 }
 
 export function csvTextFromCart(cart: CartLine[]): string {
-  const header = "product_id,product_name,category,supplier,recommended_quantity,estimated_purchase_value";
+  const header =
+    "product_id,product_name,category,supplier,order_quantity,suggested_quantity,estimated_purchase_value";
   const rows = cart.map((line) =>
     [
       csvCell(line.product_id),
       csvCell(line.product_name),
       csvCell(line.category ?? ""),
       csvCell(line.supplier ?? ""),
-      csvCell(String(line.recommended_quantity)),
-      csvCell(line.estimated_purchase_value == null ? "" : String(line.estimated_purchase_value)),
+      csvCell(String(line.order_quantity)),
+      csvCell(String(line.suggested_quantity)),
+      csvCell(lineOrderValue(line) === 0 && line.estimated_purchase_value == null ? "" : String(lineOrderValue(line))),
     ].join(","),
   );
   return [header, ...rows].join("\n");
@@ -135,11 +223,12 @@ export function calcFromCartLine(line: CartLine): Calc {
     demand_horizon: 0,
     demand_lead: 0,
     stock_target: 0,
-    recommended_quantity: line.recommended_quantity,
+    recommended_quantity: line.order_quantity,
+    suggested_quantity: line.suggested_quantity,
     coverage_days: 999,
     health: [],
     priority: "Baja",
-    estimated_purchase_value: line.estimated_purchase_value ?? 0,
+    estimated_purchase_value: lineOrderValue(line),
   };
 }
 
@@ -164,25 +253,29 @@ export function cartCategoryLabels(cart: CartLine[]): string[] {
   return cats.length > 0 ? cats : ["Pedido del chat"];
 }
 
-function dropRefinedGroup(cart: CartLine[], incoming: CartLine[]): CartLine[] {
-  const ids = new Set(incoming.map((item) => item.product_id));
-  const cats = new Set(
-    incoming.map((item) => item.category).filter((cat): cat is string => Boolean(cat)),
-  );
-  return cart.filter((line) => {
-    if (ids.has(line.product_id)) return false;
-    if (line.category && cats.has(line.category)) return false;
-    return true;
-  });
+function wasEdited(line: CartLine): boolean {
+  return line.order_quantity !== line.suggested_quantity;
 }
 
-function maxMerge(cart: CartLine[], incoming: CartLine[]): CartLine[] {
+function maxMergePreserveOrder(cart: CartLine[], incoming: CartLine[]): CartLine[] {
   const byId = new Map(cart.map((line) => [line.product_id, line]));
   for (const item of incoming) {
     const prev = byId.get(item.product_id);
-    if (!prev || item.recommended_quantity > prev.recommended_quantity) {
-      byId.set(item.product_id, prev ? { ...prev, ...item, recommended_quantity: item.recommended_quantity } : item);
+    if (!prev) {
+      byId.set(item.product_id, item);
+      continue;
     }
+    const suggested =
+      item.suggested_quantity > prev.suggested_quantity ? item.suggested_quantity : prev.suggested_quantity;
+    const winner = item.suggested_quantity >= prev.suggested_quantity ? item : prev;
+    const edited = wasEdited(prev);
+    byId.set(item.product_id, {
+      ...prev,
+      ...winner,
+      suggested_quantity: suggested,
+      order_quantity: edited ? prev.order_quantity : suggested,
+      estimated_purchase_value: winner.estimated_purchase_value,
+    });
   }
   return [...byId.values()];
 }

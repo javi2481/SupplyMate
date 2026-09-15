@@ -3,15 +3,18 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  Check,
   ChevronRight,
   Search,
+  ShoppingCart,
   X,
 } from "lucide-react";
 import { tableScopeCaption } from "@/lib/data-source";
-import { HEALTH_LABEL, dec, nf, type Calc } from "@/lib/supplymate";
-import { HealthChips, PriorityCell, visibleHealth } from "@/components/HealthChips";
+import { clampOrderQuantity } from "@/lib/cart";
+import { HEALTH_LABEL, nf, type Calc } from "@/lib/supplymate";
+import { HealthChips, visibleHealth } from "@/components/HealthChips";
 
-type SortKey = "product" | "stock" | "sales" | "coverage" | "order" | "priority" | "health";
+type SortKey = "product" | "stock" | "sales" | "order" | "health";
 type SortDirection = "asc" | "desc";
 
 function normalizeSearch(value: string): string {
@@ -79,16 +82,23 @@ export function SkuTable({
   rows,
   recorteToBuy,
   onOpen,
+  cartProductIds = [],
+  onAddLine,
 }: {
   rows: Calc[];
   recorteToBuy: number;
   onOpen: (row: Calc) => void;
+  cartProductIds?: string[];
+  onAddLine?: (row: Calc, qty: number) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [rowHints, setRowHints] = useState<Record<string, string>>({});
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({
     key: "order",
     direction: "desc",
   });
+  const inCart = useMemo(() => new Set(cartProductIds), [cartProductIds]);
   const normalizedQuery = normalizeSearch(query);
   const queryTokens = normalizedQuery.split(" ").filter(Boolean);
 
@@ -130,7 +140,6 @@ export function SkuTable({
             const words = rowSearchWords(row);
             return queryTokens.every((token) => words.some((word) => fuzzyTokenMatch(token, word)));
           });
-    const priorityRank = { Alta: 3, Media: 2, Baja: 1 } as const;
     const healthValue = (row: Calc) =>
       visibleHealth(row)
         .map((tag) => HEALTH_LABEL[tag])
@@ -139,9 +148,7 @@ export function SkuTable({
       if (sort.key === "product") return row.sku.product_name;
       if (sort.key === "stock") return row.sku.stock;
       if (sort.key === "sales") return row.sku.sales_30;
-      if (sort.key === "coverage") return row.coverage_days;
       if (sort.key === "order") return row.recommended_quantity;
-      if (sort.key === "priority") return priorityRank[row.priority];
       return healthValue(row);
     };
     return [...filtered].sort((a, b) => {
@@ -163,13 +170,42 @@ export function SkuTable({
     );
   }
 
+  function setDraft(productId: string, value: string) {
+    // Digits only — text field (no number spinners); empty allowed while typing.
+    const digits = value.replace(/\D/g, "");
+    setDrafts((prev) => ({ ...prev, [productId]: digits }));
+    setRowHints((prev) => {
+      if (!prev[productId]) return prev;
+      const next = { ...prev };
+      delete next[productId];
+      return next;
+    });
+  }
+
+  function confirmRow(row: Calc) {
+    if (!onAddLine) return;
+    const productId = row.sku.product_id;
+    const raw = drafts[productId] ?? "";
+    const qty = clampOrderQuantity(raw === "" ? raw : Number(raw));
+    if (qty == null) {
+      setRowHints((prev) => ({ ...prev, [productId]: "Indicá una cantidad" }));
+      return;
+    }
+    onAddLine(row, qty);
+    // Keep the confirmed qty visible in A pedir (do not clear the field).
+    setDrafts((prev) => ({ ...prev, [productId]: String(qty) }));
+    setRowHints((prev) => {
+      const next = { ...prev };
+      delete next[productId];
+      return next;
+    });
+  }
+
   const headers: { key: SortKey; label: string; align?: "right" }[] = [
     { key: "product", label: "SKU / Producto" },
     { key: "stock", label: "Stock", align: "right" },
     { key: "sales", label: "Ventas 30d", align: "right" },
-    { key: "coverage", label: "Cobertura", align: "right" },
     { key: "order", label: "A pedir", align: "right" },
-    { key: "priority", label: "Prioridad" },
     { key: "health", label: "Salud" },
   ];
 
@@ -179,6 +215,8 @@ export function SkuTable({
     recorteToBuy,
     searching: queryTokens.length > 0,
   });
+
+  const colCount = onAddLine ? 7 : 6;
 
   return (
     <div>
@@ -198,6 +236,7 @@ export function SkuTable({
                 type="button"
                 onClick={() => setQuery("")}
                 aria-label="Limpiar búsqueda"
+                tabIndex={-1}
                 className="absolute right-1.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-focus"
               >
                 <X className="h-3.5 w-3.5" />
@@ -223,7 +262,7 @@ export function SkuTable({
         )}
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] text-left text-xs">
+        <table className="w-full min-w-[720px] text-left text-xs">
           <thead className="sticky top-0 bg-ops-panel text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
             <tr>
               {headers.map((header, index) => (
@@ -235,6 +274,7 @@ export function SkuTable({
                     type="button"
                     onClick={() => changeSort(header.key)}
                     aria-label={`Ordenar por ${header.label}`}
+                    tabIndex={-1}
                     className={`inline-flex items-center gap-1 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-focus ${header.align === "right" ? "ml-auto" : ""}`}
                   >
                     {header.label}
@@ -242,58 +282,131 @@ export function SkuTable({
                   </button>
                 </th>
               ))}
+              {onAddLine ? (
+                <th className="w-10 px-3 py-3">
+                  <span className="sr-only">Agregar al pedido</span>
+                </th>
+              ) : null}
               <th className="w-10 px-3 py-3">
                 <span className="sr-only">Detalle</span>
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-ops-border">
-            {displayedRows.map((row) => (
-              <tr
-                key={row.sku.barcode}
-                onClick={() => onOpen(row)}
-                className="cursor-pointer bg-background outline-none transition-colors hover:bg-ops-row focus-within:bg-ops-row"
-              >
-                <td className="px-5 py-3">
-                  <div className="font-medium text-foreground">{row.sku.product_name}</div>
-                  <div className="mt-0.5 text-[10px] tabular-nums text-muted-foreground">
-                    {row.sku.barcode} · {row.sku.category}
-                  </div>
-                </td>
-                <td className="px-3 py-3 text-right tabular-nums">{nf.format(row.sku.stock)}</td>
-                <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">
-                  {nf.format(row.sku.sales_30)}
-                </td>
-                <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">
-                  {row.coverage_days >= 999 ? "sin venta" : `${dec(row.coverage_days)} d`}
-                </td>
-                <td className="px-3 py-3 text-right font-semibold tabular-nums text-ops-accent">
-                  {nf.format(row.recommended_quantity)}
-                </td>
-                <td className="px-3 py-3">
-                  <PriorityCell row={row} />
-                </td>
-                <td className="px-3 py-3">
-                  <HealthChips row={row} />
-                </td>
-                <td className="px-3 py-3">
-                  <button
-                    type="button"
-                    aria-label={`Ver cálculo de ${row.sku.product_name}`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onOpen(row);
-                    }}
-                    className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground outline-none hover:bg-ops-panel hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-focus"
+            {displayedRows.map((row) => {
+              const productId = row.sku.product_id;
+              const draft = drafts[productId] ?? "";
+              const hint = rowHints[productId];
+              const suggested = row.recommended_quantity;
+              return (
+                <tr
+                  key={row.sku.barcode || productId}
+                  onClick={() => onOpen(row)}
+                  className="cursor-pointer bg-background outline-none transition-colors hover:bg-ops-row focus-within:bg-ops-row"
+                >
+                  <td className="px-5 py-3">
+                    <div className="font-medium text-foreground">{row.sku.product_name}</div>
+                    <div className="mt-0.5 text-[10px] tabular-nums text-muted-foreground">
+                      {row.sku.barcode} · {row.sku.category}
+                    </div>
+                    {inCart.has(productId) && (
+                      <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-ops-ok">
+                        <Check className="h-3 w-3" />
+                        En el pedido
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-right tabular-nums">{nf.format(row.sku.stock)}</td>
+                  <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">
+                    {nf.format(row.sku.sales_30)}
+                  </td>
+                  <td
+                    className="px-3 py-3 text-right"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
                   >
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
+                    {onAddLine ? (
+                      <div className="inline-flex flex-col items-end gap-0.5">
+                        <div className="inline-flex items-center gap-1.5">
+                          <label className="sr-only" htmlFor={`order-qty-${productId}`}>
+                            Cantidad a pedir de {row.sku.product_name}
+                          </label>
+                          <input
+                            id={`order-qty-${productId}`}
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            value={draft}
+                            placeholder="—"
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) => setDraft(productId, event.target.value)}
+                            onKeyDown={(event) => {
+                              event.stopPropagation();
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                confirmRow(row);
+                              }
+                            }}
+                            className="h-8 w-16 rounded-md border border-ops-border bg-ops-panel px-2 text-right text-xs font-semibold tabular-nums outline-none placeholder:text-muted-foreground focus:border-ops-accent focus:ring-2 focus:ring-ops-focus"
+                          />
+                          <button
+                            type="button"
+                            tabIndex={-1}
+                            onClick={() => setDraft(productId, String(suggested))}
+                            className="text-[10px] text-muted-foreground outline-none hover:text-ops-accent focus-visible:ring-2 focus-visible:ring-ops-focus"
+                            title="Usar cantidad sugerida"
+                          >
+                            sug. {nf.format(suggested)}
+                          </button>
+                        </div>
+                        {hint ? <span className="text-[10px] text-ops-warn">{hint}</span> : null}
+                      </div>
+                    ) : (
+                      <span className="font-semibold tabular-nums text-ops-accent">
+                        {nf.format(suggested)}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3">
+                    <HealthChips row={row} />
+                  </td>
+                  {onAddLine ? (
+                    <td
+                      className="px-3 py-3"
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        aria-label={`Agregar ${row.sku.product_name} al pedido`}
+                        onClick={() => confirmRow(row)}
+                        className="grid h-8 w-8 place-items-center rounded-md border border-ops-accent/50 bg-ops-accent-soft text-ops-accent outline-none hover:border-ops-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-focus"
+                      >
+                        <ShoppingCart className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  ) : null}
+                  <td className="px-3 py-3">
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      aria-label={`Ver cálculo de ${row.sku.product_name}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onOpen(row);
+                      }}
+                      className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground outline-none hover:bg-ops-panel hover:text-foreground focus-visible:ring-2 focus-visible:ring-ops-focus"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
             {displayedRows.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-5 py-12 text-center text-muted-foreground">
+                <td colSpan={colCount} className="px-5 py-12 text-center text-muted-foreground">
                   {query ? (
                     <span>
                       No encontramos productos para “{query}”.{" "}

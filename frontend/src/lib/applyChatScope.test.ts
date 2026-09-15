@@ -4,6 +4,7 @@ import { HttpError } from "@/lib/api";
 import {
   COPY_ASSISTANT_UNAVAILABLE,
   COPY_CATALOG_LOAD_FAILED,
+  COPY_CHAT_TIMEOUT,
   applyChatScope,
   chatFailureMessage,
 } from "@/lib/applyChatScope";
@@ -242,5 +243,17 @@ describe("chatFailureMessage", () => {
       COPY_CATALOG_LOAD_FAILED,
     );
     expect(COPY_CATALOG_LOAD_FAILED).not.toMatch(/motor|API|localhost|levantad/i);
+  });
+
+  it("uses timeout copy for AbortError / TimeoutError", () => {
+    expect(chatFailureMessage("quiebre", new DOMException("Aborted", "AbortError"))).toBe(
+      COPY_CHAT_TIMEOUT,
+    );
+    expect(chatFailureMessage("quiebre", new DOMException("Timed out", "TimeoutError"))).toBe(
+      COPY_CHAT_TIMEOUT,
+    );
+    const named = new Error("signal timed out");
+    named.name = "TimeoutError";
+    expect(chatFailureMessage("quiebre", named)).toBe(COPY_CHAT_TIMEOUT);
   });
 });

@@ -10,6 +10,7 @@ import {
   csvExportLimit,
   dataSourceLabel,
   kpisFromDashboard,
+  panelFromSources,
   preferLiveApi,
   tableScopeCaption,
 } from "@/lib/data-source";
@@ -295,5 +296,82 @@ describe("slice data source helpers", () => {
       estimated_purchase_value: 1200,
     } satisfies PurchaseListItem);
     expect(projected.recommended_quantity).toBe(12);
+  });
+});
+
+describe("panelFromSources", () => {
+  const sliceDash: InventoryDashboard = {
+    skus: 100,
+    stockout_risk: 10,
+    understock: 0,
+    overstock: 0,
+    healthy: 90,
+    avg_coverage: 7,
+    estimated_purchase_value: 0,
+    recommended_units: 500,
+    purchase_skus: 40,
+    by_category: [],
+  };
+  const chatDash: InventoryDashboard = {
+    ...sliceDash,
+    skus: 1527,
+    recommended_units: 30938,
+    purchase_skus: 638,
+  };
+  const sliceList: PurchaseListItem[] = [];
+  const chatList: PurchaseListItem[] = [
+    {
+      product_id: "1",
+      barcode: "",
+      product_name: "A",
+      supplier: "",
+      category: "Fragancias",
+      subcategory: "Nacionales",
+      current_stock: 0,
+      reorder_point: null,
+      below_reorder_point: false,
+      average_daily_demand: 1,
+      days_of_supply: 1,
+      health_bucket: "stockout_risk",
+      recommended_quantity: 10,
+      operational_priority: "critical",
+      purchase_cost: null,
+      estimated_purchase_value: null,
+    },
+  ];
+
+  it("uses /slice when not loading even if chatBoard is present", () => {
+    const panel = panelFromSources({
+      sliceDash,
+      slicePurchaseList: sliceList,
+      chatBoard: { dashboard: chatDash, purchaseList: chatList },
+      loading: false,
+    });
+    expect(panel.dashboard?.skus).toBe(100);
+    expect(panel.purchaseList).toEqual(sliceList);
+    expect(panel.usedPlaceholder).toBe(false);
+  });
+
+  it("uses chatBoard only as placeholder while loading", () => {
+    const panel = panelFromSources({
+      sliceDash,
+      slicePurchaseList: sliceList,
+      chatBoard: { dashboard: chatDash, purchaseList: chatList },
+      loading: true,
+    });
+    expect(panel.dashboard?.skus).toBe(1527);
+    expect(panel.purchaseList).toEqual(chatList);
+    expect(panel.usedPlaceholder).toBe(true);
+  });
+
+  it("after mutateSlice (no chatBoard, not loading) never exposes chat snapshot", () => {
+    const panel = panelFromSources({
+      sliceDash,
+      slicePurchaseList: sliceList,
+      chatBoard: null,
+      loading: false,
+    });
+    expect(panel.dashboard).toBe(sliceDash);
+    expect(panel.usedPlaceholder).toBe(false);
   });
 });

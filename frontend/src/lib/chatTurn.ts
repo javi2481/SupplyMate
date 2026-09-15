@@ -1,8 +1,8 @@
 /** Chat turn helpers: keep pregunta → pensando → respuesta even if thread state resets. */
 
-import type { ChatResponse, InventoryDashboard, PurchaseListItem } from "@/lib/api";
+import type { InventoryDashboard, PurchaseListItem } from "@/lib/api";
 import type { AppliedChatScope } from "@/lib/applyChatScope";
-import { applyPurchaseToCart, emptyCart, type CartLine } from "@/lib/cart";
+import { emptyCart, hydrateCart, type CartLine } from "@/lib/cart";
 import { EMPTY_SLICE, type UiSlice } from "@/lib/scope";
 
 export type { CartLine } from "@/lib/cart";
@@ -69,7 +69,7 @@ export function panelOf(thread: ThreadState | undefined, fallback: ThreadPanel):
     chatBoard: thread.chatBoard !== undefined ? thread.chatBoard : fallback.chatBoard,
     replacedSurface: thread.replacedSurface ?? fallback.replacedSurface,
     conversationSlice: thread.conversationSlice ?? slice,
-    cart: thread.cart ?? fallback.cart,
+    cart: hydrateCart(thread.cart ?? fallback.cart),
   };
 }
 
@@ -77,7 +77,7 @@ export function withPanel(thread: ThreadState, panel: ThreadPanel): ThreadState 
   return { ...thread, ...panel };
 }
 
-/** Project applyChatScope's single decision onto the live thread panel. */
+/** Chat updates focus only; cart changes via explicit Agregar al pedido. */
 export function panelAfterChat(
   current: ThreadPanel,
   applied: AppliedChatScope,
@@ -93,14 +93,6 @@ export function panelAfterChat(
     conversationSlice: applied.conversationSlice,
     cart: current.cart,
   };
-}
-
-/** Merge a successful purchase turn into the thread cart; sales/empty lists are no-ops. */
-export function panelAfterPurchase(
-  panel: ThreadPanel,
-  res: Pick<ChatResponse, "mode" | "purchase_list" | "trace">,
-): ThreadPanel {
-  return { ...panel, cart: applyPurchaseToCart(panel.cart, res) };
 }
 
 /** Persist the live panel on the outgoing thread, then restore the target thread's panel. */
@@ -206,6 +198,18 @@ export function completeTurn(
   ];
 }
 
+/** Drop in-flight thinking bubbles so a reload never leaves "Pensando…" forever. */
+export function stripThinkingMessages(messages: ChatMsg[]): ChatMsg[] {
+  return messages.filter((message) => message.role !== "thinking");
+}
+
+function threadsWithoutThinking(threads: ThreadState[]): ThreadState[] {
+  return threads.map((thread) => ({
+    ...thread,
+    messages: stripThinkingMessages(thread.messages),
+  }));
+}
+
 export function loadThreads(seed: ThreadState[]): { threads: ThreadState[]; activeId: string } {
   if (typeof sessionStorage === "undefined") {
     return { threads: seed, activeId: seed[0]?.id ?? "t1" };
@@ -217,12 +221,13 @@ export function loadThreads(seed: ThreadState[]): { threads: ThreadState[]; acti
     if (!Array.isArray(parsed.threads) || parsed.threads.length === 0) {
       return { threads: seed, activeId: seed[0]?.id ?? "t1" };
     }
-    const first = parsed.threads[0];
+    const threads = threadsWithoutThinking(parsed.threads);
+    const first = threads[0];
     const activeId =
-      parsed.activeId && parsed.threads.some((t) => t.id === parsed.activeId)
+      parsed.activeId && threads.some((t) => t.id === parsed.activeId)
         ? parsed.activeId
         : (first?.id ?? seed[0]?.id ?? "t1");
-    return { threads: parsed.threads, activeId };
+    return { threads, activeId };
   } catch {
     return { threads: seed, activeId: seed[0]?.id ?? "t1" };
   }
@@ -231,7 +236,10 @@ export function loadThreads(seed: ThreadState[]): { threads: ThreadState[]; acti
 export function saveThreads(threads: ThreadState[], activeId: string): void {
   if (typeof sessionStorage === "undefined") return;
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ threads, activeId }));
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ threads: threadsWithoutThinking(threads), activeId }),
+    );
   } catch {
     /* ignore quota */
   }
