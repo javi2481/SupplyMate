@@ -1,9 +1,10 @@
+from importlib.metadata import version as pkg_version
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api import app
+from app.api import APP_VERSION, app
 from app.core.models import ChatResponse, ProductNotFoundError
 from app.middleware.rate_limit import reset_rate_limits
 from app.services import catalog_service
@@ -54,7 +55,8 @@ def test_health():
     body = response.json()
     assert body["status"] == "ok"
     assert body["service"] == "SupplyMate"
-    assert body["version"]
+    assert body["version"] == APP_VERSION
+    assert pkg_version("supplymate") == APP_VERSION
     assert body["message"]
     assert "time" in body
 
